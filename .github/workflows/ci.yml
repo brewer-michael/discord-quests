@@ -70,3 +70,23 @@ jobs:
           name: playwright-report
           path: apps/web/playwright-report
           retention-days: 7
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t discord-quests .
+      - name: The runtime user can run pnpm without downloading it
+        run: docker run --rm --network none discord-quests pnpm --version
+      - name: The setup page starts and serves a page
+        run: |
+          docker run -d --name web -p 3000:3000 \
+            -e DATABASE_URL=postgres://nobody:nothing@127.0.0.1:1/none \
+            -e MASTER_KEYS="v1:$(head -c 32 /dev/urandom | base64)" \
+            -e DISCORD_CLIENT_ID=123456789 -e DISCORD_CLIENT_SECRET=not-a-secret \
+            -e WEB_BASE_URL=http://localhost:3000 \
+            discord-quests pnpm --filter @dq/web start
+          for i in $(seq 1 30); do curl -fsS localhost:3000/privacy > /dev/null && break; sleep 2; done
+          curl -fsS localhost:3000/privacy | grep -q "Privacy"
+      - if: failure()
+        run: docker logs web || true

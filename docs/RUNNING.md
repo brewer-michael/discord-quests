@@ -91,6 +91,30 @@ bot opens a private **DM screen** thread that only the DM is added to.
   safe for later. `/loom plant` adds a deed by hand. `/loom mode` switches the hidden hand off if the DM would
   rather handle it themselves.
 
+## Deploying
+
+Ready-made configs: [`render.yaml`](../render.yaml) (Render Blueprint: database, bot and setup page),
+[`deploy/fly/`](../deploy/fly) (Fly.io: one app each for the bot and the setup page) and
+[`deploy/railway.md`](../deploy/railway.md). All of them build the same `Dockerfile`.
+
+- **Run exactly one bot.** It holds the Discord gateway connection and the round timers. The setup page can scale
+  freely.
+- **Same `MASTER_KEYS` everywhere.** The bot decrypts the keys the setup page saved.
+- **Logs** are one JSON object per line when `NODE_ENV=production` or `LOG_FORMAT=json` (time, level, message,
+  campaign and round ids). API keys and tokens are redacted before anything is written.
+
+## Backups and keys
+
+- Use a managed Postgres with daily backups and point-in-time recovery, or schedule
+  `pg_dump --format=custom "$DATABASE_URL" > discord-quests-$(date +%F).dump` and keep copies off the server.
+  Restore with `pg_restore --clean --if-exists -d "$DATABASE_URL" <file>`.
+- Back up `MASTER_KEYS` separately from the database (a password manager is fine). Without them, saved API keys
+  can't be decrypted; servers would need to enter their keys again, but no game data is lost.
+- **Rotating the master key:** put a new key first, keep the old one after it
+  (`MASTER_KEYS=v2:<new>,v1:<old>`), deploy, then run `pnpm --filter @dq/db rotate-keys`. It re-encrypts every
+  saved API key and sign-in token with the new key in one transaction. Afterwards remove the old key and deploy
+  again.
+
 ## Hosting notes
 
 - Any container host works (Railway, Fly.io, Render, a small VPS). One bot process comfortably serves thousands

@@ -1,0 +1,10 @@
+# Real-life details. Every line must be blocked.
+my email is kid.gamer@example.com
+call me at 555-123-4567
+text me on +1 (555) 987 6543
+I live on 42 Maple Street
+I'm 9 years old
+i am 11 yrs old
+my real name is Sam Jones
+I go to Riverside Elementary School
+my address is near the park

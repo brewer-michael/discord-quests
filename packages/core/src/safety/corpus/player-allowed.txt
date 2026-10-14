@@ -1,0 +1,21 @@
+# Ordinary adventure actions. None of these may be blocked.
+I bonk the goblin with my staff
+I sneak past the sleeping guards
+I give my bread to the hungry fox
+I attack the shadow wolf with my sword
+I tell Hattie I will bring the flame home
+I cast fire bolt at the gloom mite
+I shoot an arrow at the skulker
+I try to scare the mites away with my lantern
+I pay the toll with 12 gold coins
+I check the chest for traps
+We set up camp and share the trail cakes
+I hug Snibbet and tell him it's okay
+I climb the 1000 steps one at a time
+I ask the Bargain Fox what the deal costs
+I read the old map by candlelight
+I help the dazed knight back to his feet
+I say "Assemble, friends!" and charge
+I hide behind the passage wall
+I bash the clockwork sentry
+I look for Sussex road on the map

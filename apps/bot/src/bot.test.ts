@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { commandsJson } from "./commands";
 import { battleMenu } from "./handlers/battle";
 import { decodeId, encodeId } from "./ids";
+import { RateLimiter } from "./rate-limit";
 import { countComponents, textLength } from "./render/common";
 import { draftModal, renderDraft } from "./render/draft";
 import { renderHub } from "./render/hub";
@@ -75,6 +76,16 @@ describe("custom ids", () => {
     ]) {
       expect(decodeId(raw), raw).toBeNull();
     }
+  });
+});
+
+describe("typed-action limit", () => {
+  it("allows a burst, then asks for a breather, then recovers", () => {
+    const limiter = new RateLimiter(3, 60_000);
+    expect([0, 1, 2].map((s) => limiter.take("kid", s * 1000))).toEqual([0, 0, 0]);
+    expect(limiter.take("kid", 10_000)).toBe(50);
+    expect(limiter.take("other", 10_000)).toBe(0);
+    expect(limiter.take("kid", 61_000)).toBe(0);
   });
 });
 

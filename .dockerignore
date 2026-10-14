@@ -7,3 +7,9 @@ node_modules
 coverage
 dist
 .next
+**/.next
+**/test-results
+**/playwright-report
+**/*.tsbuildinfo
+**/next-env.d.ts
+sim-output

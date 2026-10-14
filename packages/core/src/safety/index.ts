@@ -24,10 +24,44 @@ function escapeRe(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+const LOOKALIKES: Record<string, string> = {
+  "0": "o",
+  "1": "i",
+  "3": "e",
+  "4": "a",
+  "5": "s",
+  "7": "t",
+  "@": "a",
+  $: "s",
+};
+
+/** The ways a word gets disguised: digits for letters, letters spread apart, letters stretched out. */
+function textVariants(text: string): string[] {
+  const lower = text.toLowerCase();
+  const lookalike = lower.replace(/[013457@$]/g, (ch) => LOOKALIKES[ch] ?? ch);
+  const joined = lookalike.replace(/\b(?:[a-z][\s.\-_]+){2,}[a-z]\b/g, (m) => m.replace(/[\s.\-_]+/g, ""));
+  return [...new Set([lower, lookalike, joined])];
+}
+
+const squash = (s: string) => s.replace(/([a-z])\1+/g, "$1");
+
 export function findBannedTerms(text: string, terms: readonly string[]): string[] {
+  const variants = textVariants(text);
+  const squashed = variants.map(squash);
   const hits: string[] = [];
   for (const term of terms) {
-    if (new RegExp(`\\b${escapeRe(term)}\\b`, "i").test(text)) hits.push(term);
+    const t = term.toLowerCase();
+    const plain = new RegExp(`\\b${escapeRe(t)}\\b`);
+    const stretched = new RegExp(`\\b${escapeRe(squash(t))}\\b`);
+    // One or more letters after the first hidden behind * or #, like "f*ck".
+    const masked = new RegExp(
+      `\\b${escapeRe(t.charAt(0))}${[...t.slice(1)].map((ch) => `[${escapeRe(ch)}*#]`).join("")}(?![a-z])`,
+    );
+    if (
+      variants.some((v) => plain.test(v) || (/[*#]/.test(v) && masked.test(v))) ||
+      squashed.some((v) => stretched.test(v))
+    )
+      hits.push(term);
   }
   return hits;
 }

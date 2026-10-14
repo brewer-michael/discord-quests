@@ -22,6 +22,7 @@ import {
 import type { BotContext } from "../context";
 import { refreshWaiting, resolveAndPost, sendableChannel } from "../flows";
 import { encodeId } from "../ids";
+import { typedActions } from "../rate-limit";
 import { COLORS, esc, text, V2_EPHEMERAL } from "../render/common";
 import { renderJournal } from "../render/misc";
 import { campaignHere, say } from "./shared";
@@ -89,7 +90,13 @@ export async function freeformButton(i: ButtonInteraction, roundId: string) {
   );
 }
 
+function slowDown(wait: number) {
+  return `Whoa, lots of ideas! Take a breath and try again in ${wait} second${wait === 1 ? "" : "s"}.`;
+}
+
 export async function freeformSubmit(ctx: BotContext, i: ModalSubmitInteraction, roundId: string) {
+  const wait = typedActions.take(i.user.id);
+  if (wait > 0) return say(i, slowDown(wait));
   await i.deferReply({ flags: ["Ephemeral"] });
   const res = await ctx.engine.turns.submitAction({
     roundId,
@@ -105,6 +112,8 @@ export async function actCommand(ctx: BotContext, i: ChatInputCommandInteraction
   const c = await campaignHere(ctx, i);
   const round = await ctx.engine.turns.currentRound(c.id);
   if (!round) throw new GameError("no round", "There's nothing to do right now. Wait for the next scene!");
+  const wait = typedActions.take(i.user.id);
+  if (wait > 0) return say(i, slowDown(wait));
   await i.deferReply({ flags: ["Ephemeral"] });
   const res = await ctx.engine.turns.submitAction({
     roundId: round.id,

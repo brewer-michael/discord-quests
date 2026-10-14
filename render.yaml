@@ -1,0 +1,55 @@
+# Render Blueprint: Postgres, the bot (a background worker) and the setup page.
+# New > Blueprint in the Render dashboard, point it at this repository, then fill in the secrets it asks for.
+databases:
+  - name: discord-quests-db
+    plan: basic-256mb
+    postgresMajorVersion: "17"
+
+envVarGroups:
+  - name: discord-quests
+    envVars:
+      - key: DISCORD_TOKEN
+        sync: false
+      - key: DISCORD_CLIENT_ID
+        sync: false
+      - key: DISCORD_CLIENT_SECRET
+        sync: false
+      # Newest first: v1:<32 random bytes, base64>
+      - key: MASTER_KEYS
+        sync: false
+      # The setup page's public address, e.g. https://discord-quests-web.onrender.com
+      - key: WEB_BASE_URL
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: LOG_FORMAT
+        value: json
+
+services:
+  # Exactly one bot: Discord allows one gateway session per shard, and round timers live in it.
+  - type: worker
+    name: discord-quests-bot
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    numInstances: 1
+    envVars:
+      - fromGroup: discord-quests
+      - key: DATABASE_URL
+        fromDatabase:
+          name: discord-quests-db
+          property: connectionString
+
+  - type: web
+    name: discord-quests-web
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerCommand: pnpm --filter @dq/web start
+    plan: starter
+    healthCheckPath: /privacy
+    envVars:
+      - fromGroup: discord-quests
+      - key: DATABASE_URL
+        fromDatabase:
+          name: discord-quests-db
+          property: connectionString

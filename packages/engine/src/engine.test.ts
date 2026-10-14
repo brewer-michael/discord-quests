@@ -4,7 +4,7 @@ import { createTestDb, TEST_DATABASE_URL } from "@dq/db/testing";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { serverGameDefaults } from "./campaign-service";
-import { createEngine, type Engine } from "./index";
+import { createEngine, createLogger, type Engine } from "./index";
 import { loadLoom } from "./loom-store";
 import { planChapter } from "./planner";
 import { asStory } from "./story-state";
@@ -515,5 +515,21 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
     await expect(engine.campaigns.purge(c.id, "someone-else")).rejects.toThrow();
     await engine.campaigns.purge(c.id, "z1");
     expect(await engine.campaigns.get(c.id)).toBeNull();
+  });
+});
+
+describe("logs", () => {
+  it("are JSON lines with secrets redacted", () => {
+    const lines: string[] = [];
+    const log = createLogger({ format: "json", service: "bot", write: (l) => lines.push(l) });
+    log.warn("provider failed with key sk-ant-api03-ABCDEFGHIJKLMNOP", {
+      apiKey: "sk-live-123456789",
+      headers: { authorization: "Bearer abcdefghijklmnopqrstuvwxyz" },
+      detail: "upstream said: invalid x-api-key sk-proj-ZZZZZZZZZZZZZZZZ",
+      campaignId: "c-1",
+    });
+    const entry = JSON.parse(lines[0] as string);
+    expect(entry).toMatchObject({ level: "warn", service: "bot", campaignId: "c-1", apiKey: "[redacted]" });
+    expect(lines[0]).not.toMatch(/sk-(ant|live|proj)|abcdefghijklmnop/);
   });
 });

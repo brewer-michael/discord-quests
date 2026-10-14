@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { connect, runMigrations } from "@dq/db";
-import { consoleLogger, createEngine, WorldCache } from "@dq/engine";
+import { createEngine, createLogger, WorldCache } from "@dq/engine";
 import { BudgetGuard, ImageService, ProviderGateway, ProviderStore } from "@dq/providers";
 import { sql } from "drizzle-orm";
 import { createClient, wire } from "./bot";
@@ -9,7 +9,11 @@ import { loadEnv } from "./env";
 import { RoundScheduler } from "./scheduler";
 
 const env = loadEnv();
-const log = consoleLogger;
+const log = createLogger({
+  service: "bot",
+  format:
+    process.env.LOG_FORMAT === "json" ? "json" : process.env.LOG_FORMAT === "pretty" ? "pretty" : undefined,
+});
 const handle = connect(env.DATABASE_URL);
 if (env.RUN_MIGRATIONS !== "false") {
   await runMigrations(handle.db);

@@ -13,7 +13,8 @@
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "generate": "drizzle-kit generate",
-    "migrate": "tsx src/migrate-cli.ts"
+    "migrate": "tsx src/migrate-cli.ts",
+    "rotate-keys": "tsx src/rotate-cli.ts"
   },
   "dependencies": {
     "drizzle-orm": "catalog:",

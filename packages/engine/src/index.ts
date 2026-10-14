@@ -4,6 +4,7 @@ export * from "./character-service";
 export * from "./deps";
 export * from "./director";
 export * from "./dm-service";
+export * from "./logger";
 export * from "./loom-store";
 export * from "./narrator";
 export * from "./story-state";
