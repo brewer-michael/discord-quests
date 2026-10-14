@@ -1,0 +1,15 @@
+id: stability
+kind: image
+label: Stability AI
+description: Stable Image models. The model is the endpoint name (core, ultra or sd3).
+adapter: stability
+baseUrl: https://api.stability.ai/v2beta/stable-image/generate
+baseUrlEditable: false
+selfHosted: false
+auth: { type: bearer }
+needsKey: true
+keyUrl: https://platform.stability.ai/account/keys
+models:
+  - { id: core, label: Stable Image Core, pricing: { image: 0.03 } }
+  - { id: ultra, label: Stable Image Ultra, pricing: { image: 0.08 } }
+defaultModels: { image: core }

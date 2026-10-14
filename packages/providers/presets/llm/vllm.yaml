@@ -1,0 +1,12 @@
+id: vllm
+kind: llm
+label: vLLM server
+description: A model you run yourself. The bot's server must be able to reach it, and the operator must allow private endpoints.
+adapter: openai_compat
+baseUrl: http://localhost:8000/v1
+baseUrlEditable: true
+selfHosted: true
+auth: { type: none }
+needsKey: false
+capabilities: { structured: json_object, promptCache: none, effort: false, serverFallbacks: false, maxTokensParam: max_tokens }
+models: []

@@ -1,0 +1,15 @@
+id: replicate
+kind: image
+label: Replicate (FLUX and more)
+description: Run open image models like FLUX. Weaker built-in filtering, so the bot's own prompt rules matter more.
+adapter: replicate
+baseUrl: https://api.replicate.com/v1
+baseUrlEditable: false
+selfHosted: false
+auth: { type: bearer }
+needsKey: true
+keyUrl: https://replicate.com/account/api-tokens
+models:
+  - { id: black-forest-labs/flux-schnell, label: FLUX schnell (fast), pricing: { image: 0.003 } }
+  - { id: black-forest-labs/flux-dev, label: FLUX dev, pricing: { image: 0.025 } }
+defaultModels: { image: black-forest-labs/flux-schnell }

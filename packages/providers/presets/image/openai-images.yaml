@@ -1,0 +1,14 @@
+id: openai-images
+kind: image
+label: OpenAI Images
+description: Follows detailed scene prompts well, with strict built-in moderation.
+adapter: openai_images
+baseUrl: https://api.openai.com/v1
+baseUrlEditable: false
+selfHosted: false
+auth: { type: bearer }
+needsKey: true
+keyUrl: https://platform.openai.com/api-keys
+models:
+  - { id: gpt-image-1, label: GPT Image, pricing: { image: 0.04 } }
+defaultModels: { image: gpt-image-1 }

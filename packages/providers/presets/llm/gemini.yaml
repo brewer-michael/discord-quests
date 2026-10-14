@@ -1,0 +1,13 @@
+id: gemini
+kind: llm
+label: Google Gemini
+description: Google's Gemini models with strict built-in safety filters.
+adapter: gemini
+baseUrl: null
+baseUrlEditable: false
+selfHosted: false
+auth: { type: header, headerName: x-goog-api-key }
+needsKey: true
+keyUrl: https://aistudio.google.com/app/apikey
+capabilities: { structured: json_schema, promptCache: implicit, effort: false, serverFallbacks: false }
+models: []

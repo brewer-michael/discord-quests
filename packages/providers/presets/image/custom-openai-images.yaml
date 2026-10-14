@@ -1,0 +1,11 @@
+id: custom-openai-images
+kind: image
+label: Custom OpenAI-compatible images
+description: Any service with an OpenAI-style /images/generations endpoint (LocalAI, gateways and more).
+adapter: openai_compat_images
+baseUrl: null
+baseUrlEditable: true
+selfHosted: false
+auth: { type: bearer }
+needsKey: false
+models: []

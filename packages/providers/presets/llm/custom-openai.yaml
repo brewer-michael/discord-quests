@@ -1,0 +1,12 @@
+id: custom-openai
+kind: llm
+label: Custom OpenAI-compatible endpoint
+description: Any service that speaks the OpenAI chat completions API. Enter its base URL (ending in /v1) and key.
+adapter: openai_compat
+baseUrl: null
+baseUrlEditable: true
+selfHosted: false
+auth: { type: bearer }
+needsKey: false
+capabilities: { structured: json_object, promptCache: none, effort: false, serverFallbacks: false, maxTokensParam: max_tokens }
+models: []

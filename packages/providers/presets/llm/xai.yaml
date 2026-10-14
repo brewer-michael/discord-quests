@@ -1,0 +1,13 @@
+id: xai
+kind: llm
+label: xAI Grok
+description: An OpenAI-compatible service. Pick a model from the list the service provides.
+adapter: openai_compat
+baseUrl: https://api.x.ai/v1
+baseUrlEditable: false
+selfHosted: false
+auth: { type: bearer }
+needsKey: true
+keyUrl: https://console.x.ai
+capabilities: { structured: json_schema, promptCache: implicit, effort: false, serverFallbacks: false, maxTokensParam: max_tokens }
+models: []

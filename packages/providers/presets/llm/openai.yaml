@@ -1,0 +1,13 @@
+id: openai
+kind: llm
+label: OpenAI
+description: An OpenAI-compatible service. Pick a model from the list the service provides.
+adapter: openai_compat
+baseUrl: https://api.openai.com/v1
+baseUrlEditable: false
+selfHosted: false
+auth: { type: bearer }
+needsKey: true
+keyUrl: https://platform.openai.com/api-keys
+capabilities: { structured: json_schema, promptCache: implicit, effort: false, serverFallbacks: false, maxTokensParam: max_completion_tokens }
+models: []

@@ -1,0 +1,14 @@
+id: fal
+kind: image
+label: fal.ai
+description: Fast hosted image models with a built-in safety checker.
+adapter: fal
+baseUrl: https://queue.fal.run
+baseUrlEditable: false
+selfHosted: false
+auth: { type: header, headerName: authorization, prefix: "Key " }
+needsKey: true
+keyUrl: https://fal.ai/dashboard/keys
+models:
+  - { id: fal-ai/flux/schnell, label: FLUX schnell, pricing: { image: 0.003 } }
+defaultModels: { image: fal-ai/flux/schnell }

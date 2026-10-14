@@ -1,0 +1,30 @@
+id: anthropic
+kind: llm
+label: Anthropic Claude (recommended)
+description: Claude writes warm, careful stories and follows safety rules closely. The default for Discord Quests.
+adapter: anthropic
+baseUrl: null
+baseUrlEditable: false
+selfHosted: false
+auth: { type: header, headerName: x-api-key }
+needsKey: true
+keyUrl: https://console.anthropic.com/settings/keys
+capabilities: { structured: json_schema, promptCache: explicit, effort: true, serverFallbacks: true }
+models:
+  - { id: claude-opus-5-5, label: Claude Opus 5.5 (best stories), pricing: { input: 4, output: 20, cacheRead: 0.2 } }
+  - { id: claude-sonnet-5-5, label: "Claude Sonnet 5.5 (faster, cheaper)", pricing: { input: 2, output: 10, cacheRead: 0.2 } }
+  - { id: claude-haiku-5-5, label: "Claude Haiku 5.5 (quickest, cheapest)", pricing: { input: 0.1, output: 0.5 } }
+defaultModels:
+  narrator: claude-opus-5-5
+  director: claude-opus-5-5
+  intent: claude-opus-5-5
+  safety: claude-opus-5-5
+  judge: claude-opus-5-5
+  summarizer: claude-opus-5-5
+defaultParams:
+  narrator: { effort: medium }
+  director: { effort: high }
+  intent: { effort: low }
+  safety: { effort: low }
+  judge: { effort: low }
+  summarizer: { effort: low }

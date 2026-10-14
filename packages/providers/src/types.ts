@@ -1,0 +1,142 @@
+import type { Effort, LlmTask, LlmUsage, PromptBlock } from "@dq/core/llm";
+import type { z } from "zod";
+
+export type LlmAdapterId = "anthropic" | "openai_compat" | "gemini";
+export type ImageAdapterId =
+  | "openai_images"
+  | "openai_compat_images"
+  | "google_imagen"
+  | "gemini_image"
+  | "stability"
+  | "replicate"
+  | "fal"
+  | "generic_http";
+
+export type AuthSpec =
+  | { type: "none" }
+  | { type: "bearer" }
+  | { type: "header"; headerName: string; prefix?: string }
+  | { type: "query"; paramName: string };
+
+export interface ModelPricing {
+  /** USD per million input tokens. */
+  input?: number;
+  output?: number;
+  cacheRead?: number;
+  /** USD per image. */
+  image?: number;
+}
+
+/** A provider configuration with its secret decrypted, ready to call. */
+export interface ResolvedProviderConfig {
+  id: string;
+  name: string;
+  presetId: string;
+  adapterId: LlmAdapterId | ImageAdapterId;
+  baseUrl: string | null;
+  auth: AuthSpec;
+  apiKey: string | null;
+  extraHeaders: Record<string, string>;
+  /** Self-hosted endpoints may live on private networks (when the operator allows it). */
+  selfHosted: boolean;
+  capabilities: Partial<LlmCapabilities>;
+  pricing: Record<string, ModelPricing>;
+  genericSpec: GenericHttpSpec | null;
+}
+
+export interface LlmCapabilities {
+  structured: "json_schema" | "json_object" | "prompt_only";
+  promptCache: "explicit" | "implicit" | "none";
+  effort: boolean;
+  serverFallbacks: boolean;
+}
+
+export interface CallContext {
+  fetch: typeof fetch;
+  signal?: AbortSignal;
+}
+
+export interface StructuredRequest<T> {
+  task: LlmTask;
+  model: string;
+  system: PromptBlock[];
+  user: PromptBlock[];
+  schema: z.ZodType<T>;
+  schemaName: string;
+  maxOutputTokens: number;
+  effort?: Effort;
+}
+
+export type AdapterResult<T> =
+  | { ok: true; value: T; usage: LlmUsage; model: string; fellBack: boolean }
+  | {
+      ok: false;
+      stop: "refusal" | "max_tokens" | "filtered" | "error" | "invalid";
+      error?: string;
+      usage?: LlmUsage;
+      retryable: boolean;
+    };
+
+export interface LlmAdapter {
+  readonly id: LlmAdapterId;
+  generateStructured<T>(
+    req: StructuredRequest<T>,
+    cfg: ResolvedProviderConfig,
+    ctx: CallContext,
+  ): Promise<AdapterResult<T>>;
+  listModels?(cfg: ResolvedProviderConfig, ctx: CallContext): Promise<string[]>;
+}
+
+export interface ImageRequest {
+  prompt: string;
+  negativePrompt: string;
+  width: number;
+  height: number;
+  model: string;
+  seed?: number;
+}
+
+export interface ImageResult {
+  bytes: Uint8Array;
+  mime: "image/png" | "image/webp" | "image/jpeg";
+  revisedPrompt?: string;
+}
+
+export interface ImageAdapter {
+  readonly id: ImageAdapterId;
+  generate(req: ImageRequest, cfg: ResolvedProviderConfig, ctx: CallContext): Promise<ImageResult>;
+}
+
+/** A custom image endpoint described as a templated request and a response mapping. */
+export interface GenericHttpSpec {
+  request: {
+    method: "POST" | "GET";
+    url: string;
+    headers?: Record<string, string>;
+    body?: string;
+  };
+  response:
+    | { mode: "sync"; imageBase64Path?: string; imageUrlPath?: string }
+    | {
+        mode: "poll";
+        idPath: string;
+        statusUrl: string;
+        statusPath: string;
+        done: string[];
+        failed: string[];
+        resultBase64Path?: string;
+        resultUrlPath?: string;
+        intervalMs?: number;
+        timeoutMs?: number;
+      };
+}
+
+export class ProviderError extends Error {
+  constructor(
+    message: string,
+    readonly retryable: boolean,
+    readonly status?: number,
+  ) {
+    super(message);
+  }
+}

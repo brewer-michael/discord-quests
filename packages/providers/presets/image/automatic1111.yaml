@@ -1,0 +1,22 @@
+id: automatic1111
+kind: image
+label: Stable Diffusion WebUI (Automatic1111)
+description: A Stable Diffusion server you run yourself, started with --api.
+adapter: generic_http
+baseUrl: http://localhost:7860
+baseUrlEditable: true
+selfHosted: true
+auth: { type: none }
+needsKey: false
+models:
+  - { id: default, label: Whatever model the server has loaded }
+defaultModels: { image: default }
+genericSpec:
+  request:
+    method: POST
+    url: "{{baseUrl}}/sdapi/v1/txt2img"
+    headers: { content-type: application/json }
+    body: '{"prompt": {{json prompt}}, "negative_prompt": {{json negativePrompt}}, "width": {{width}}, "height": {{height}}, "seed": {{seed}}, "steps": 25}'
+  response:
+    mode: sync
+    imageBase64Path: $.images[0]

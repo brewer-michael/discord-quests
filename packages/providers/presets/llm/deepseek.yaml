@@ -1,0 +1,13 @@
+id: deepseek
+kind: llm
+label: DeepSeek
+description: An OpenAI-compatible service. Pick a model from the list the service provides.
+adapter: openai_compat
+baseUrl: https://api.deepseek.com/v1
+baseUrlEditable: false
+selfHosted: false
+auth: { type: bearer }
+needsKey: true
+keyUrl: https://platform.deepseek.com/api_keys
+capabilities: { structured: json_object, promptCache: implicit, effort: false, serverFallbacks: false, maxTokensParam: max_tokens }
+models: []

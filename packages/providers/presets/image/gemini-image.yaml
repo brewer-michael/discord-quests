@@ -1,0 +1,14 @@
+id: gemini-image
+kind: image
+label: Google Gemini image
+description: Gemini's native image output, with Google's safety filters.
+adapter: gemini_image
+baseUrl: null
+baseUrlEditable: false
+selfHosted: false
+auth: { type: header, headerName: x-goog-api-key }
+needsKey: true
+keyUrl: https://aistudio.google.com/app/apikey
+models:
+  - { id: gemini-2.5-flash-image, label: Gemini Flash Image, pricing: { image: 0.04 } }
+defaultModels: { image: gemini-2.5-flash-image }

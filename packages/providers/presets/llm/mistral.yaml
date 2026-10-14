@@ -1,0 +1,13 @@
+id: mistral
+kind: llm
+label: Mistral
+description: An OpenAI-compatible service. Pick a model from the list the service provides.
+adapter: openai_compat
+baseUrl: https://api.mistral.ai/v1
+baseUrlEditable: false
+selfHosted: false
+auth: { type: bearer }
+needsKey: true
+keyUrl: https://console.mistral.ai/api-keys
+capabilities: { structured: json_object, promptCache: implicit, effort: false, serverFallbacks: false, maxTokensParam: max_tokens }
+models: []

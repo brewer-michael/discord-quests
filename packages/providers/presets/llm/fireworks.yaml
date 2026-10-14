@@ -1,0 +1,13 @@
+id: fireworks
+kind: llm
+label: Fireworks AI
+description: An OpenAI-compatible service. Pick a model from the list the service provides.
+adapter: openai_compat
+baseUrl: https://api.fireworks.ai/inference/v1
+baseUrlEditable: false
+selfHosted: false
+auth: { type: bearer }
+needsKey: true
+keyUrl: https://fireworks.ai/account/api-keys
+capabilities: { structured: json_object, promptCache: implicit, effort: false, serverFallbacks: false, maxTokensParam: max_tokens }
+models: []

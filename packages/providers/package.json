@@ -1,0 +1,23 @@
+{
+  "name": "@dq/providers",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Story and image AI providers: adapters, presets, routing, budgets and SSRF-safe fetching.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "catalog:",
+    "@dq/core": "workspace:*",
+    "@dq/db": "workspace:*",
+    "drizzle-orm": "catalog:",
+    "openai": "catalog:",
+    "undici": "catalog:",
+    "yaml": "catalog:",
+    "zod": "catalog:"
+  }
+}

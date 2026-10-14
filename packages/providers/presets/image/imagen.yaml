@@ -1,0 +1,14 @@
+id: imagen
+kind: image
+label: Google Imagen
+description: High-quality images from Google, with strict safety filters.
+adapter: google_imagen
+baseUrl: null
+baseUrlEditable: false
+selfHosted: false
+auth: { type: header, headerName: x-goog-api-key }
+needsKey: true
+keyUrl: https://aistudio.google.com/app/apikey
+models:
+  - { id: imagen-4.0-generate-001, label: Imagen 4, pricing: { image: 0.04 } }
+defaultModels: { image: imagen-4.0-generate-001 }

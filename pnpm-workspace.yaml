@@ -16,6 +16,9 @@ catalog:
   drizzle-kit: ^0.31.11
   pg: ^8.23.1
   "@types/pg": ^8.23.1
+  "@anthropic-ai/sdk": ^0.133.0
+  openai: ^7.33.0
+  undici: ^7.30.0
 
 onlyBuiltDependencies:
   - esbuild

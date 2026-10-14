@@ -1,0 +1,11 @@
+id: custom-http
+kind: image
+label: Custom HTTP endpoint
+description: Describe any image API with a request template and where to find the image in the response.
+adapter: generic_http
+baseUrl: null
+baseUrlEditable: true
+selfHosted: false
+auth: { type: bearer }
+needsKey: false
+models: []
