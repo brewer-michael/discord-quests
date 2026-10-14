@@ -1,15 +1,19 @@
-# Epilogue templates. {{deed}} and {{payoff}} are plain-language phrases; never numbers or game terms.
+# Epilogue templates.
+#   {{deed}}    a clause: what the heroes did ("let Snibbet go free in the Lamp-House")
+#   {{payoff}}  a full sentence: what happened at the end
+#   {{anchor}}  the name of someone they helped
+# Never numbers or game terms.
 subtle:
-  - Some said it was luck. Those who remembered {{deed}} said nothing, and smiled.
+  - Some said it was luck. Those who remembered the day the heroes {{deed}} said nothing, and smiled.
+  - Nobody could quite explain what happened at the very end. {{payoff}} But the heroes, thinking back, wondered.
   - >-
-    Long after, when the lanterns burned bright again, someone asked how it all came right at the very end.
-    Old Wick only looked at the heroes and said, "Kindness has a long memory."
+    Long after, when the lanterns burned bright again, someone asked how it all came right. Old Wick only
+    looked at the heroes and said, "Kindness has a long memory."
   - The road is long, my bright ones, and it remembers who walked it gently.
-  - Nobody could quite explain how {{payoff}}. But the heroes, thinking back, wondered.
 explicit:
-  - "Looking back: when you {{deed}}, you couldn't have known that one day {{payoff}}."
-  - It began with a small thing, {{deed}}. It ended with {{payoff}}.
-  - Of all the choices on the long road, it was this one that mattered most. You {{deed}}, and so {{payoff}}.
+  - "Looking back: when you {{deed}}, you couldn't have known how much it would matter. {{payoff}}"
+  - "It began with a small thing: you {{deed}}. And at the very end: {{payoff}}"
+  - "Of all the choices on the long road, this one mattered most. You {{deed}}. {{payoff}}"
 echoes:
   - Somewhere, {{anchor}} still tells the story of the day the heroes {{deed}}.
   - Not every kindness came back around. Some were simply kind, and that was enough.

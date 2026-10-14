@@ -1,0 +1,14 @@
+{
+  "name": "@dq/sim",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Plays campaigns without Discord: Monte Carlo tuning reports and readable transcripts.",
+  "scripts": {
+    "start": "tsx src/cli.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@dq/core": "workspace:*"
+  }
+}

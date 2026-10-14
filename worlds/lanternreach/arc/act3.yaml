@@ -129,7 +129,7 @@ chapters:
             - type: object_reveals
               accepts: [keepsake_kept]
               hint: A keepsake from home reminds the hero why they came, and their hand opens.
-          requiredGrace: 1.8
+          requiredGrace: 1.6
           onSuccess: >-
             With an aching heart and a brave one, the hero opens their hand. The Ember falls into the First
             Forge, and light roars up the mountain and out across all of Lanternreach.
