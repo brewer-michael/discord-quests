@@ -1,5 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { beforeAll, describe, expect, it } from "vitest";
+import { chapterComplete, finalCrux, nextPlayableBeat } from "../story/progress";
 import { readWorldFiles } from "./fs";
 import { indexWorld } from "./index-world";
 import { loadWorld } from "./load";
@@ -33,7 +34,8 @@ describe("starter world", () => {
   it("indexes beats in story order", () => {
     const idx = indexWorld(world);
     expect(idx.beatOrder[0]?.beat.id).toBe("ch1-the-last-flame");
-    expect(idx.beatOrder.at(-1)?.beat.id).toBe("ch8-the-last-step");
+    expect(idx.beatOrder.at(-1)?.beat.id).toBe("ch8-the-long-road-home");
+    expect(finalCrux(idx)?.beat.id).toBe("ch8-the-last-step");
     expect(idx.beats.get("ch3-the-siege-of-lantern-hall")?.beat.crux?.type).toBe("hold_the_line");
   });
 
@@ -51,6 +53,29 @@ describe("starter world", () => {
     expect(last?.sockets.some((s) => s.accepts.includes("mercy") && s.anchorTag === "covets-ember")).toBe(
       true,
     );
+  });
+});
+
+describe("branches", () => {
+  it("are played only when a failed crux opens them", () => {
+    const idx = indexWorld(world);
+    const upToFinale = idx.beatOrder.filter((b) => !b.beat.branch).map((b) => b.beat.id);
+    expect(nextPlayableBeat(idx, upToFinale)).toBeNull();
+    expect(nextPlayableBeat(idx, upToFinale, ["ch8-the-long-road-home"])?.beat.id).toBe(
+      "ch8-the-long-road-home",
+    );
+    expect(chapterComplete(idx, "ch8", new Set(upToFinale))).toBe(true);
+  });
+
+  it("must be reachable, and only from an earlier crux", () => {
+    const w = clone(world);
+    const act3 = w.acts.find((a) => a.number === 3)!;
+    const last = act3.chapters.at(-1)!;
+    const crux = last.beats.find((b) => b.id === "ch8-the-last-step")!.crux!;
+    crux.onFailForward.beat = undefined;
+    expect(errorsOf(w).join("\n")).toMatch(/branch beat is not the onFailForward of any crux/);
+    crux.onFailForward.beat = "ch8-the-thousand-steps";
+    expect(errorsOf(w).join("\n")).toMatch(/must be a later branch beat/);
   });
 });
 

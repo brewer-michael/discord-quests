@@ -1,4 +1,4 @@
-import { campaigns, characters, events, safetyEvents, turns } from "@dq/db";
+import { campaigns, chapterSummaries, characters, events, safetyEvents, storyPlans, turns } from "@dq/db";
 import { campaignLoom } from "@dq/db/loom";
 import { createTestDb, TEST_DATABASE_URL } from "@dq/db/testing";
 import { eq } from "drizzle-orm";
@@ -6,6 +6,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { serverGameDefaults } from "./campaign-service";
 import { createEngine, type Engine } from "./index";
 import { loadLoom } from "./loom-store";
+import { planChapter } from "./planner";
+import { asStory } from "./story-state";
 import { FakeLlm, UnconfiguredLlm } from "./testing";
 import { WorldCache } from "./world-cache";
 
@@ -189,6 +191,24 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
     for (const secret of ["reservedForBeat", "sincerity", "ripenSpan", "masterSeed", "Keep it small"]) {
       expect(history).not.toContain(secret);
     }
+    // Each new chapter is tailored by the planner, and the storyteller sees its notes.
+    const plans = await db.db.select().from(storyPlans).where(eq(storyPlans.campaignId, c.id));
+    expect(plans.length).toBeGreaterThanOrEqual(6);
+    expect(
+      llm.calls
+        .filter((x) => x.task === "director")
+        .every((x) => !/reservedForBeat|ripen|weight|thread/i.test(x.user)),
+    ).toBe(true);
+    expect(
+      llm.calls.some(
+        (x) => x.task === "narrator" && x.user.includes("Story notes (weave these in naturally)"),
+      ),
+    ).toBe(true);
+    // Every chapter gets a recap, which the storyteller and the journal both use.
+    const recaps = await db.db.select().from(chapterSummaries).where(eq(chapterSummaries.campaignId, c.id));
+    expect(recaps.length).toBeGreaterThanOrEqual(7);
+    expect(llm.calls.some((x) => x.task === "narrator" && x.user.includes("## The story so far"))).toBe(true);
+    expect((await engine.campaigns.journal(c.id)).chapters.length).toBeGreaterThan(3);
     const loom = await loadLoom(db.db, c.id);
     expect(loom.state.deeds.length).toBeGreaterThan(5);
     const evs = await db.db.select().from(events).where(eq(events.campaignId, c.id));
@@ -201,7 +221,8 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
   }, 120_000);
 
   it("fights round by round, then lets the heroes choose mercy", async () => {
-    const engine = createEngine({ db: db.db, worlds, llm: new FakeLlm() });
+    const llm = new FakeLlm();
+    const engine = createEngine({ db: db.db, worlds, llm });
     const c = await engine.campaigns.create({
       guildId: "g-fight",
       channelId: "ch-fight",
@@ -239,6 +260,7 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
     expect(await act("a", { kind: "choice", choiceIndex: 0 })).toMatchObject({ ok: false });
     expect(await act("a", { kind: "combat", action: { kind: "fly-away" } })).toMatchObject({ ok: false });
 
+    const callsBeforeFight = llm.calls.length;
     const wren = await engine.turns.combatOptions(view.roundId as string, "b");
     expect(wren?.spells.map((x) => x.id)).toEqual(
       expect.arrayContaining(["sacred-flame", "healing-word", "bless"]),
@@ -268,6 +290,10 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
     }
 
     expect(view.combat?.phase).toBe("aftermath");
+    // The storyteller is told what the dice decided.
+    const fightPrompts = llm.calls.slice(callsBeforeFight).filter((x) => x.task === "narrator");
+    expect(fightPrompts.every((x) => x.user.includes("## The fight, round"))).toBe(true);
+    expect(fightPrompts.at(-1)?.user).toMatch(/Gloam Skulker is beaten and waiting/);
     {
       // The beaten Gloam Skulker waits; letting it go is mercy toward the Gloam Host.
       expect(view.choices[0]?.label).toMatch(/^Let .* go free$/);
@@ -281,6 +307,53 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
     }
     // The garden fight is over (the road ahead may hold a new one).
     expect(view.sceneTitle).not.toBe("Gloam in the Garden");
+  });
+
+  it("throws away planner notes that would give the game away", async () => {
+    const llm = new FakeLlm({
+      director: () => ({
+        theme: "Karma is coming for them.",
+        beats: [
+          {
+            beatId: "ch2-the-fork-in-the-road",
+            note: "Their hidden luck score is high, so fate helps them.",
+            callback: null,
+            featured: [],
+          },
+          {
+            beatId: "ch2-shadow-wolves",
+            note: "Remember how brave the heroes were in the garden.",
+            callback: null,
+            featured: ["nobody-real", "hattie-wick"],
+          },
+        ],
+      }),
+    });
+    const { index } = worlds.get("lanternreach");
+    const c = await createEngine({ db: db.db, worlds, llm }).campaigns.create({
+      guildId: "g-plan",
+      channelId: "ch-plan",
+      name: "Plans",
+      mode: "ai_dm",
+      createdBy: "p",
+    });
+    const plan = await planChapter({
+      db: db.db,
+      llm,
+      index,
+      log: { info: () => {}, warn: () => {}, error: () => {} },
+      campaignId: c.id,
+      guildId: "g-plan",
+      chapter: 2,
+      story: asStory(c.story),
+      contentLevel: "gentle",
+    });
+    expect(plan?.beats["ch2-the-fork-in-the-road"]).toBeUndefined();
+    expect(plan?.beats["ch2-shadow-wolves"]).toEqual({
+      note: "Remember how brave the heroes were in the garden.",
+      featured: ["hattie-wick"],
+    });
+    expect(plan?.theme).not.toMatch(/karma/i);
   });
 
   it("keeps playing when no AI is configured", async () => {

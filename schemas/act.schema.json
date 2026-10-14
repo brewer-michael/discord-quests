@@ -206,6 +206,10 @@
                   "default": false,
                   "type": "boolean"
                 },
+                "branch": {
+                  "default": false,
+                  "type": "boolean"
+                },
                 "crux": {
                   "type": "object",
                   "properties": {

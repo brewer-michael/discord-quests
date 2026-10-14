@@ -322,8 +322,15 @@ export function validateWorld(world: World): WorldIssue[] {
       err(file, where, "decisive beats need a crux, and only decisive beats may have one");
     if (beat.crux) {
       const crux = beat.crux;
+      const target = crux.onFailForward.beat ? idx.beats.get(crux.onFailForward.beat) : undefined;
       if (crux.onFailForward.beat && !beatIds.has(crux.onFailForward.beat)) {
         err(file, `${where}.crux`, `onFailForward beat "${crux.onFailForward.beat}" does not exist`);
+      } else if (target && (!target.beat.branch || target.order <= ref.order)) {
+        err(
+          file,
+          `${where}.crux`,
+          `onFailForward beat "${crux.onFailForward.beat}" must be a later branch beat`,
+        );
       }
       if (crux.clock) {
         const fac = idx.factions.get(crux.clock.faction);
@@ -348,6 +355,14 @@ export function validateWorld(world: World): WorldIssue[] {
   const finalCrux = finalAct?.chapters.flatMap((c) => c.beats).findLast((b) => b.decisive);
   if (finalCrux && !finalCrux.crux?.sockets.some((s) => s.accepts.includes("mercy"))) {
     warn(`arc/${finalAct?.id}.yaml`, finalCrux.id, "the final crux has no socket that mercy can fill");
+  }
+
+  // Branch beats must be reachable, and can't be decisive themselves.
+  for (const ref of idx.beatOrder.filter((b) => b.beat.branch)) {
+    const reached = idx.beatOrder.some((b) => b.beat.crux?.onFailForward.beat === ref.beat.id);
+    if (!reached)
+      err(`arc/${ref.act.id}.yaml`, ref.beat.id, "branch beat is not the onFailForward of any crux");
+    if (ref.beat.decisive) err(`arc/${ref.act.id}.yaml`, ref.beat.id, "a branch beat can't be decisive");
   }
 
   // Detours must serve a socket that some beat actually needs.

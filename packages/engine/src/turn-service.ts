@@ -81,6 +81,7 @@ import {
 } from "@dq/db";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { buildFor } from "./character-rules";
+import { chapterRecaps, writeChapterRecap } from "./chronicle";
 import {
   aftermathChoices,
   type CombatView,
@@ -94,6 +95,7 @@ import { type EngineDeps, GameError, silentLogger } from "./deps";
 import { nextSceneSpec, type SceneEntityState, type SceneSpec } from "./director";
 import { clearPendingLoom, loadLoom, loadPendingLoom, saveLoom, savePendingLoom } from "./loom-store";
 import { narrate } from "./narrator";
+import { applyPlan, latestPlan, planChapter } from "./planner";
 import { asStory, type StoryState } from "./story-state";
 import type { DmDraft, PreparedTurn, ResolveResult, RollView, SubmitResult, TurnView } from "./views";
 
@@ -468,7 +470,9 @@ export class TurnService {
       const prepared = await this.prepare(claimed);
       if (c?.mode === "assist" && c.dmUserId)
         return { kind: "draft", draft: await this.saveDraft(prepared, c.dmUserId) };
-      return { kind: "turn", view: await this.commit(prepared.turn, prepared.loom, prepared.inputHash) };
+      const view = await this.commit(prepared.turn, prepared.loom, prepared.inputHash);
+      await this.afterCommit(prepared.turn);
+      return { kind: "turn", view };
     } catch (e) {
       await db
         .update(rounds)
@@ -588,11 +592,20 @@ export class TurnService {
         }
       : evaluateLoom(loom.state, input, ctx, deriveRng(loom.masterSeed, "loom", seq));
 
-    // 4. What comes next.
-    let storyAfter: StoryState = { ...story, completedBeats: completedAfter };
+    // 4. What comes next. A failed crux may open a branch of the story.
+    const cruxRef = crux && spec.beatId ? index.beats.get(spec.beatId)?.beat.crux : undefined;
+    const failedForward = Boolean(
+      crux && !crux.check.success && (!loomResult.crux || loomResult.crux.outcome === "fail_forward"),
+    );
+    const branchesAfter =
+      failedForward && cruxRef?.onFailForward.beat
+        ? [...new Set([...(story.branches ?? []), cruxRef.onFailForward.beat])]
+        : (story.branches ?? []);
+    let storyAfter: StoryState = { ...story, completedBeats: completedAfter, branches: branchesAfter };
     if (closing && spec.kind === "travel")
       storyAfter = { ...storyAfter, regionId: spec.regionId, poiId: null };
-    const plannedNext = closing ? nextSceneSpec(index, storyAfter, loomResult.state) : null;
+    const arcNext = closing ? nextSceneSpec(index, storyAfter, loomResult.state) : null;
+    const plannedNext = arcNext ? applyPlan(index, arcNext, await latestPlan(db, c.id)) : null;
     const nextSpec = plannedNext
       ? withEncounter(
           index,
@@ -618,7 +631,7 @@ export class TurnService {
       db.select().from(quests).where(eq(quests.campaignId, c.id)),
       db.select().from(canonEntities).where(eq(canonEntities.campaignId, c.id)).limit(30),
     ]);
-    const recent = await this.recentNarration(c.id, 3);
+    const [recent, recaps] = await Promise.all([this.recentNarration(c.id, 3), chapterRecaps(db, c.id, 3)]);
     const view = this.publicView({
       index,
       mode,
@@ -634,6 +647,7 @@ export class TurnService {
       quests: questRows,
       canon: canonRows,
       steerAway: Boolean(story.steerAway),
+      summaries: recaps.map((r) => `Chapter ${r.chapter}: ${r.text}`),
       ...(fight
         ? {
             battle: {
@@ -682,6 +696,7 @@ export class TurnService {
         cruxSuccess: crux ? crux.check.success : null,
         chapterEnded,
         completedAfter,
+        branchesAfter,
         promisesKept,
         view,
         choicesFor,
@@ -705,6 +720,52 @@ export class TurnService {
       loom: loomResult,
       inputHash: hash(input),
     };
+  }
+
+  /** Work that follows a committed turn: at a chapter's end, its recap for the journal. */
+  private async afterCommit(turn: PreparedTurn) {
+    if (!turn.chapterEnded) return;
+    try {
+      const [c] = await this.deps.db.select().from(campaigns).where(eq(campaigns.id, turn.campaignId));
+      if (!c) return;
+      const { index } = this.deps.worlds.get(c.worldId);
+      const contentLevel = campaignSettings(c).contentLevel;
+      await writeChapterRecap({
+        db: this.deps.db,
+        llm: this.deps.llm,
+        index,
+        log: this.log,
+        campaignId: c.id,
+        guildId: c.guildId,
+        chapterNumber: turn.spec.chapterNumber,
+        contentLevel,
+      });
+      // Tailor the next chapter to what the heroes did, starting with the scene that just opened.
+      const story = asStory(c.story);
+      if (story.ended || !story.sceneId) return;
+      const [sceneRow] = await this.deps.db.select().from(scenes).where(eq(scenes.id, story.sceneId));
+      const current = sceneRow?.state as unknown as SceneSpec | undefined;
+      if (!current || current.chapterNumber <= turn.spec.chapterNumber) return;
+      const plan = await planChapter({
+        db: this.deps.db,
+        llm: this.deps.llm,
+        index,
+        log: this.log,
+        campaignId: c.id,
+        guildId: c.guildId,
+        chapter: current.chapterNumber,
+        story,
+        contentLevel,
+      });
+      const tailored = applyPlan(index, current, plan);
+      if (tailored !== current)
+        await this.deps.db
+          .update(scenes)
+          .set({ state: tailored as unknown as Record<string, unknown> })
+          .where(eq(scenes.id, story.sceneId));
+    } catch (e) {
+      this.log.warn("chapter recap failed", { error: (e as Error).message });
+    }
   }
 
   /** One round of a fight: everyone's chosen action, then initiative order. */
@@ -893,6 +954,7 @@ export class TurnService {
       let storyAfter: StoryState = {
         ...story,
         completedBeats: prepared.completedAfter,
+        branches: prepared.branchesAfter,
         roundsInScene: story.roundsInScene + 1,
         // Only the dice end a fight, never the narrator.
         closeNextRound: !closing && !prepared.combat && !spec.combat && narration.output.goalMet,
@@ -1314,6 +1376,7 @@ export class TurnService {
     const final =
       edits.narration !== undefined || edits.choices !== undefined ? this.applyDmEdits(turn, edits) : turn;
     const view = await this.commit(final, pending.result, pending.inputHash);
+    await this.afterCommit(final);
     await this.deps.db
       .update(approvalRequests)
       .set({
@@ -1991,6 +2054,7 @@ export class TurnService {
           ...(e.note ? { note: e.note } : {}),
         })),
       opportunities: spec.opportunities,
+      ...(spec.directorNote ? { directorNote: spec.directorNote } : {}),
     };
   }
 
@@ -2009,6 +2073,8 @@ export class TurnService {
     quests: Array<typeof quests.$inferSelect>;
     canon: Array<typeof canonEntities.$inferSelect>;
     steerAway?: boolean;
+    summaries?: string[];
+    battle?: PublicSceneData["battle"];
   }) {
     const { index } = args;
     const data: PublicSceneData = {
@@ -2026,7 +2092,7 @@ export class TurnService {
         hpMax: p.hpMax,
         conditions: p.conditions,
       })),
-      chapterSummaries: [],
+      chapterSummaries: args.summaries ?? [],
       recentTurns: args.recent,
       canon: args.canon.map((c) => ({ name: c.name, kind: c.kind, description: c.description })),
       quests: args.quests.map((q) => ({ title: q.title, objective: q.objective, status: q.status })),
@@ -2056,6 +2122,7 @@ export class TurnService {
       })(),
       epilogue: args.epilogue,
       steerAway: args.steerAway ?? false,
+      ...(args.battle ? { battle: args.battle } : {}),
     };
     return publicSceneView(data);
   }

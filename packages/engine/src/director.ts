@@ -44,6 +44,8 @@ export interface SceneSpec {
   actNumber: number;
   /** The fight in this scene, if there is one. */
   combat?: CombatState;
+  /** The story planner's note on how this scene should echo the heroes' earlier choices. */
+  directorNote?: string;
 }
 
 const TARGET_ROUNDS: Record<SceneKind, number> = {
@@ -73,7 +75,7 @@ export function npcAnchor(index: WorldIndex, npcId: string): AnchorRef {
  * bearers are placed in decisive scenes so a payoff can be plausible.
  */
 export function nextSceneSpec(index: WorldIndex, story: StoryState, loom: LoomState): SceneSpec | null {
-  const ref = nextPlayableBeat(index, story.completedBeats);
+  const ref = nextPlayableBeat(index, story.completedBeats, story.branches ?? []);
   if (!ref) return null;
   if (ref.beat.region !== story.regionId) return travelScene(index, story, ref);
   return beatScene(index, ref, loom);

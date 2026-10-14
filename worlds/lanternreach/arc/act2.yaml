@@ -85,6 +85,24 @@ chapters:
           - Earn the Wardens' trust.
         introduces: [bram-tallow]
         sockets: [trusted_at_need]
+      - id: ch6-raid-on-the-watch
+        title: Raid on the Watch
+        kind: combat
+        region: old-road-ruins
+        poi: wardens-watch
+        summary: >-
+          At dusk the Gloam Host comes for the watchtower: skulkers creep up the walls to snuff the torches
+          while a Gloam Knight marches on the gate. The heroes stand with the Wardens to keep the light lit.
+        goals:
+          - Keep the watchtower's torches burning.
+          - Drive the Gloam Host back from the gate.
+        requires: [ch6-wardens-watch]
+        virtueOpportunities:
+          - tag: mercy
+            note: A beaten Gloam creature that gives up can be let go instead of being dragged before the Wardens.
+        foes:
+          - { creature: gloam-skulker, count: [2, 3] }
+          - { creature: gloam-knight, count: [1, 1] }
       - id: ch6-the-waystone-race
         title: The Race to the Waystone
         kind: crux

@@ -90,6 +90,8 @@ export interface PreparedTurn {
   cruxSuccess: boolean | null;
   chapterEnded: boolean;
   completedAfter: string[];
+  /** Branch beats open after this turn. */
+  branchesAfter: string[];
   promisesKept: string[];
   view: PublicSceneData;
   choicesFor: SceneSpecView;

@@ -35,6 +35,22 @@ chapters:
           - tag: kindness_to_lowly
             note: Share warmth and food with the kitchen helpers, even though it risks discovery.
         sockets: [knowledge_given]
+      - id: ch7-the-knights-patrol
+        title: The Knights' Patrol
+        kind: combat
+        region: gloamhold
+        summary: >-
+          In the long cold halls, a patrol of Gloam Knights clanks around the corner, perfectly in step.
+          There is nowhere to hide. The heroes will have to get past them.
+        goals:
+          - Get past the patrol before the alarm spreads.
+        requires: [ch7-the-cold-kitchens]
+        virtueOpportunities:
+          - tag: mercy
+            note: A knight who gives up can be let go. Nobody in Gloamhold has ever shown them mercy.
+        foes:
+          - { creature: gloam-knight, count: [1, 2] }
+          - { creature: gloam-skulker, count: [1, 2] }
       - id: ch7-the-ember-vault
         title: The Ember Vault
         kind: crux
@@ -137,6 +153,26 @@ chapters:
             The Ember falls into the forge and the light returns, but something precious is lost in the
             flames, and the road home will be quieter for it.
           onFailForward:
+            beat: ch8-the-long-road-home
             text: >-
               The Ember will not be let go of, and the Gloam King carries it back into the dark. But the story
               is not over. It turns toward one last, long road.
+
+      - id: ch8-the-long-road-home
+        title: The Long Road Home
+        kind: social
+        region: hearthmoor
+        branch: true
+        requires: [ch8-the-last-step]
+        summary: >-
+          The Ember is gone into the dark, and the Long Night settles over Lanternreach. But the heroes still
+          carry small lights: a candle-stub, a kept promise, a keepsake from home, friends made along the way.
+          Back in Hearthmoor, the whole village gathers in the cold square to see what can be done.
+        goals:
+          - Bring hope home to Hearthmoor.
+          - Light the first lantern again from the small lights the heroes kept.
+        virtueOpportunities:
+          - tag: self_sacrifice
+            note: Give your own small light so the village lantern can burn.
+          - tag: keepsake_kept
+            note: The keepsake from home still holds a spark of warmth.

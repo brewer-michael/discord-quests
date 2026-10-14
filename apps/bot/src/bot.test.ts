@@ -214,6 +214,25 @@ describe("renderers stay within Discord's limits", () => {
     checkLimits(battleMenu(UUID, "magic", "healing-word", "Who gets Healing Word?", picks));
   });
 
+  it("a long journal", () => {
+    checkLimits(
+      renderJournal({
+        quests: Array.from({ length: 20 }, (_, i) => ({
+          title: `Quest ${i}`,
+          objective: "o".repeat(200),
+          status: "active",
+        })),
+        promises: Array.from({ length: 20 }, (_, i) => ({
+          to: `Friend ${i}`,
+          text: "p".repeat(200),
+          status: "pending",
+        })),
+        recent: ["r".repeat(2000), "s".repeat(2000)],
+        chapters: Array.from({ length: 8 }, (_, i) => ({ chapter: i + 1, text: "c".repeat(900) })),
+      }),
+    );
+  });
+
   it("the hub and info pages", () => {
     checkLimits(
       renderHub({

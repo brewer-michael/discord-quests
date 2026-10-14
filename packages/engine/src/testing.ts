@@ -47,6 +47,23 @@ function lastSection(user: string, heading: string): string {
 }
 
 const DEFAULTS: Record<string, Handler> = {
+  director: (call) => {
+    const user = call.user.map((b) => b.text).join("\n");
+    const beats = [...user.matchAll(/- beat: ([a-z0-9-]+) \| ([^(]+)/g)].map((m) => ({
+      beatId: m[1] as string,
+      note: `Let the heroes' earlier kindness show in ${m[2]?.trim()}.`,
+      callback: null,
+      featured: user.includes("[id: hattie-wick]") ? ["hattie-wick"] : [],
+    }));
+    return { theme: "Friends found along the way.", beats };
+  },
+  summarizer: (call) => {
+    const user = call.user.map((b) => b.text).join("\n");
+    const first = user.split("\n- ")[1]?.split(/[.!?]/)[0] ?? "The heroes pressed on";
+    return {
+      recap: `${first.trim()}. The heroes kept going, together, and the road ahead grew a little brighter.`,
+    };
+  },
   narrator: (call): NarratorOutput => {
     const user = call.user.map((b) => b.text).join("\n");
     const finale = user.includes("This is the end of the adventure");

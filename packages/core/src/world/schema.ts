@@ -444,6 +444,8 @@ export const BeatDef = z.strictObject({
     .array(z.strictObject({ tag: VirtueTag, target: Id.optional(), note: Text }))
     .default([]),
   decisive: z.boolean().default(false),
+  /** Played only when a failed crux's onFailForward sends the story here. */
+  branch: z.boolean().default(false),
   crux: CruxSpec.optional(),
   /** Who the heroes face in a combat beat (counts are for a party of three). Defaults to the region's table. */
   foes: z

@@ -18,6 +18,8 @@ export interface StoryState {
   ended: boolean;
   /** A player used the X-card: the next narration steers gently away. */
   steerAway?: boolean;
+  /** Branch beats opened by failed cruxes. */
+  branches?: string[];
 }
 
 export function initialStoryState(index: WorldIndex): StoryState {

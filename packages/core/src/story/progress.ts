@@ -16,7 +16,7 @@ export function chapterComplete(
   completed: ReadonlySet<string>,
 ): boolean {
   const refs = index.beatOrder.filter((b) => b.chapter.id === chapterId);
-  return refs.every((b) => b.beat.optional || completed.has(b.beat.id));
+  return refs.every((b) => b.beat.optional || b.beat.branch || completed.has(b.beat.id));
 }
 
 export function storyProgress(index: WorldIndex, completedBeats: readonly string[]): number {
@@ -34,14 +34,21 @@ export function upcomingBeats(
   limit = Number.POSITIVE_INFINITY,
 ): BeatRef[] {
   const done = new Set(completedBeats);
-  return index.beatOrder.filter((b) => !done.has(b.beat.id)).slice(0, limit);
+  // Branches may never be played, so nothing is planned around them.
+  return index.beatOrder.filter((b) => !done.has(b.beat.id) && !b.beat.branch).slice(0, limit);
 }
 
 /** The next beat to play: first incomplete beat whose requirements are all complete. */
-export function nextPlayableBeat(index: WorldIndex, completedBeats: readonly string[]): BeatRef | null {
+export function nextPlayableBeat(
+  index: WorldIndex,
+  completedBeats: readonly string[],
+  /** Branch beats a failed crux has opened. */
+  branches: readonly string[] = [],
+): BeatRef | null {
   const done = new Set(completedBeats);
   for (const ref of index.beatOrder) {
     if (done.has(ref.beat.id)) continue;
+    if (ref.beat.branch && !branches.includes(ref.beat.id)) continue;
     if (ref.beat.requires.every((r) => done.has(r))) return ref;
   }
   return null;

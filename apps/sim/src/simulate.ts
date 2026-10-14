@@ -137,8 +137,10 @@ export function simulateCampaign(index: WorldIndex, opts: SimOptions): SimRun {
     return out;
   };
 
+  const branches = new Set<string>();
   for (const ref of index.beatOrder) {
     const beat = ref.beat;
+    if (beat.branch && !branches.has(beat.id)) continue;
     const region = index.regions.get(beat.region);
 
     // Traveling to a new region is its own scene, where quiet-hand detours can happen.
@@ -317,6 +319,8 @@ export function simulateCampaign(index: WorldIndex, opts: SimOptions): SimRun {
       if (out.crux.outcome === "fail_forward" && beat.crux.clock) {
         clocks = tickClock(index, clocks, clockKey(beat.crux.clock.faction, beat.crux.clock.clock), 1);
       }
+      if (out.crux.outcome === "fail_forward" && beat.crux.onFailForward.beat)
+        branches.add(beat.crux.onFailForward.beat);
     }
 
     completed.push(beat.id);

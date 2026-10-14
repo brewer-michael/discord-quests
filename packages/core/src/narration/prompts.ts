@@ -37,6 +37,8 @@ export interface SceneSpecView {
   goals: string[];
   entities: SceneEntityView[];
   opportunities: OpportunityView[];
+  /** How this scene should echo what the heroes did before. */
+  directorNote?: string;
 }
 
 export interface PublicSceneData {
@@ -146,6 +148,7 @@ function formatScene(s: SceneSpecView, heading: string): string {
     s.summary,
   ];
   if (s.goals.length > 0) lines.push(`Scene goals: ${s.goals.join(" ")}`);
+  if (s.directorNote) lines.push(`Story notes (weave these in naturally): ${s.directorNote}`);
   if (s.entities.length > 0) {
     lines.push("Who and what is here (use these refs):");
     for (const e of s.entities)

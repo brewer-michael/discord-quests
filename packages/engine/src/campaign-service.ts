@@ -11,6 +11,7 @@ import {
   turns,
 } from "@dq/db";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import { chapterRecaps } from "./chronicle";
 import { type EngineDeps, GameError } from "./deps";
 import { createLoom } from "./loom-store";
 import { asStory, initialStoryState } from "./story-state";
@@ -238,7 +239,7 @@ export class CampaignService {
   async journal(campaignId: string) {
     const c = await this.require(campaignId);
     const { index } = this.deps.worlds.get(c.worldId);
-    const [questRows, promiseRows, recent] = await Promise.all([
+    const [questRows, promiseRows, recent, chapters] = await Promise.all([
       this.deps.db.select().from(quests).where(eq(quests.campaignId, campaignId)),
       this.deps.db.select().from(promises).where(eq(promises.campaignId, campaignId)),
       this.deps.db
@@ -247,11 +248,13 @@ export class CampaignService {
         .where(eq(turns.campaignId, campaignId))
         .orderBy(sql`${turns.seq} desc`)
         .limit(3),
+      chapterRecaps(this.deps.db, campaignId, 8),
     ]);
     const npcName = (id: string) => index.namedNpcs.get(id)?.name ?? id;
     return {
       quests: questRows.map((q) => ({ title: q.title, objective: q.objective, status: q.status })),
       promises: promiseRows.map((p) => ({ to: npcName(p.npcId), text: p.text, status: p.status })),
+      chapters,
       recent: recent
         .reverse()
         .map((t) => String((t.data.narration as { narration?: string } | undefined)?.narration ?? ""))
