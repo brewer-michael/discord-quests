@@ -1,8 +1,8 @@
 import { VIRTUE_TAGS } from "@dq/core/loom";
 import { createTestDb, TEST_DATABASE_URL } from "@dq/db/testing";
-import { createEngine, type DraftView, type TurnView, WorldCache } from "@dq/engine";
+import { createEngine, type DraftView, GUIDE, type TurnView, WorldCache } from "@dq/engine";
 import { FakeLlm } from "@dq/engine/testing";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { commandsJson } from "./commands";
 import { battleMenu } from "./handlers/battle";
 import { renderSafetyLog } from "./handlers/campaign";
@@ -10,10 +10,13 @@ import { decodeId, encodeId } from "./ids";
 import { RateLimiter } from "./rate-limit";
 import { countComponents, textLength } from "./render/common";
 import { draftModal, renderDraft } from "./render/draft";
-import { renderHub } from "./render/hub";
+import { renderGuide, renderWelcome } from "./render/guide";
+import { describePace, renderHub } from "./render/hub";
 import { renderAbout, renderHelp, renderJournal, renderPrivacy } from "./render/misc";
-import { freezeComponents, renderTurn } from "./render/turn";
+import { freezeComponents, renderTurn, waitingLine } from "./render/turn";
 import { renderWizard } from "./render/wizard";
+import { roomProblems } from "./rooms";
+import { RoundScheduler } from "./scheduler";
 
 const UUID = "123e4567-e89b-42d3-a456-426614174000";
 const worlds = new WorldCache();
@@ -110,6 +113,76 @@ describe("the guardian's safety log", () => {
     expect(text).toMatch(/someone pressed \*\*Not this\*\*/);
     expect(text.length).toBeLessThanOrEqual(1900);
     expect(renderSafetyLog([])).toMatch(/Nothing has been stopped/);
+  });
+});
+
+describe("rooms", () => {
+  it("say what's missing in plain words, and insist the DM room is private", () => {
+    const all = () => true;
+    expect(roomProblems("table", all, true)).toEqual([]);
+    expect(roomProblems("dm", all, false)).toEqual([]);
+    expect(roomProblems("dm", all, true)).toEqual([
+      expect.stringMatching(/Everyone on the server can see this room/),
+    ]);
+    const noThreads = roomProblems("table", (p) => p !== "CreatePublicThreads" && p !== "PinMessages", true);
+    expect(noThreads).toEqual([
+      "I need permission to start a thread for each campaign.",
+      "I need permission to pin each campaign's welcome card.",
+    ]);
+    expect(roomProblems("dm", (p) => p !== "CreatePrivateThreads", false)).toEqual([
+      "I need permission to make a private screen for each DM.",
+    ]);
+  });
+});
+
+describe("pacing", () => {
+  it("keeps far-off deadlines instead of firing early", () => {
+    vi.useFakeTimers();
+    try {
+      const start = Date.now();
+      const scheduler = new RoundScheduler();
+      const fired: string[] = [];
+      // 40 days is beyond what a single timer can wait.
+      scheduler.schedule("r:deadline", new Date(start + 40 * 86_400_000), () => fired.push("deadline"));
+      scheduler.schedule("r:reminder", new Date(start + 60_000), () => fired.push("reminder"));
+      vi.advanceTimersByTime(61_000);
+      expect(fired).toEqual(["reminder"]);
+      vi.advanceTimersByTime(30 * 86_400_000);
+      expect(fired).toEqual(["reminder"]);
+      vi.advanceTimersByTime(10 * 86_400_000);
+      expect(fired).toEqual(["reminder", "deadline"]);
+      scheduler.schedule("q:deadline", new Date(Date.now() + 5000), () => fired.push("cancelled"));
+      scheduler.cancelRound("q");
+      vi.advanceTimersByTime(10_000);
+      expect(fired).not.toContain("cancelled");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("shows when the story moves on, and describes the pace", () => {
+    const at = new Date("2026-03-01T12:00:00Z");
+    expect(waitingLine(["Pip", "Mira"], at)).toBe(
+      "-# Waiting on: Pip, Mira · the story moves on <t:1772366400:R>",
+    );
+    expect(waitingLine([], at)).toMatch(/Everyone has chosen/);
+    expect(describePace({ pace: "post", roundTimerSeconds: 86_400, pingPlayers: true })).toBe(
+      "Play by post · 1 day per turn · pings on",
+    );
+    expect(describePace({ pace: "post", roundTimerSeconds: 0, pingPlayers: true })).toBe(
+      "Play by post · no time limit · pings on",
+    );
+  });
+});
+
+describe("onboarding", () => {
+  it("welcomes a new server and points at the guide", () => {
+    const json = JSON.stringify(checkLimits(renderWelcome("https://quests.example")));
+    expect(json).toContain("https://quests.example/guide");
+    expect(json).toContain("/setup table:#quest-table dm-room:#dm-screen");
+    expect(JSON.stringify(checkLimits(renderWelcome(undefined)))).toContain("/help topic:setup");
+    for (const ids of [["rooms", "setup", "ai", "play"], ["pace"], GUIDE.map((s) => s.id)])
+      checkLimits(renderGuide(ids, "https://quests.example"));
   });
 });
 

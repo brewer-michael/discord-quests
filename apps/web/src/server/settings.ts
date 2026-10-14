@@ -1,4 +1,5 @@
 import { type DbOrTx, guilds } from "@dq/db";
+import { validTimer } from "@dq/engine/pace";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { audit } from "./audit";
@@ -8,8 +9,10 @@ import { ensureGuild } from "./providers";
 export const GameDefaults = z.object({
   imagePolicy: z.enum(["new_scenes", "cruxes_only", "off"]),
   epilogueStyle: z.enum(["subtle", "explicit", "off"]),
-  roundTimerSeconds: z.coerce.number().int().min(60).max(86_400),
+  roundTimerSeconds: z.coerce.number().refine(validTimer, "Pick a time from the list"),
   loomMode: z.enum(["auto", "off"]),
+  pace: z.enum(["live", "post"]),
+  pingPlayers: z.boolean(),
 });
 export type GameDefaults = z.infer<typeof GameDefaults>;
 
@@ -18,6 +21,8 @@ export const DEFAULT_GAME: GameDefaults = {
   epilogueStyle: "subtle",
   roundTimerSeconds: 180,
   loomMode: "auto",
+  pace: "live",
+  pingPlayers: false,
 };
 
 const optionalNumber = (max: number, int = false) =>
@@ -34,6 +39,8 @@ export const SettingsForm = z.object({
   epilogueStyle: GameDefaults.shape.epilogueStyle,
   roundTimerSeconds: GameDefaults.shape.roundTimerSeconds,
   loomMode: GameDefaults.shape.loomMode,
+  pace: GameDefaults.shape.pace,
+  pingPlayers: z.preprocess((v) => v === "on", z.boolean()),
 });
 
 export interface ServerSettings {
@@ -41,6 +48,8 @@ export interface ServerSettings {
   dailyBudgetUsd: number | null;
   dailyImageCap: number | null;
   game: GameDefaults;
+  /** The table room and DM room chosen in Discord with /setup. */
+  rooms: { table?: { id: string; name: string }; dm?: { id: string; name: string } };
 }
 
 export async function serverSettings(db: DbOrTx, guildId: string): Promise<ServerSettings> {
@@ -52,6 +61,7 @@ export async function serverSettings(db: DbOrTx, guildId: string): Promise<Serve
     dailyBudgetUsd: typeof s.dailyBudgetUsd === "number" ? s.dailyBudgetUsd : null,
     dailyImageCap: typeof s.dailyImageCap === "number" ? s.dailyImageCap : null,
     game: game.success ? game.data : DEFAULT_GAME,
+    rooms: (s.rooms as ServerSettings["rooms"] | undefined) ?? {},
   };
 }
 
@@ -78,6 +88,8 @@ export async function saveServerSettings(
         epilogueStyle: v.epilogueStyle,
         roundTimerSeconds: v.roundTimerSeconds,
         loomMode: v.loomMode,
+        pace: v.pace,
+        pingPlayers: v.pingPlayers,
       },
     };
     await tx

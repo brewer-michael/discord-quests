@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { serverGameDefaults } from "./campaign-service";
 import { createEngine, createLogger, type Engine } from "./index";
 import { loadLoom } from "./loom-store";
+import { describeTimer, paceOf, reminderAt, whenTimeIsUp } from "./pace";
 import { planChapter } from "./planner";
 import { asStory } from "./story-state";
 import { FakeLlm, UnconfiguredLlm } from "./testing";
@@ -32,6 +33,43 @@ async function makeHero(engine: Engine, campaignId: string, userId: string, clas
   expect(draft.missing).toEqual([]);
   return engine.characters.finalize(campaignId, userId);
 }
+
+describe("pace", () => {
+  it("reads older campaigns sensibly and fills in defaults", () => {
+    expect(paceOf({})).toEqual({ pace: "live", roundTimerSeconds: 180, pingPlayers: false });
+    expect(paceOf({ roundTimerSeconds: 86_400 })).toEqual({
+      pace: "post",
+      roundTimerSeconds: 86_400,
+      pingPlayers: true,
+    });
+    expect(paceOf({ roundTimerSeconds: 0 })).toMatchObject({ pace: "post", roundTimerSeconds: 0 });
+    expect(paceOf({ roundTimerSeconds: 5 })).toMatchObject({ roundTimerSeconds: 180 });
+  });
+
+  it("reminds once before a long deadline, daily when there is none, and never at game night", () => {
+    const opened = new Date("2026-01-01T00:00:00Z");
+    const day = { createdAt: opened, deadlineAt: new Date("2026-01-02T00:00:00Z"), remindedAt: null };
+    const post = paceOf({ pace: "post", roundTimerSeconds: 86_400 });
+    expect(reminderAt(post, day)?.toISOString()).toBe("2026-01-01T18:00:00.000Z");
+    expect(reminderAt(post, { ...day, remindedAt: new Date("2026-01-01T18:00:00Z") })).toBeNull();
+    const week = paceOf({ pace: "post", roundTimerSeconds: 604_800 });
+    expect(reminderAt(week, { ...day, deadlineAt: new Date("2026-01-08T00:00:00Z") })?.toISOString()).toBe(
+      "2026-01-07T12:00:00.000Z",
+    );
+    const open = paceOf({ pace: "post", roundTimerSeconds: 0 });
+    expect(reminderAt(open, { createdAt: opened, deadlineAt: null, remindedAt: null })?.toISOString()).toBe(
+      "2026-01-02T00:00:00.000Z",
+    );
+    expect(reminderAt(paceOf({ pace: "live" }), day)).toBeNull();
+    expect(describeTimer(0)).toBe("no time limit");
+    // Time's up: go on if anyone chose; if nobody did, play by post tries again and game night waits.
+    expect(whenTimeIsUp(post, 3, 1)).toBe("resolve");
+    expect(whenTimeIsUp(post, 3, 3)).toBe("extend");
+    expect(whenTimeIsUp(paceOf({ pace: "live" }), 3, 3)).toBe("wait");
+    expect(whenTimeIsUp(open, 3, 3)).toBe("wait");
+    expect(describeTimer(172_800)).toBe("2 days");
+  });
+});
 
 describe("server defaults for new campaigns", () => {
   it("takes valid values from the setup page and ignores anything else", () => {
@@ -307,6 +345,87 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
     }
     // The garden fight is over (the road ahead may hold a new one).
     expect(view.sceneTitle).not.toBe("Gloam in the Garden");
+  });
+
+  it("switches pace, stops the clock while paused, and remembers the server's rooms", async () => {
+    const engine = createEngine({ db: db.db, worlds, llm: new FakeLlm() });
+    const c = await engine.campaigns.create({
+      guildId: "g-pace",
+      channelId: "table-1",
+      name: "Slow and Steady",
+      mode: "ai_dm",
+      createdBy: "host",
+      settings: { pace: "post", roundTimerSeconds: 86_400, pingPlayers: true },
+    });
+    await engine.campaigns.setThreads(c.id, "thread-1", null);
+    await engine.campaigns.join(c.id, "kid");
+    await makeHero(engine, c.id, "kid", "scout", "Nib Quickfoot");
+    expect(await engine.campaigns.pace(c.id)).toEqual({
+      pace: "post",
+      roundTimerSeconds: 86_400,
+      pingPlayers: true,
+    });
+    await expect(engine.campaigns.setPace(c.id, "kid", { pace: "live" })).rejects.toThrow(/not host/);
+    await expect(engine.campaigns.setPace(c.id, "host", { roundTimerSeconds: 17 })).rejects.toThrow(
+      /bad timer/,
+    );
+    expect(await engine.campaigns.setPace(c.id, "host", { pace: "live" })).toEqual({
+      pace: "live",
+      roundTimerSeconds: 180,
+      pingPlayers: false,
+    });
+    expect(await engine.campaigns.setPace(c.id, "host", { pace: "post", roundTimerSeconds: 0 })).toEqual({
+      pace: "post",
+      roundTimerSeconds: 0,
+      pingPlayers: true,
+    });
+
+    const view = await engine.turns.openCampaign(c.id, "host");
+    const roundId = view.roundId as string;
+    expect(await engine.turns.waitingOnPlayers(roundId, c.id)).toEqual([
+      { userId: "kid", name: "Nib Quickfoot" },
+    ]);
+    // Paused: a deadline that fires anyway moves nothing on.
+    await engine.campaigns.setStatus(c.id, "host", "paused");
+    expect(await engine.turns.resolveRound(roundId)).toBeNull();
+    expect((await engine.turns.getRound(roundId))?.status).toBe("collecting");
+    expect(await engine.turns.openRounds().then((r) => r.filter((x) => x.campaign.id === c.id))).toEqual([]);
+    await engine.campaigns.setStatus(c.id, "host", "active");
+    const deadline = new Date(Date.now() + 3_600_000);
+    await engine.turns.setRoundDeadline(roundId, deadline);
+    await engine.turns.markReminded(roundId);
+    const open = (await engine.turns.openRounds()).find((x) => x.round.id === roundId);
+    expect(open?.round.deadlineAt?.getTime()).toBe(deadline.getTime());
+    expect(open?.round.remindedAt).not.toBeNull();
+    await engine.turns.setRoundDeadline(roundId, null);
+    expect((await engine.turns.getRound(roundId))?.remindedAt).toBeNull();
+    expect((await engine.turns.resolveRound(roundId))?.kind).toBe("turn");
+    expect((await engine.campaigns.status(c.id)).pace.pace).toBe("post");
+
+    // Rooms are per server, and a room can host only one campaign played right in it.
+    expect(await engine.campaigns.rooms("g-pace")).toEqual({});
+    await engine.campaigns.setRooms(
+      { id: "g-pace", name: "Pace Club" },
+      { table: { id: "table-1", name: "quest-table" } },
+    );
+    expect(
+      await engine.campaigns.setRooms(
+        { id: "g-pace", name: "Pace Club" },
+        { dm: { id: "dm-1", name: "dm-screen" } },
+      ),
+    ).toEqual({ table: { id: "table-1", name: "quest-table" }, dm: { id: "dm-1", name: "dm-screen" } });
+    expect(await engine.campaigns.runningIn("thread-1")).toMatchObject({ id: c.id });
+    expect(await engine.campaigns.runningIn("elsewhere")).toBeNull();
+    const later = await engine.campaigns.create({
+      guildId: "g-pace",
+      channelId: "table-1",
+      name: "Next",
+      mode: "ai_dm",
+      createdBy: "host",
+    });
+    await engine.campaigns.setThreads(later.id, "thread-1", null);
+    await engine.campaigns.setStatus(c.id, "host", "ended");
+    expect((await engine.campaigns.findByThread("thread-1"))?.id).toBe(later.id);
   });
 
   it("lets a guardian watch over the table without seeing what was typed", async () => {

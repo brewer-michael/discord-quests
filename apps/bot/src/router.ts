@@ -24,8 +24,10 @@ import {
   rollCommand,
   xcard,
 } from "./handlers/play";
+import { setupCommand } from "./handlers/setup";
 import { friendly, say } from "./handlers/shared";
 import { decodeId } from "./ids";
+import { renderGuide } from "./render/guide";
 import { renderAbout, renderHelp, renderPrivacy } from "./render/misc";
 import { renderSheet } from "./render/sheet";
 
@@ -52,13 +54,17 @@ export async function route(ctx: BotContext, i: Interaction): Promise<void> {
         case "xcard":
           return await xcard(ctx, i);
         case "setup":
-          return await setup(ctx, i);
+          return await setupCommand(ctx, i);
         case "dm":
           return await dmCommand(ctx, i);
         case "loom":
           return await loomCommand(ctx, i);
-        case "help":
-          return void (await i.reply(renderHelp() as never));
+        case "help": {
+          const topic = i.options.getString("topic") ?? "play";
+          if (topic === "play") return void (await i.reply(renderHelp() as never));
+          const ids = topic === "pace" ? ["pace"] : ["rooms", "setup", "ai", "play"];
+          return void (await i.reply(renderGuide(ids, ctx.env.WEB_BASE_URL) as never));
+        }
         case "about":
           return void (await i.reply(renderAbout() as never));
         case "privacy":
@@ -140,25 +146,4 @@ export async function route(ctx: BotContext, i: Interaction): Promise<void> {
     });
     await say(i as never, friendly(e)).catch(() => {});
   }
-}
-
-async function setup(ctx: BotContext, i: import("discord.js").ChatInputCommandInteraction) {
-  const base = ctx.env.WEB_BASE_URL;
-  const defaults = [
-    ctx.env.ANTHROPIC_API_KEY ? "Claude" : null,
-    ctx.env.OPENAI_API_KEY ? "OpenAI" : null,
-    ctx.env.GEMINI_API_KEY ? "Gemini" : null,
-  ].filter(Boolean);
-  await say(
-    i,
-    [
-      "## Setting up Discord Quests",
-      base
-        ? `Choose story and image providers, add API keys, and set budgets on the setup page: ${base}/servers/${i.guildId}`
-        : "The setup page isn't configured on this bot yet (WEB_BASE_URL).",
-      defaults.length > 0
-        ? `Until then, this bot's server defaults are used: ${defaults.join(", ")}.`
-        : "No server-default providers are configured, so the story will be told by the engine alone until providers are set up.",
-    ].join("\n"),
-  );
 }

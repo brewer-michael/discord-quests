@@ -63,7 +63,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <main className="page">{children}</main>
         <footer className="footer">
           Discord Quests is not affiliated with Discord. Game rules are adapted from the System Reference
-          Document 5.2.1 (CC-BY-4.0). <Link href="/privacy">Privacy</Link>
+          Document 5.2.1 (CC-BY-4.0). <Link href="/guide">Setup guide</Link> ·{" "}
+          <Link href="/privacy">Privacy</Link>
         </footer>
       </body>
     </html>

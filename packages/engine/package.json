@@ -6,7 +6,9 @@
   "description": "Campaign, character and turn services shared by the Discord bot, the web app and the simulator.",
   "exports": {
     ".": "./src/index.ts",
+    "./guide": "./src/guide.ts",
     "./loom-store": "./src/loom-store.ts",
+    "./pace": "./src/pace.ts",
     "./testing": "./src/testing.ts"
   },
   "scripts": {

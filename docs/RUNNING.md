@@ -69,13 +69,43 @@ Anyone with **Manage Server** on a Discord server can sign in and, for that serv
 API keys are encrypted with `MASTER_KEYS` before they're stored and are never sent back to the browser. Every
 change is recorded on the server's Activity page.
 
-## 4. Play
+## 4. Set up each server
 
-1. In any text channel: `/campaign new name:Lights Out`. The bot opens a thread for the adventure.
-2. Everyone presses **Join** and **Make my hero** in the thread.
+When the bot joins a server it posts a welcome message pointing to the setup guide (`WEB_BASE_URL/guide`, also
+`/help topic:setup` in Discord). The bot needs two rooms:
+
+- **A table room** (e.g. `#quest-table`) that everyone can see. Each campaign gets its own thread there, or can be
+  played right in the room (`/campaign new place:Right in the table room`, one campaign at a time).
+- **A private DM room** (e.g. `#dm-screen`) that only the DMs and the bot can see. In Assist mode each DM's private
+  screen is a thread in this room, and only that DM is added to it.
+
+Someone with **Manage Server** runs `/setup table:#quest-table dm-room:#dm-screen`. The bot checks it has the
+permissions it needs in both rooms and refuses a DM room that everyone can see. `/setup` on its own shows how
+things stand. Until rooms are chosen, `/campaign new` opens a thread in whatever channel it was used in.
+
+## 5. Play
+
+1. Anywhere on the server: `/campaign new name:Lights Out`. The adventure opens in the table room.
+2. Everyone presses **Join** and **Make my hero** in the campaign's thread.
 3. The host presses **Begin the adventure**.
-4. Each turn, players press a choice (or **Something else…** to describe their own). When everyone has chosen, or
-   the round timer runs out (3 minutes by default), the story continues.
+4. Each turn, players press a choice (or **Something else…** to describe their own). The story continues when
+   everyone has chosen, when the turn's time runs out, or when the host presses **Continue the story**.
+
+### Game night or play by post
+
+Each campaign has a pace, chosen with `/campaign new pace:…` and changed any time with `/campaign pace`:
+
+| | Game night | Play by post |
+|---|---|---|
+| Time per turn | 3 minutes (2 minutes to 10) | 1 day (12 hours to a week, or no limit) |
+| Pings | none: everyone's already there | the players who need to act, when a turn opens |
+| Reminders | none | before the turn closes (a quarter of the way out, between 1 and 12 hours); daily if there's no limit |
+| Nobody chose at all | the timer stops and the story waits | the turn gets another round of the timer, with a ping |
+
+`/campaign pace timer:… pings:…` fine-tunes either one. `/campaign pause` stops the clock entirely (no deadline,
+no reminders, nothing moves on); `/campaign resume` restarts the open turn's clock and pings the players.
+Deadlines and reminders live in the database, so they survive restarts and deploys. Server-wide defaults for new
+campaigns are on the setup page's Settings.
 
 ### With a human DM (Assist mode)
 

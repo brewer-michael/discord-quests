@@ -7,6 +7,7 @@ import {
   guilds,
   promises,
   quests,
+  rounds,
   safetyEvents,
   scenes,
   turns,
@@ -15,6 +16,7 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { chapterRecaps } from "./chronicle";
 import { type EngineDeps, GameError } from "./deps";
 import { createLoom } from "./loom-store";
+import { PACES, type Pace, type PaceSettings, paceOf, validTimer } from "./pace";
 import { asStory, initialStoryState } from "./story-state";
 import { DEFAULT_WORLD_ID } from "./world-cache";
 
@@ -22,8 +24,12 @@ export interface CampaignSettings {
   contentLevel: "gentle" | "adventurous";
   audience: "family" | "teen";
   epilogueStyle: "subtle" | "explicit" | "off";
-  /** Seconds players have to act in a live round before it resolves anyway. */
+  /** Seconds players have to act before the round resolves anyway. 0 waits for everyone. */
   roundTimerSeconds: number;
+  /** Game night or play by post. */
+  pace?: Pace;
+  /** Mention players when a turn opens, and remind them before it closes. */
+  pingPlayers?: boolean;
   imagePolicy: "new_scenes" | "cruxes_only" | "off";
   /** "off" switches the hidden hand off for this campaign. */
   loomMode?: "auto" | "off";
@@ -39,8 +45,9 @@ export function serverGameDefaults(
     out.imagePolicy = d.imagePolicy;
   if (d.epilogueStyle === "subtle" || d.epilogueStyle === "explicit" || d.epilogueStyle === "off")
     out.epilogueStyle = d.epilogueStyle;
-  if (typeof d.roundTimerSeconds === "number" && d.roundTimerSeconds >= 60 && d.roundTimerSeconds <= 86_400)
-    out.roundTimerSeconds = Math.round(d.roundTimerSeconds);
+  if (validTimer(d.roundTimerSeconds)) out.roundTimerSeconds = d.roundTimerSeconds;
+  if (d.pace === "live" || d.pace === "post") out.pace = d.pace;
+  if (typeof d.pingPlayers === "boolean") out.pingPlayers = d.pingPlayers;
   if (d.loomMode === "auto" || d.loomMode === "off") out.loomMode = d.loomMode;
   return out;
 }
@@ -51,7 +58,16 @@ export const DEFAULT_SETTINGS: CampaignSettings = {
   epilogueStyle: "subtle",
   roundTimerSeconds: 180,
   imagePolicy: "new_scenes",
+  pace: "live",
+  pingPlayers: false,
 };
+
+export interface ServerRooms {
+  /** Where play happens: dice, actions, the story. */
+  table?: { id: string; name: string };
+  /** Private to the DMs and the bot: Assist-mode DM screens live here. */
+  dm?: { id: string; name: string };
+}
 
 export class CampaignService {
   constructor(private readonly deps: EngineDeps) {}
@@ -152,12 +168,78 @@ export class CampaignService {
   }
 
   /** The campaign whose thread (or DM thread) a command was used in. */
+  /** The campaign played in a thread (or room), preferring one that's still running. */
   async findByThread(threadId: string) {
+    const rows = await this.deps.db
+      .select()
+      .from(campaigns)
+      .where(sql`${campaigns.threadId} = ${threadId} or ${campaigns.dmThreadId} = ${threadId}`)
+      .orderBy(desc(campaigns.createdAt));
+    return rows.find((c) => c.status !== "ended") ?? rows[0] ?? null;
+  }
+
+  /** Is a campaign already being played right in this room? */
+  async runningIn(channelId: string) {
     const [c] = await this.deps.db
       .select()
       .from(campaigns)
-      .where(sql`${campaigns.threadId} = ${threadId} or ${campaigns.dmThreadId} = ${threadId}`);
+      .where(
+        and(eq(campaigns.threadId, channelId), inArray(campaigns.status, ["setup", "active", "paused"])),
+      );
     return c ?? null;
+  }
+
+  async pace(campaignId: string): Promise<PaceSettings> {
+    return paceOf((await this.require(campaignId)).settings as Record<string, unknown>);
+  }
+
+  /**
+   * Switches between game night and play by post (or adjusts the timer or pings).
+   * Choosing a pace brings its usual timer and pings unless they're given too.
+   */
+  async setPace(
+    campaignId: string,
+    userId: string,
+    patch: { pace?: Pace; roundTimerSeconds?: number; pingPlayers?: boolean },
+  ): Promise<PaceSettings> {
+    if (!(await this.isHostOrDm(campaignId, userId)))
+      throw new GameError("not host", "Only the host or the DM can change the pace.");
+    if (patch.roundTimerSeconds !== undefined && !validTimer(patch.roundTimerSeconds))
+      throw new GameError("bad timer", "Pick a time from the list.");
+    const preset = patch.pace ? PACES[patch.pace] : undefined;
+    const next: PaceSettings = {
+      ...(await this.pace(campaignId)),
+      ...(preset
+        ? { pace: preset.pace, roundTimerSeconds: preset.roundTimerSeconds, pingPlayers: preset.pingPlayers }
+        : {}),
+      ...(patch.roundTimerSeconds !== undefined ? { roundTimerSeconds: patch.roundTimerSeconds } : {}),
+      ...(patch.pingPlayers !== undefined ? { pingPlayers: patch.pingPlayers } : {}),
+    };
+    await this.updateSettings(campaignId, { ...next });
+    return next;
+  }
+
+  async rooms(guildId: string): Promise<ServerRooms> {
+    const [g] = await this.deps.db.select().from(guilds).where(eq(guilds.id, guildId));
+    return ((g?.settings as Record<string, unknown> | undefined)?.rooms as ServerRooms | undefined) ?? {};
+  }
+
+  /** Saves the server's table room and DM room. Discord permissions are checked by the bot before this. */
+  async setRooms(guild: { id: string; name: string }, rooms: ServerRooms): Promise<ServerRooms> {
+    return this.deps.db.transaction(async (tx) => {
+      await tx
+        .insert(guilds)
+        .values({ id: guild.id, name: guild.name })
+        .onConflictDoUpdate({ target: guilds.id, set: { name: guild.name, updatedAt: new Date() } });
+      const [g] = await tx.select().from(guilds).where(eq(guilds.id, guild.id)).for("update");
+      const settings = (g?.settings ?? {}) as Record<string, unknown>;
+      const merged = { ...((settings.rooms as ServerRooms | undefined) ?? {}), ...rooms };
+      await tx
+        .update(guilds)
+        .set({ settings: { ...settings, rooms: merged }, updatedAt: new Date() })
+        .where(eq(guilds.id, guild.id));
+      return merged;
+    });
   }
 
   async listForGuild(guildId: string) {
@@ -282,6 +364,15 @@ export class CampaignService {
         level: p.level,
       })),
       quests: questRows,
+      pace: paceOf(c.settings as Record<string, unknown>),
+      deadline:
+        (
+          await this.deps.db
+            .select({ deadlineAt: rounds.deadlineAt })
+            .from(rounds)
+            .where(and(eq(rounds.campaignId, campaignId), eq(rounds.status, "collecting")))
+            .limit(1)
+        )[0]?.deadlineAt ?? null,
     };
   }
 

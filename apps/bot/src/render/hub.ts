@@ -1,3 +1,4 @@
+import { describeTimer, PACES, type PaceSettings } from "@dq/engine";
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ContainerBuilder } from "discord.js";
 import { encodeId } from "../ids";
 import { COLORS, divider, esc, text, V2 } from "./common";
@@ -12,6 +13,14 @@ export interface HubInfo {
   status: string;
   audience: "family" | "teen";
   heroes: Array<{ name: string; userId: string; ready: boolean }>;
+  pace?: PaceSettings;
+}
+
+/** "Play by post · 1 day per turn · pings on" */
+export function describePace(p: PaceSettings): string {
+  const timer =
+    p.roundTimerSeconds === 0 ? "no time limit" : `${describeTimer(p.roundTimerSeconds)} per turn`;
+  return `${PACES[p.pace].label} · ${timer} · pings ${p.pingPlayers ? "on" : "off"}`;
 }
 
 export const FAMILY_NOTICE =
@@ -28,6 +37,7 @@ export function renderHub(info: HubInfo) {
       [
         `**Storyteller:** ${info.mode === "ai_dm" ? "Old Wick (the bot) runs the story" : `<@${info.dmUserId}> runs the story, with the bot's help`}`,
         `**Status:** ${info.status === "setup" ? "Gathering heroes" : info.status === "active" ? "Adventure in progress" : info.status}`,
+        ...(info.pace ? [`**Pace:** ${describePace(info.pace)} (change with \`/campaign pace\`)`] : []),
         `**Heroes:** ${
           info.heroes.length === 0
             ? "none yet"

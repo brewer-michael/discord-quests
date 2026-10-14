@@ -1,80 +1,158 @@
-import { GameError } from "@dq/engine";
+import { GameError, PACES, type Pace, paceOf } from "@dq/engine";
 import {
   type ButtonInteraction,
   ChannelType,
   type ChatInputCommandInteraction,
+  type TextChannel,
   ThreadAutoArchiveDuration,
 } from "discord.js";
 import type { BotContext } from "../context";
-import { postTurn, sendableChannel } from "../flows";
-import { renderHub } from "../render/hub";
+import { postTurn, restartClock, sendableChannel, stopClock } from "../flows";
+import { describePace, renderHub } from "../render/hub";
+import { canSeeRoom, checkRoom, fetchRoom } from "../rooms";
 import { campaignHere, refreshHub, say } from "./shared";
 
 export async function campaignNew(ctx: BotContext, i: ChatInputCommandInteraction) {
-  const channel = i.channel;
-  if (!i.guildId || !channel || channel.type !== ChannelType.GuildText) {
-    throw new GameError(
-      "bad channel",
-      "Use `/campaign new` in a regular text channel. I'll make a thread for the adventure.",
-    );
+  const guild = i.guild;
+  if (!i.guildId || !guild) throw new GameError("no guild", "Start campaigns in a server.");
+  const rooms = await ctx.engine.campaigns.rooms(i.guildId);
+  const me = guild.members.me ?? (await guild.members.fetchMe());
+  const setupHint = "Someone with Manage Server can fix this with `/setup` (or see `/help topic:setup`).";
+
+  // The table room: the server's chosen room, or (before /setup) the channel the command was used in.
+  let table: TextChannel;
+  if (rooms.table) {
+    const found = await fetchRoom(guild, rooms.table.id);
+    if (!found)
+      throw new GameError("table gone", `I can't find this server's table room any more. ${setupHint}`);
+    table = found;
+  } else {
+    if (i.channel?.type !== ChannelType.GuildText)
+      throw new GameError(
+        "bad channel",
+        `This server hasn't chosen a table room yet, so use \`/campaign new\` in a regular text channel. ${setupHint}`,
+      );
+    table = i.channel;
   }
-  await i.deferReply({ flags: ["Ephemeral"] });
+  const tableProblems = checkRoom("table", table, me);
+  if (tableProblems.length > 0)
+    throw new GameError(
+      "table perms",
+      `I can't run a game in ${table.toString()} yet:\n${tableProblems.map((p) => `- ${p}`).join("\n")}\n${setupHint}`,
+    );
+
   const mode = (i.options.getString("storyteller") ?? "ai_dm") as "ai_dm" | "assist";
   const audience = (i.options.getString("audience") ?? "family") as "family" | "teen";
+  const place = (i.options.getString("place") ?? "thread") as "thread" | "room";
+  const pace = i.options.getString("pace") as Pace | null;
   const dm = i.options.getUser("dm");
   if (mode === "assist" && !dm)
     throw new GameError("no dm", "Pick the human DM with the `dm` option, or let the bot tell the story.");
+
+  // The DM's private screen lives in the DM room, so the DM has to be able to see it.
+  let screenParent: TextChannel | null = null;
+  if (mode === "assist" && dm) {
+    if (rooms.dm) {
+      const dmRoom = await fetchRoom(guild, rooms.dm.id);
+      if (!dmRoom)
+        throw new GameError("dm room gone", `I can't find this server's DM room any more. ${setupHint}`);
+      const problems = checkRoom("dm", dmRoom, me);
+      if (problems.length > 0)
+        throw new GameError(
+          "dm perms",
+          `The DM room isn't ready:\n${problems.map((p) => `- ${p}`).join("\n")}\n${setupHint}`,
+        );
+      if (!(await canSeeRoom(guild, dmRoom, dm.id)))
+        throw new GameError(
+          "dm cant see",
+          `${dm.toString()} can't see the DM room (${dmRoom.toString()}). Add them to it first: their private screen lives there.`,
+        );
+      screenParent = dmRoom;
+    } else screenParent = table;
+  }
+  if (place === "room" && (await ctx.engine.campaigns.runningIn(table.id)))
+    throw new GameError(
+      "room busy",
+      `A campaign is already being played right in ${table.toString()}. Start this one in its own thread instead.`,
+    );
+
+  await i.deferReply({ flags: ["Ephemeral"] });
   const name = i.options.getString("name", true);
   const c = await ctx.engine.campaigns.create({
     guildId: i.guildId,
-    guildName: i.guild?.name ?? "",
-    channelId: channel.id,
+    guildName: guild.name,
+    channelId: table.id,
     name,
     mode,
     createdBy: i.user.id,
     dmUserId: dm?.id ?? null,
-    settings: { audience },
-  });
-  const thread = await channel.threads.create({
-    name: `🏮 ${name}`.slice(0, 100),
-    autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek,
-    reason: "New Discord Quests campaign",
-  });
-  let dmThreadId: string | null = null;
-  if (mode === "assist" && dm) {
-    const screen = await channel.threads.create({
-      name: `DM screen: ${name}`.slice(0, 100),
-      type: ChannelType.PrivateThread,
-      invitable: false,
-      reason: "Private DM screen",
-    });
-    await screen.members.add(dm.id).catch(() => {});
-    dmThreadId = screen.id;
-    await screen.send(
-      "This private thread is your DM screen. Drafts of each turn will appear here for you to approve, edit or redo.",
-    );
-  }
-  await ctx.engine.campaigns.setThreads(c.id, thread.id, dmThreadId);
-  const { index } = ctx.worlds.get(c.worldId);
-  const hub = await thread.send(
-    renderHub({
-      campaignId: c.id,
-      name: c.name,
-      worldName: index.world.meta.name,
-      tagline: index.world.meta.tagline,
-      mode,
-      dmUserId: dm?.id ?? null,
-      status: "setup",
+    settings: {
       audience,
-      heroes: [],
-    }) as never,
-  );
-  await hub.pin().catch(() => {});
-  await ctx.engine.campaigns.updateSettings(c.id, { hubMessageId: hub.id });
-  await thread.members.add(i.user.id).catch(() => {});
-  await i.editReply({
-    content: `Your adventure begins in ${thread.toString()}. Invite your friends to press **Join** there!`,
+      ...(pace
+        ? { pace, roundTimerSeconds: PACES[pace].roundTimerSeconds, pingPlayers: PACES[pace].pingPlayers }
+        : {}),
+    },
   });
+  try {
+    const home =
+      place === "room"
+        ? table
+        : await table.threads.create({
+            name: `🏮 ${name}`.slice(0, 100),
+            autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek,
+            reason: "New Discord Quests campaign",
+          });
+    let dmThreadId: string | null = null;
+    if (screenParent && dm) {
+      const screen = await screenParent.threads.create({
+        name: `DM screen: ${name}`.slice(0, 100),
+        type: ChannelType.PrivateThread,
+        invitable: false,
+        autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek,
+        reason: "Private DM screen",
+      });
+      await screen.members.add(dm.id).catch(() => {});
+      dmThreadId = screen.id;
+      await screen.send({
+        content: `${dm.toString()}, this private thread is your DM screen for **${name}**. Each turn is drafted here for you to send, edit or redo before the players see it. \`/loom view\` and \`/dm say\` work here too.`,
+        allowedMentions: { users: [dm.id] },
+      });
+    }
+    await ctx.engine.campaigns.setThreads(c.id, home.id, dmThreadId);
+    const { index } = ctx.worlds.get(c.worldId);
+    const hub = await home.send(
+      renderHub({
+        campaignId: c.id,
+        name: c.name,
+        worldName: index.world.meta.name,
+        tagline: index.world.meta.tagline,
+        mode,
+        dmUserId: dm?.id ?? null,
+        status: "setup",
+        audience,
+        heroes: [],
+        pace: paceOf(c.settings as Record<string, unknown>),
+      }) as never,
+    );
+    await hub.pin().catch(() => {});
+    await ctx.engine.campaigns.updateSettings(c.id, { hubMessageId: hub.id });
+    if (home.isThread()) await home.members.add(i.user.id).catch(() => {});
+    const where = home.isThread() ? `${home.toString()} (in ${table.toString()})` : table.toString();
+    await i.editReply({
+      content: [
+        `Your adventure begins in ${where}. Invite your friends to press **Join** there!`,
+        rooms.table
+          ? ""
+          : "-# Tip: someone with Manage Server can give the bot a table room and a private DM room with `/setup`.",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    });
+  } catch (e) {
+    // Don't leave a half-made campaign behind.
+    await ctx.engine.campaigns.purge(c.id, i.user.id).catch(() => {});
+    throw e;
+  }
 }
 
 export async function campaignJoin(
@@ -151,6 +229,7 @@ export async function campaignCommand(ctx: BotContext, i: ChatInputCommandIntera
           `**${s.campaign.name}** · ${s.worldName}`,
           `Status: ${s.campaign.status} · Now in: ${s.regionName}${s.chapter ? ` · ${s.chapter}` : ""}`,
           `Heroes: ${s.party.map((p) => `${p.name || "(unnamed)"} (level ${p.level}${p.ready ? "" : ", still being made"})`).join(", ") || "none yet"}`,
+          `Pace: ${describePace(s.pace)}${s.deadline ? ` · this turn moves on <t:${Math.floor(s.deadline.getTime() / 1000)}:R>` : ""}`,
           s.quests.length ? `Quests: ${s.quests.map((q) => q.title).join(", ")}` : "",
         ]
           .filter(Boolean)
@@ -170,6 +249,25 @@ export async function campaignCommand(ctx: BotContext, i: ChatInputCommandIntera
       await say(i, renderSafetyLog(log));
       return;
     }
+    case "pace": {
+      const pace = i.options.getString("pace") as Pace | null;
+      const timer = i.options.getInteger("timer");
+      const pings = i.options.getBoolean("pings");
+      if (!pace && timer === null && pings === null) {
+        await say(i, `This campaign plays at **${describePace(await ctx.engine.campaigns.pace(c.id))}**.`);
+        return;
+      }
+      const next = await ctx.engine.campaigns.setPace(c.id, i.user.id, {
+        ...(pace ? { pace } : {}),
+        ...(timer !== null ? { roundTimerSeconds: timer } : {}),
+        ...(pings !== null ? { pingPlayers: pings } : {}),
+      });
+      // The turn that's open now gets a fresh clock under the new pace.
+      await restartClock(ctx, c.id, "new");
+      await say(i, `Now playing at **${describePace(next)}**.`);
+      await refreshHub(ctx, c.id);
+      return;
+    }
     case "pause":
     case "resume":
     case "end":
@@ -178,6 +276,9 @@ export async function campaignCommand(ctx: BotContext, i: ChatInputCommandIntera
         i.user.id,
         sub === "pause" ? "paused" : sub === "resume" ? "active" : "ended",
       );
+      // Pausing stops the clock; resuming starts the open turn's clock afresh.
+      if (sub === "pause" || sub === "end") await stopClock(ctx, c.id);
+      else await restartClock(ctx, c.id, "resumed");
       await say(
         i,
         sub === "pause"

@@ -53,6 +53,17 @@ export default async function Overview({ params }: { params: Promise<{ guildId: 
               Then anyone can start with <code>/campaign new</code>.
             </span>
           </Check>
+          <Check done={Boolean(settings.rooms.table && settings.rooms.dm)}>
+            <strong>Give the bot its two rooms.</strong>{" "}
+            <span className="muted">
+              {settings.rooms.table && settings.rooms.dm
+                ? `Playing in #${settings.rooms.table.name}; DM screens in #${settings.rooms.dm.name}.`
+                : "A table room for everyone and a private DM room, chosen in Discord with /setup. "}
+              {settings.rooms.table && settings.rooms.dm ? null : (
+                <Link href="/guide#rooms">How to set them up</Link>
+              )}
+            </span>
+          </Check>
           <Check done={hasStory || platformStory}>
             <strong>Choose a storyteller.</strong>{" "}
             <span className="muted">

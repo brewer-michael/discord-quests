@@ -3,6 +3,7 @@ import { BASE_URL, GUILD_ID, SESSION_TOKEN } from "./fixtures";
 
 const PAGES = [
   "/",
+  "/guide",
   "/servers",
   `/servers/${GUILD_ID}`,
   `/servers/${GUILD_ID}/providers/new?kind=image`,

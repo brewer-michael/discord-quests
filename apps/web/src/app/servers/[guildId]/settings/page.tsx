@@ -1,3 +1,4 @@
+import { PACES, TIMER_CHOICES } from "@dq/engine/pace";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
 import { requireGuild } from "@/server/access";
 import { services } from "@/server/db";
@@ -78,22 +79,44 @@ export default async function Settings({ params }: { params: Promise<{ guildId: 
             </select>
           </div>
           <div className="field">
+            <label htmlFor="pace">How fast campaigns play</label>
+            <select id="pace" name="pace" defaultValue={s.game.pace}>
+              {Object.values(PACES).map((p) => (
+                <option key={p.pace} value={p.pace}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+            <span className="hint">
+              {PACES.live.label}: {PACES.live.blurb} {PACES.post.label}: {PACES.post.blurb} Each campaign can
+              switch any time with <code>/campaign pace</code>.
+            </span>
+          </div>
+          <div className="field">
             <label htmlFor="roundTimerSeconds">Time to choose each turn</label>
             <select
               id="roundTimerSeconds"
               name="roundTimerSeconds"
               defaultValue={String(s.game.roundTimerSeconds)}
             >
-              <option value="60">1 minute</option>
-              <option value="120">2 minutes</option>
-              <option value="180">3 minutes</option>
-              <option value="300">5 minutes</option>
-              <option value="900">15 minutes</option>
-              <option value="3600">1 hour</option>
-              <option value="43200">12 hours (play by post)</option>
-              <option value="86400">24 hours (play by post)</option>
+              {TIMER_CHOICES.map((t) => (
+                <option key={t.seconds} value={String(t.seconds)}>
+                  {t.label}
+                </option>
+              ))}
             </select>
+            <span className="hint">Anyone who hasn't chosen by then watches and waits that turn.</span>
           </div>
+          <label className="check-field">
+            <input type="checkbox" name="pingPlayers" defaultChecked={s.game.pingPlayers} />
+            <span>
+              Ping players when it's their turn
+              <br />
+              <span className="hint">
+                And remind anyone who hasn't chosen before the turn moves on. Best for play by post.
+              </span>
+            </span>
+          </label>
           <div className="field">
             <label htmlFor="epilogueStyle">At the end of the story</label>
             <select id="epilogueStyle" name="epilogueStyle" defaultValue={s.game.epilogueStyle}>

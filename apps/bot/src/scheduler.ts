@@ -1,29 +1,45 @@
 /**
- * Round timers. In live play, a round resolves when everyone has acted or the
- * timer runs out. Deadlines live in the database, so timers come back after a
- * restart.
+ * Round timers and reminders. Deadlines live in the database, so they come
+ * back after a restart; this only holds the in-process timers.
  */
+const MAX_TIMEOUT = 2 ** 31 - 1;
+
 export class RoundScheduler {
   private readonly timers = new Map<string, NodeJS.Timeout>();
 
-  schedule(roundId: string, at: Date, fire: () => void) {
-    this.cancel(roundId);
-    const delay = Math.max(1000, at.getTime() - Date.now());
-    const t = setTimeout(
-      () => {
-        this.timers.delete(roundId);
-        fire();
-      },
-      Math.min(delay, 2 ** 31 - 1),
-    );
-    t.unref?.();
-    this.timers.set(roundId, t);
+  /** Runs `fire` at `at`. Re-arms itself for times further away than a timer can wait (about 24 days). */
+  schedule(key: string, at: Date, fire: () => void, now = Date.now) {
+    this.cancel(key);
+    const arm = () => {
+      const delay = at.getTime() - now();
+      const t = setTimeout(
+        () => {
+          if (at.getTime() - now() > 1000) return arm();
+          this.timers.delete(key);
+          fire();
+        },
+        Math.max(1000, Math.min(delay, MAX_TIMEOUT)),
+      );
+      t.unref?.();
+      this.timers.set(key, t);
+    };
+    arm();
   }
 
-  cancel(roundId: string) {
-    const t = this.timers.get(roundId);
+  cancel(key: string) {
+    const t = this.timers.get(key);
     if (t) clearTimeout(t);
-    this.timers.delete(roundId);
+    this.timers.delete(key);
+  }
+
+  /** Cancels a round's deadline and reminder. */
+  cancelRound(roundId: string) {
+    this.cancel(`${roundId}:deadline`);
+    this.cancel(`${roundId}:reminder`);
+  }
+
+  has(key: string) {
+    return this.timers.has(key);
   }
 
   size() {

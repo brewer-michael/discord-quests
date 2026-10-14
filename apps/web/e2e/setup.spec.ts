@@ -91,6 +91,15 @@ test("signed-out visitors see the landing page and are sent to Discord to sign i
   expect(callback.headers().location).toContain("/?error=signin");
 });
 
+test("the setup guide is public and explains the two rooms", async ({ page }) => {
+  await page.goto("/guide");
+  await expect(page.getByRole("heading", { name: "Setting up Discord Quests" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "2. Make two rooms" })).toBeVisible();
+  await expect(page.getByText("/setup table:#quest-table dm-room:#dm-screen")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Game night or play by post" })).toBeVisible();
+  await snap(page, "00-guide");
+});
+
 test("an admin sees only the servers they manage", async ({ page }) => {
   await signIn(page);
   await page.goto("/servers");
@@ -108,6 +117,11 @@ test("adding a custom endpoint keeps the key secret, and the connection test wor
   const leaks = watchForSecret(page);
   await page.goto(`/servers/${GUILD_ID}`);
   await expect(page.getByText("Getting ready")).toBeVisible();
+  await expect(page.getByText("Give the bot its two rooms.")).toBeVisible();
+  await expect(page.getByRole("link", { name: "How to set them up" })).toHaveAttribute(
+    "href",
+    "/guide#rooms",
+  );
   await snap(page, "03-overview-empty");
 
   await page.getByRole("link", { name: "Add a story service" }).click();
@@ -159,7 +173,8 @@ test("routing, settings, usage and activity", async ({ page }) => {
 
   await page.goto(`/servers/${GUILD_ID}/settings`);
   await page.getByLabel("Daily budget (US dollars)").fill("2.5");
-  await page.getByLabel("Time to choose each turn").selectOption("43200");
+  await page.getByLabel("How fast campaigns play").selectOption("post");
+  await page.getByLabel("Time to choose each turn").selectOption("172800");
   await page.getByRole("button", { name: "Save settings" }).click();
   await expect(page.getByText("Saved. New campaigns will use these defaults.")).toBeVisible();
   await page.reload();

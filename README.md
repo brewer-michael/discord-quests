@@ -15,6 +15,10 @@ It can be the dungeon master itself (**AI-DM mode**) or help a human dungeon mas
   spending points by hand.
 - **Gentle battles.** Turn-based fights with initiative, spells and potions, where nobody is ever badly
   hurt: foes faint, run off or pop into smoke, heroes at zero are only Dazed, and a beaten foe can be spared.
+- **Game night or play by post.** Quick rounds with everyone online, or turns over days with pings and
+  reminders. A campaign can switch whenever it suits the group, and pausing stops the clock.
+- **Two rooms per server.** Play happens in a table room everyone can see; human DMs get private screens in a
+  DM room only they and the bot can see. The bot welcomes each new server and links to a setup guide.
 - **Scene art** when the party reaches a new place or challenge, from the image provider you choose.
 - **Your choice of AI.** Story and image providers are configured on the web setup page: Claude (the
   default), OpenAI-compatible services, Gemini, local models, or your own custom endpoint.

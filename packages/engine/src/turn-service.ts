@@ -467,6 +467,11 @@ export class TurnService {
     if (!claimed) return null;
     try {
       const [c] = await db.select().from(campaigns).where(eq(campaigns.id, claimed.campaignId));
+      // A paused campaign's clock is stopped: nothing moves on until it resumes.
+      if (c?.status !== "active") {
+        await db.update(rounds).set({ status: "collecting" }).where(eq(rounds.id, roundId));
+        return null;
+      }
       const prepared = await this.prepare(claimed);
       if (c?.mode === "assist" && c.dmUserId)
         return { kind: "draft", draft: await this.saveDraft(prepared, c.dmUserId) };
@@ -1940,8 +1945,40 @@ export class TurnService {
   async setRoundMessage(roundId: string, messageId: string, deadlineAt: Date | null) {
     await this.deps.db
       .update(rounds)
-      .set({ discordMessageId: messageId, deadlineAt })
+      .set({ discordMessageId: messageId, deadlineAt, remindedAt: null })
       .where(eq(rounds.id, roundId));
+  }
+
+  /** A new deadline (or none) for an open round, e.g. after a pause or a change of pace. */
+  async setRoundDeadline(roundId: string, deadlineAt: Date | null) {
+    await this.deps.db
+      .update(rounds)
+      .set({ deadlineAt, remindedAt: null })
+      .where(and(eq(rounds.id, roundId), eq(rounds.status, "collecting")));
+  }
+
+  async markReminded(roundId: string, at = new Date()) {
+    await this.deps.db.update(rounds).set({ remindedAt: at }).where(eq(rounds.id, roundId));
+  }
+
+  /** The players who haven't acted yet, for pings and reminders. */
+  async waitingOnPlayers(
+    roundId: string,
+    campaignId: string,
+  ): Promise<Array<{ userId: string; name: string }>> {
+    const party = await this.party(campaignId);
+    const acted = await this.deps.db.select().from(pendingActions).where(eq(pendingActions.roundId, roundId));
+    const done = new Set(acted.map((a) => a.characterId));
+    return party.filter((p) => !done.has(p.id)).map((p) => ({ userId: p.userId, name: p.name }));
+  }
+
+  /** Every open round in a running campaign, for bringing back timers and reminders after a restart. */
+  async openRounds() {
+    return this.deps.db
+      .select({ round: rounds, campaign: campaigns })
+      .from(rounds)
+      .innerJoin(campaigns, eq(campaigns.id, rounds.campaignId))
+      .where(and(eq(rounds.status, "collecting"), eq(campaigns.status, "active")));
   }
 
   async getRound(roundId: string) {

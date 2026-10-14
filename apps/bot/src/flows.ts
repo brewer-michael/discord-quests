@@ -1,9 +1,17 @@
-import { type DmDraft, GameError, type TurnView } from "@dq/engine";
+import {
+  type DmDraft,
+  GameError,
+  type PaceSettings,
+  paceOf,
+  reminderAt,
+  type TurnView,
+  whenTimeIsUp,
+} from "@dq/engine";
 import type { Message, SendableChannels } from "discord.js";
 import type { BotContext } from "./context";
 import { notice, V2 } from "./render/common";
 import { renderDraft } from "./render/draft";
-import { freezeComponents, renderTurn, sceneAttachment } from "./render/turn";
+import { freezeComponents, renderTurn, sceneAttachment, waitingLine } from "./render/turn";
 
 export async function sendableChannel(
   ctx: BotContext,
@@ -14,18 +22,23 @@ export async function sendableChannel(
   return ch?.isSendable() ? ch : null;
 }
 
-/** Posts a turn, remembers its message, starts the round timer, and fetches scene art in the background. */
+function deadlineFor(pace: PaceSettings, from = Date.now()): Date | null {
+  return pace.roundTimerSeconds > 0 ? new Date(from + pace.roundTimerSeconds * 1000) : null;
+}
+
+/** Posts a turn, remembers its message, starts the round's clock, and fetches scene art in the background. */
 export async function postTurn(ctx: BotContext, channel: SendableChannels, view: TurnView): Promise<Message> {
+  const campaign = await ctx.engine.campaigns.get(view.campaignId);
+  const pace = paceOf(campaign?.settings as Record<string, unknown> | undefined);
+  const deadline = view.roundId ? deadlineFor(pace) : null;
   const waitingOn = view.roundId ? await ctx.engine.turns.waitingOn(view.roundId, view.campaignId) : [];
-  const message = await channel.send(renderTurn(view, { waitingOn }));
+  const message = await channel.send(renderTurn(view, { waitingOn, deadline }));
   if (view.roundId) {
-    const campaign = await ctx.engine.campaigns.get(view.campaignId);
-    const seconds = Number(
-      (campaign?.settings as Record<string, unknown> | undefined)?.roundTimerSeconds ?? 0,
-    );
-    const deadline = seconds > 0 ? new Date(Date.now() + seconds * 1000) : null;
     await ctx.engine.turns.setRoundMessage(view.roundId, message.id, deadline);
-    if (deadline) scheduleRound(ctx, view.roundId, deadline, channel.id);
+    const round = await ctx.engine.turns.getRound(view.roundId);
+    if (round) armRound(ctx, round, pace, channel.id);
+    if (pace.pingPlayers && !view.campaignEnded)
+      await pingTurn(ctx, channel, view.roundId, view.campaignId, deadline, "new");
   }
   if (view.levelUps.length > 0) {
     await channel.send({
@@ -37,10 +50,134 @@ export async function postTurn(ctx: BotContext, channel: SendableChannels, view:
   return message;
 }
 
-export function scheduleRound(ctx: BotContext, roundId: string, at: Date, channelId: string) {
-  ctx.scheduler.schedule(roundId, at, () => {
-    void sendableChannel(ctx, channelId).then((ch) => (ch ? resolveAndPost(ctx, roundId, ch) : undefined));
-  });
+type RoundRow = NonNullable<Awaited<ReturnType<BotContext["engine"]["turns"]["getRound"]>>>;
+
+/** Sets a round's timers: the deadline (if any) and the next reminder (play by post). */
+export function armRound(ctx: BotContext, round: RoundRow, pace: PaceSettings, channelId: string) {
+  ctx.scheduler.cancelRound(round.id);
+  if (round.deadlineAt) {
+    ctx.scheduler.schedule(
+      `${round.id}:deadline`,
+      round.deadlineAt,
+      () => void onDeadline(ctx, round.id, channelId),
+    );
+  }
+  const remind = reminderAt(pace, round);
+  if (remind)
+    ctx.scheduler.schedule(`${round.id}:reminder`, remind, () => void sendReminder(ctx, round.id, channelId));
+}
+
+/** Mentions the players who still need to act. Only the people who haven't chosen get pinged. */
+export async function pingTurn(
+  ctx: BotContext,
+  channel: SendableChannels,
+  roundId: string,
+  campaignId: string,
+  deadline: Date | null,
+  kind: "new" | "reminder" | "resumed",
+) {
+  const players = await ctx.engine.turns.waitingOnPlayers(roundId, campaignId);
+  const users = [...new Set(players.map((p) => p.userId))];
+  if (users.length === 0) return;
+  const when = deadline
+    ? ` The story moves on <t:${Math.floor(deadline.getTime() / 1000)}:R> (<t:${Math.floor(deadline.getTime() / 1000)}:f>).`
+    : " There's no rush: the story waits for everyone.";
+  const lead =
+    kind === "new"
+      ? "🔔 A new turn is ready!"
+      : kind === "resumed"
+        ? "▶️ The adventure is back on!"
+        : "⏳ Friendly reminder: your heroes are waiting.";
+  await channel
+    .send({
+      content: `${lead} ${users.map((u) => `<@${u}>`).join(" ")}, choose what your hero does.${when}`,
+      allowedMentions: { users },
+    })
+    .catch((e: Error) => ctx.log.warn("ping failed", { error: e.message }));
+}
+
+/**
+ * Time's up. Whoever hasn't chosen watches and waits, and the story goes on.
+ * But if nobody has chosen anything, moving on would waste the turn: at game
+ * night the story simply waits; in play by post it gives everyone another go.
+ */
+async function onDeadline(ctx: BotContext, roundId: string, channelId: string) {
+  const channel = await sendableChannel(ctx, channelId);
+  const round = await ctx.engine.turns.getRound(roundId);
+  if (!channel || round?.status !== "collecting") return;
+  const campaign = await ctx.engine.campaigns.get(round.campaignId);
+  if (campaign?.status !== "active") return;
+  const waiting = await ctx.engine.turns.waitingOnPlayers(roundId, campaign.id);
+  const party = await ctx.engine.characters.activeCharacters(campaign.id);
+  const pace = paceOf(campaign.settings as Record<string, unknown>);
+  const next = whenTimeIsUp(pace, party.length, waiting.length);
+  if (next === "resolve") return resolveAndPost(ctx, roundId, channel);
+  if (next === "extend") {
+    const deadline = deadlineFor(pace);
+    await ctx.engine.turns.setRoundDeadline(roundId, deadline);
+    await channel
+      .send({
+        content: "-# Nobody has chosen yet, so the story is waiting a little longer.",
+        allowedMentions: { parse: [] },
+      })
+      .catch(() => {});
+    if (pace.pingPlayers) await pingTurn(ctx, channel, roundId, campaign.id, deadline, "reminder");
+    const fresh = await ctx.engine.turns.getRound(roundId);
+    if (fresh) armRound(ctx, fresh, pace, channelId);
+  } else {
+    await ctx.engine.turns.setRoundDeadline(roundId, null);
+    await channel
+      .send({
+        content:
+          "-# Nobody has chosen yet. The story will wait until someone does (or the host presses **Continue the story**).",
+        allowedMentions: { parse: [] },
+      })
+      .catch(() => {});
+  }
+  await refreshWaiting(ctx, roundId, channel);
+}
+
+async function sendReminder(ctx: BotContext, roundId: string, channelId: string) {
+  const round = await ctx.engine.turns.getRound(roundId);
+  if (round?.status !== "collecting") return;
+  const campaign = await ctx.engine.campaigns.get(round.campaignId);
+  if (campaign?.status !== "active") return;
+  const pace = paceOf(campaign.settings as Record<string, unknown>);
+  if (!pace.pingPlayers) return;
+  const channel = await sendableChannel(ctx, channelId);
+  if (!channel) return;
+  await pingTurn(ctx, channel, roundId, campaign.id, round.deadlineAt, "reminder");
+  await ctx.engine.turns.markReminded(roundId);
+  const fresh = await ctx.engine.turns.getRound(roundId);
+  if (fresh) armRound(ctx, fresh, pace, channelId);
+}
+
+/** Pausing stops the clock: no deadline, no reminders. */
+export async function stopClock(ctx: BotContext, campaignId: string) {
+  const round = await ctx.engine.turns.currentRound(campaignId);
+  if (!round) return;
+  ctx.scheduler.cancelRound(round.id);
+  await ctx.engine.turns.setRoundDeadline(round.id, null);
+}
+
+/** Starts the open round's clock afresh (after resuming, or a change of pace). */
+export async function restartClock(ctx: BotContext, campaignId: string, kind: "resumed" | "new") {
+  const campaign = await ctx.engine.campaigns.get(campaignId);
+  const round = await ctx.engine.turns.currentRound(campaignId);
+  if (!campaign || !round || campaign.status !== "active") return null;
+  const pace = paceOf(campaign.settings as Record<string, unknown>);
+  const deadline = deadlineFor(pace);
+  await ctx.engine.turns.setRoundDeadline(round.id, deadline);
+  const channel = await sendableChannel(ctx, campaign.threadId);
+  if (!channel) return deadline;
+  if (pace.pingPlayers) {
+    await pingTurn(ctx, channel, round.id, campaign.id, deadline, kind);
+    await ctx.engine.turns.markReminded(round.id);
+  }
+  const fresh = await ctx.engine.turns.getRound(round.id);
+  if (fresh) armRound(ctx, fresh, pace, channel.id);
+  await refreshWaiting(ctx, round.id, channel);
+  return deadline;
 }
 
 async function addSceneImage(ctx: BotContext, message: Message, view: TurnView) {
@@ -80,7 +217,7 @@ export async function resolveAndPost(
 ): Promise<void> {
   if (ctx.resolving.has(roundId)) return;
   ctx.resolving.add(roundId);
-  ctx.scheduler.cancel(roundId);
+  ctx.scheduler.cancelRound(roundId);
   const typing = setInterval(() => void channel.sendTyping().catch(() => {}), 8000);
   void channel.sendTyping().catch(() => {});
   try {
@@ -125,10 +262,7 @@ export async function refreshWaiting(ctx: BotContext, roundId: string, channel: 
       typeof o.content === "string" &&
       (o.content.startsWith("-# Waiting on") || o.content.startsWith("-# Everyone has chosen"))
     ) {
-      o.content =
-        waitingOn.length > 0
-          ? `-# Waiting on: ${waitingOn.join(", ")}`
-          : "-# Everyone has chosen. The story continues…";
+      o.content = waitingLine(waitingOn, round.deadlineAt);
     }
     if (Array.isArray(o.components)) o.components = o.components.map(update);
     return o;

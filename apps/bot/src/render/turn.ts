@@ -22,6 +22,15 @@ const DICE = (r: TurnView["rolls"][number]) => {
 export interface TurnRenderOptions {
   waitingOn?: string[];
   image?: { name: string } | null;
+  /** When the round moves on without the players who haven't chosen. */
+  deadline?: Date | null;
+}
+
+/** "Waiting on: Pip, Mira · the story moves on in 3 hours" */
+export function waitingLine(waitingOn: readonly string[], deadline?: Date | null): string {
+  if (waitingOn.length === 0) return "-# Everyone has chosen. The story continues…";
+  const when = deadline ? ` · the story moves on <t:${Math.floor(deadline.getTime() / 1000)}:R>` : "";
+  return `-# Waiting on: ${waitingOn.map(esc).join(", ")}${when}`;
 }
 
 /** The main story message: narration, voices, dice, and what the heroes can do next. */
@@ -95,13 +104,7 @@ export function renderTurn(view: TurnView, opts: TurnRenderOptions = {}) {
       ),
     );
     if (opts.waitingOn) {
-      c.addTextDisplayComponents(
-        text(
-          opts.waitingOn.length > 0
-            ? `-# Waiting on: ${opts.waitingOn.map(esc).join(", ")}`
-            : "-# Everyone has chosen. The story continues…",
-        ),
-      );
+      c.addTextDisplayComponents(text(waitingLine(opts.waitingOn, opts.deadline)));
     }
   }
   if (view.campaignEnded) {
@@ -215,13 +218,7 @@ function renderBattle(
   );
   c.addActionRowComponents(second);
   if (opts.waitingOn) {
-    c.addTextDisplayComponents(
-      text(
-        opts.waitingOn.length > 0
-          ? `-# Waiting on: ${opts.waitingOn.map(esc).join(", ")}`
-          : "-# Everyone has chosen. The story continues…",
-      ),
-    );
+    c.addTextDisplayComponents(text(waitingLine(opts.waitingOn, opts.deadline)));
   }
 }
 

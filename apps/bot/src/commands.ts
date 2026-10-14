@@ -1,6 +1,12 @@
-import { InteractionContextType, SlashCommandBuilder } from "discord.js";
+import { TIMER_CHOICES } from "@dq/engine";
+import { ChannelType, InteractionContextType, PermissionFlagsBits, SlashCommandBuilder } from "discord.js";
 
 const GUILD = InteractionContextType.Guild;
+const PACE_CHOICES = [
+  { name: "Game night: quick rounds, everyone here at once", value: "live" },
+  { name: "Play by post: take turns over days, with pings", value: "post" },
+];
+const TIMER_OPTION_CHOICES = TIMER_CHOICES.map((c) => ({ name: c.label, value: c.seconds }));
 
 export const COMMANDS = [
   new SlashCommandBuilder()
@@ -10,7 +16,7 @@ export const COMMANDS = [
     .addSubcommand((s) =>
       s
         .setName("new")
-        .setDescription("Start a new campaign in this channel")
+        .setDescription("Start a new campaign (in the table room, if the server has one)")
         .addStringOption((o) =>
           o.setName("name").setDescription("What's the adventure called?").setMaxLength(60).setRequired(true),
         )
@@ -34,6 +40,43 @@ export const COMMANDS = [
         )
         .addUserOption((o) =>
           o.setName("dm").setDescription("The human DM (for the 'a person runs it' option)"),
+        )
+        .addStringOption((o) =>
+          o
+            .setName("pace")
+            .setDescription("How fast do you play? You can change it any time.")
+            .addChoices(...PACE_CHOICES),
+        )
+        .addStringOption((o) =>
+          o
+            .setName("place")
+            .setDescription("Where the game is played")
+            .addChoices(
+              { name: "Its own thread in the table room (recommended)", value: "thread" },
+              { name: "Right in the table room (one campaign at a time)", value: "room" },
+            ),
+        ),
+    )
+    .addSubcommand((s) =>
+      s
+        .setName("pace")
+        .setDescription("Switch between game night and play by post, or change the turn timer (host or DM)")
+        .addStringOption((o) =>
+          o
+            .setName("pace")
+            .setDescription("Game night or play by post")
+            .addChoices(...PACE_CHOICES),
+        )
+        .addIntegerOption((o) =>
+          o
+            .setName("timer")
+            .setDescription("How long players have each turn")
+            .addChoices(...TIMER_OPTION_CHOICES),
+        )
+        .addBooleanOption((o) =>
+          o
+            .setName("pings")
+            .setDescription("Mention players when it's their turn, and remind them before it closes"),
         ),
     )
     .addSubcommand((s) => s.setName("join").setDescription("Join the campaign in this thread"))
@@ -170,9 +213,34 @@ export const COMMANDS = [
     ),
   new SlashCommandBuilder()
     .setName("setup")
-    .setDescription("Set up story and image providers for this server")
-    .setContexts(GUILD),
-  new SlashCommandBuilder().setName("help").setDescription("How to play"),
+    .setDescription("Choose the table room and the private DM room, and see how setup is going")
+    .setContexts(GUILD)
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .addChannelOption((o) =>
+      o
+        .setName("table")
+        .setDescription("The room where everyone plays (each campaign gets a thread here)")
+        .addChannelTypes(ChannelType.GuildText),
+    )
+    .addChannelOption((o) =>
+      o
+        .setName("dm-room")
+        .setDescription("A private room for the DMs and the bot, where DM screens live")
+        .addChannelTypes(ChannelType.GuildText),
+    ),
+  new SlashCommandBuilder()
+    .setName("help")
+    .setDescription("How to play, and how to set the bot up")
+    .addStringOption((o) =>
+      o
+        .setName("topic")
+        .setDescription("What do you need help with?")
+        .addChoices(
+          { name: "How to play", value: "play" },
+          { name: "Setting up the bot on this server", value: "setup" },
+          { name: "Game night or play by post", value: "pace" },
+        ),
+    ),
   new SlashCommandBuilder().setName("about").setDescription("About Discord Quests"),
   new SlashCommandBuilder().setName("privacy").setDescription("What the bot remembers"),
 ];

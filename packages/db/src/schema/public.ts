@@ -379,6 +379,8 @@ export const rounds = pgTable(
       .notNull()
       .default("collecting"),
     deadlineAt: timestamp("deadline_at", { withTimezone: true }),
+    /** When the players who hadn't acted were last reminded (play by post). */
+    remindedAt: timestamp("reminded_at", { withTimezone: true }),
     /** Choices offered this round, with hidden intent tags. Buttons carry only an index. */
     choices: jsonb("choices").$type<unknown[]>().notNull().default([]),
     initiative: jsonb("initiative").$type<unknown[]>().notNull().default([]),

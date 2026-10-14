@@ -68,6 +68,9 @@ export default async function Home({
           <a className="btn btn-lg" href={inviteUrl(env.DISCORD_CLIENT_ID)}>
             Add the bot to a server
           </a>
+          <Link className="btn btn-lg btn-ghost" href="/guide">
+            How to set it up
+          </Link>
         </div>
       </section>
       <section className="features" aria-label="Features">

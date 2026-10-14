@@ -348,8 +348,10 @@ describe.skipIf(!TEST_DATABASE_URL)("setup page data", () => {
         dailyImageCap: "",
         imagePolicy: "cruxes_only",
         epilogueStyle: "explicit",
-        roundTimerSeconds: "43200",
+        roundTimerSeconds: "0",
         loomMode: "auto",
+        pace: "post",
+        pingPlayers: "on",
       }),
     });
     expect(res).toEqual({ ok: true });
@@ -358,9 +360,12 @@ describe.skipIf(!TEST_DATABASE_URL)("setup page data", () => {
     expect(s.game).toEqual({
       imagePolicy: "cruxes_only",
       epilogueStyle: "explicit",
-      roundTimerSeconds: 43200,
+      roundTimerSeconds: 0,
       loomMode: "auto",
+      pace: "post",
+      pingPlayers: true,
     });
+    expect(s.rooms).toEqual({});
     expect(await new ProviderStore(db.db, env).guildSettings(guild.id)).toMatchObject({
       dailyBudgetUsd: 2.5,
     });

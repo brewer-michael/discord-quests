@@ -796,3 +796,16 @@ th.num {
   border: 1px solid var(--border);
   margin-top: 8px;
 }
+
+.guide-steps {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 8px;
+}
+.guide-steps li::marker {
+  color: var(--accent);
+}
+section[id] {
+  scroll-margin-top: 16px;
+}
