@@ -1,0 +1,9 @@
+title: Lanternreach
+width: 1400
+height: 1000
+colors:
+  sea: "#9cc3d5"
+  land: "#efe3c2"
+  ink: "#4a3b2a"
+  fog: "#d9d4c7"
+compass: [1290, 900]

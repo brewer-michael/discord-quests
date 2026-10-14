@@ -1,0 +1,31 @@
+- id: long-road
+  name: The Long Road
+  tagline: The right way is rarely the quick way.
+  description: >-
+    Heroes on the Long Road keep their promises, tell the truth, and help whoever needs it, even when it
+    slows them down. It is a harder road, and nobody claps for most of it.
+  perks:
+    - id: steady-heart
+      name: Steady Heart
+      description: You have advantage on saves against being Spooked.
+      effect: { kind: advantage_vs_condition, condition: frightened }
+    - id: shoulder-to-shoulder
+      name: Shoulder to Shoulder
+      description: When you help a friend with a check, they also add +1.
+      effect: { kind: help_bonus, amount: 1 }
+
+- id: quick-way
+  name: The Quick Way
+  tagline: Why wait, when you could win right now?
+  description: >-
+    Heroes on the Quick Way are clever, bold and impatient. Rules are more like suggestions, and a good
+    bargain beats a long walk. The Quick Way really is quicker, most of the time.
+  perks:
+    - id: quick-wits
+      name: Quick Wits
+      description: Once per long rest, you can reroll a check you just failed.
+      effect: { kind: reroll_failed_check, usesPerLongRest: 1 }
+    - id: friend-of-dealers
+      name: Friend of Dealers
+      description: Merchants, tricksters and the Bargain Fox offer you deals more often.
+      effect: { kind: flavor }

@@ -1,0 +1,127 @@
+id: act2
+number: 2
+title: The Long Road
+summary: >-
+  The heroes follow the Old Road across Lanternreach, gathering what they need to open the Ember Vault, and
+  racing the Long Night to the Great Waystone.
+detail: outline
+chapters:
+  - id: ch4
+    number: 4
+    title: Bells of Copperpeak
+    summary: The tinker-town has gone silent. The Burrowkin once forged a key to the Ember Vault.
+    regions: [copperpeak]
+    beats:
+      - id: ch4-bellhollow
+        title: The Silent Bells
+        kind: social
+        region: copperpeak
+        poi: bellhollow
+        summary: >-
+          The bells of Bellhollow have stopped ringing, because the Burrowkin are afraid to draw the Gloam
+          Host's attention. The heroes learn of the Lamp-Key, forged here long ago, that opens the Ember Vault.
+        goals:
+          - Win the Burrowkin's trust.
+          - Learn where the Lamp-Key is kept.
+        offersShortcuts: [ledger-shortcut-pass]
+        sockets: [knowledge_given]
+      - id: ch4-the-tinkers-gate
+        title: The Tinkers' Gate
+        kind: exploration
+        region: copperpeak
+        poi: tinkers-gate
+        summary: The Lamp-Key lies beyond a copper gate guarded by very polite, very stubborn clockwork sentries.
+        goals:
+          - Get past the sentries.
+          - Recover the Lamp-Key.
+        milestone: true
+        sockets: [knowledge_given, object_reveals]
+
+  - id: ch5
+    number: 5
+    title: Salt and Mist
+    summary: A lighthouse gone dark, and a fen where nothing stays where you left it.
+    regions: [saltwind-coast, mistfen]
+    beats:
+      - id: ch5-the-dark-lighthouse
+        title: The Dark Lighthouse
+        kind: exploration
+        region: saltwind-coast
+        poi: dark-lighthouse
+        summary: >-
+          The great lighthouse is dark, and ships are lost in the fog. Relighting it would use some of the
+          precious flame the heroes are carrying.
+        goals:
+          - Decide whether to share the flame with the lighthouse.
+        virtueOpportunities:
+          - tag: self_sacrifice
+            note: Share some of the carried flame to light the lighthouse, leaving less for the road.
+        sockets: [ally_arrives]
+      - id: ch5-lost-in-mistfen
+        title: Lost in Mistfen
+        kind: travel
+        region: mistfen
+        summary: The mist swallows the path. Friendly wisps might help, if anyone can make them laugh.
+        goals:
+          - Find the way through the fen.
+        milestone: true
+        sockets: [hidden_way, knowledge_given]
+
+  - id: ch6
+    number: 6
+    title: The Old Road
+    summary: The last Wardens, and a race against the Long Night to light the Great Waystone.
+    regions: [old-road-ruins]
+    beats:
+      - id: ch6-wardens-watch
+        title: Wardens' Watch
+        kind: social
+        region: old-road-ruins
+        poi: wardens-watch
+        summary: >-
+          Captain Bram Tallow and the last Wardens hold the watchtower. If the Great Waystone's signal fire
+          is lit, every Warden for a hundred miles will light the road to Gloamhold.
+        goals:
+          - Earn the Wardens' trust.
+        introduces: [bram-tallow]
+        sockets: [trusted_at_need]
+      - id: ch6-the-waystone-race
+        title: The Race to the Waystone
+        kind: crux
+        region: old-road-ruins
+        poi: the-great-waystone
+        summary: >-
+          The Long Night is rolling across the ruins like a tide. The heroes must reach the Great Waystone
+          and light its signal fire before the dark gets there first.
+        goals:
+          - Light the Great Waystone before the Long Night reaches it.
+        decisive: true
+        milestone: true
+        offersShortcuts: [gloam-disguise]
+        crux:
+          type: race_against_clock
+          check:
+            ability: con
+            skill: athletics
+            label: Race the Dark
+            dc: { base: 16, perEnemyClockSegment: 1, perSnareSeverity: 1, max: 30 }
+          clock: { faction: gloam-host, clock: long-night }
+          sockets:
+            - type: trusted_at_need
+              accepts: [honesty_at_cost, promise_kept, amends]
+              faction: wardens-of-the-old-road
+              hint: The Wardens light fires all along the road ahead of them, so they never lose the way.
+            - type: hidden_way
+              accepts: [patience, kindness_to_lowly]
+              hint: A shepherd's track cuts through the hills, straight to the Waystone.
+            - type: spared_one_acts
+              accepts: [mercy]
+              anchorTag: covets-ember
+              hint: Snibbet scurries out of the ruins and shows them a thieves' shortcut he swore he'd never share.
+          requiredGrace: 1.2
+          onSuccess: The signal fire roars up, and one by one, Warden fires answer all along the road.
+          onCostlySuccess: The fire is lit, but the heroes are scattered and their supplies are lost in the dark.
+          onFailForward:
+            text: >-
+              The Long Night reaches the Waystone first. The heroes must go on toward Gloamhold in the dark,
+              and the Gloam Host knows they are coming.

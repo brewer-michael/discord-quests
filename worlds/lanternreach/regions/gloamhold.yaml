@@ -1,0 +1,59 @@
+id: gloamhold
+name: Gloamhold
+description: A fortress of grey stone where it is always twilight. Every window is dark, every corridor is cold,
+  and every door creaks in a minor key.
+biome: fortress
+terrain: [fortress]
+levelBand: [7, 9]
+polygon:
+- [851, 77]
+- [1260, 70]
+- [1330, 220]
+- [1329, 302]
+- [931, 489]
+- [774, 301]
+centroid: [960, 280]
+edges:
+- to: glass-dunes
+  travelDays: 3
+  road: false
+- to: old-road-ruins
+  travelDays: 3
+  road: true
+- to: mount-cinder
+  travelDays: 2
+  road: false
+pois:
+- id: ember-vault
+  name: The Ember Vault
+  description: A round vault with a lock shaped like a lantern, deep in the fortress.
+  kind: dungeon
+  at: [980, 250]
+- id: gloam-throne
+  name: The Gloam Throne
+  description: A cold throne room where the Gloam King sits alone.
+  kind: dungeon
+  at: [1000, 200]
+- id: cold-kitchens
+  name: The Cold Kitchens
+  description: Gloamhold's kitchens, where nobody has cooked a warm meal in years.
+  kind: secret
+  at: [930, 320]
+encounters:
+  chance: 0.35
+  table:
+  - creature: gloam-knight
+    count: [1, 3]
+    weight: 3
+  - creature: gloam-skulker
+    count: [3, 5]
+    weight: 2
+  - creature: gloam-warden
+    count: [1, 1]
+    weight: 1
+lootTable: gloam-leavings
+secrets:
+- The kitchen helpers of Gloamhold are not Gloam at all. They are lost villagers, and they are very cold.
+artPrompt: a gloomy grey stone fortress in endless twilight with dark windows and a cold blue mist, storybook style,
+  not too scary
+mood: cold, gloomy, a little sad

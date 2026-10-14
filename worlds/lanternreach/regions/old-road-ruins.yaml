@@ -1,0 +1,56 @@
+id: old-road-ruins
+name: The Old Road Ruins
+description: 'The broken middle of the Old Road: toppled waystones, mossy arches, and the Wardens'' last watch-post,
+  still standing.'
+biome: ruins
+terrain: [ruins, meadow]
+levelBand: [5, 7]
+polygon:
+- [931, 489]
+- [907, 566]
+- [718, 647]
+- [558, 531]
+- [596, 347]
+- [774, 301]
+centroid: [720, 480]
+edges:
+- to: copperpeak
+  travelDays: 3
+  road: true
+- to: mistfen
+  travelDays: 2
+  road: true
+- to: gloamhold
+  travelDays: 3
+  road: true
+- to: mount-cinder
+  travelDays: 4
+  road: true
+pois:
+- id: the-great-waystone
+  name: The Great Waystone
+  description: A giant standing stone with a signal-fire bowl on top, older than the Lamplighters.
+  kind: landmark
+  at: [720, 440]
+- id: wardens-watch
+  name: Wardens' Watch
+  description: A sturdy watchtower where the last Wardens keep their promise to guard the road.
+  kind: camp
+  at: [680, 520]
+encounters:
+  chance: 0.3
+  table:
+  - creature: gloam-knight
+    count: [1, 1]
+    weight: 2
+  - creature: shadow-wolf
+    count: [2, 3]
+    weight: 2
+  - creature: ledger-bruiser
+    count: [2, 4]
+    weight: 1
+secrets:
+- When the Great Waystone's fire is lit, every Warden for a hundred miles comes running.
+artPrompt: mossy ruins of an ancient road with toppled standing stones and a lone watchtower under a stormy purple
+  sky
+mood: ancient, brave, windswept

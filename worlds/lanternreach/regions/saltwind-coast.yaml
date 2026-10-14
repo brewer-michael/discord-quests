@@ -1,0 +1,50 @@
+id: saltwind-coast
+name: Saltwind Coast
+description: Windy cliffs and pebbly coves, where gulls argue all day and the great lighthouse stands dark for the
+  first time in a thousand years.
+biome: coast
+terrain: [coast, cliffs]
+levelBand: [3, 5]
+polygon:
+- [140, 90]
+- [302, 87]
+- [312, 107]
+- [286, 461]
+- [67, 618]
+- [60, 240]
+centroid: [150, 400]
+edges:
+- to: reedmarsh
+  travelDays: 3
+  road: true
+- to: mistfen
+  travelDays: 2
+  road: false
+pois:
+- id: dark-lighthouse
+  name: The Dark Lighthouse
+  description: A tall striped lighthouse whose great lamp has gone cold.
+  kind: landmark
+  at: [110, 330]
+- id: gull-cove
+  name: Gull Cove
+  description: A sheltered cove with fishing huts and far too many gulls.
+  kind: camp
+  at: [170, 480]
+encounters:
+  chance: 0.2
+  table:
+  - creature: gloam-skulker
+    count: [2, 4]
+    weight: 2
+  - creature: marsh-snapper
+    count: [1, 1]
+    weight: 1
+  - creature: glimmer-fox
+    count: [1, 2]
+    weight: 1
+secrets:
+- The lighthouse keeper's apprentice still climbs the tower every night, hoping.
+artPrompt: windswept sea cliffs with a tall striped lighthouse standing dark against a stormy evening sky, gulls
+  wheeling
+mood: windy, lonely, hopeful

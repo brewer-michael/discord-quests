@@ -1,0 +1,116 @@
+# Guided mode lets young or new players build a hero by picking stories instead of spending points.
+# Every upbringing is a legal 27-point buy; `pnpm world:validate` checks this.
+upbringings:
+  - id: forge-apprentice
+    label: Hammer and anvil at the village forge
+    description: You grew up pumping the bellows and carrying iron. Strong arms, tough as an old boot.
+    scores: { str: 15, con: 14, dex: 13, wis: 12, cha: 10, int: 8 }
+    classAffinity: [shieldheart, wayfarer]
+  - id: shepherds-hill
+    label: Watching the flocks on Shepherd's Hill
+    description: Long days in wind and rain made you hardy, and you learned to notice every little thing.
+    scores: { con: 15, str: 14, wis: 13, dex: 12, cha: 10, int: 8 }
+    classAffinity: [shieldheart, lanternkeeper]
+  - id: woodland-wanderer
+    label: Wandering the woods with your grandmother
+    description: She taught you every bird call and every trail. You move quietly and see clearly.
+    scores: { dex: 15, wis: 14, con: 13, int: 12, str: 10, cha: 8 }
+    classAffinity: [wayfarer, scout]
+  - id: rooftop-runner
+    label: Racing across the market rooftops
+    description: Quick feet, quick wits, and a talent for being somewhere else when trouble arrives.
+    scores: { dex: 15, con: 14, int: 13, cha: 12, wis: 10, str: 8 }
+    classAffinity: [scout]
+  - id: library-mouse
+    label: Hiding in the library after closing time
+    description: You read every book you could reach, and climbed the shelves for the rest.
+    scores: { int: 15, dex: 14, con: 13, wis: 12, cha: 10, str: 8 }
+    classAffinity: [lorewright]
+  - id: lantern-garden
+    label: Tending the lantern-shrine garden
+    description: Quiet mornings, kind visitors, and a lantern that needed you. You learned patience and care.
+    scores: { wis: 15, con: 14, str: 13, cha: 12, int: 10, dex: 8 }
+    classAffinity: [lanternkeeper]
+  - id: traveling-show
+    label: Touring with a traveling show
+    description: Juggling, singing, and making friends in a new town every week.
+    scores: { cha: 15, dex: 14, con: 13, wis: 12, int: 10, str: 8 }
+    classAffinity: [songspinner]
+
+abilityFlavor:
+  str:
+    plus2: You grew strong hauling, lifting and climbing.
+    plus1: You're stronger than you look.
+  dex:
+    plus2: You're quick as a squirrel and twice as nimble.
+    plus1: You've got quick hands and quicker feet.
+  con:
+    plus2: You're tough as an old oak. Colds don't stand a chance.
+    plus1: You can keep going when others need a nap.
+  int:
+    plus2: You figure out puzzles before anyone else has finished reading them.
+    plus1: You remember the things other people forget.
+  wis:
+    plus2: You notice everything, and you understand people's hearts.
+    plus1: You have a good feeling for when something is wrong.
+  cha:
+    plus2: People listen when you speak, and smile when you sing.
+    plus1: You make friends wherever you go.
+
+asiOptions:
+  - id: train-with-the-blacksmith
+    label: Train with the blacksmith
+    description: Swing the hammer every morning until your arms ache and your back is strong.
+    increments: { str: 1, con: 1 }
+  - id: swing-the-big-hammer
+    label: Lift the biggest hammer in the forge
+    description: Nobody else can lift it. Yet.
+    increments: { str: 2 }
+  - id: practice-in-the-archery-yard
+    label: Practice in the archery yard
+    description: A thousand arrows, a thousand misses, and then a thousand hits.
+    increments: { dex: 2 }
+  - id: climb-every-tree
+    label: Climb every tree in the forest
+    description: Up, over, and down the other side.
+    increments: { str: 1, dex: 1 }
+  - id: run-the-old-road
+    label: Run the Old Road at dawn
+    description: Mile after mile, until your legs feel like they could go forever.
+    increments: { dex: 1, con: 1 }
+  - id: endure-the-winter
+    label: Spend a winter with the mountain shepherds
+    description: Cold wind, hard work, and soup that tastes like victory.
+    increments: { con: 2 }
+  - id: read-the-old-books
+    label: Read the old books in Lantern Hall
+    description: Dusty pages, faded maps, and secrets in the margins.
+    increments: { int: 2 }
+  - id: tinker-with-gadgets
+    label: Help the tinkers fix their gadgets
+    description: Springs, gears, and a lot of tiny screws.
+    increments: { int: 1, dex: 1 }
+  - id: listen-to-the-elders
+    label: Listen to the elders' stories
+    description: Every story has a lesson hiding in it, if you listen closely.
+    increments: { wis: 1, int: 1 }
+  - id: sit-by-the-lantern
+    label: Sit quietly by the lantern each night
+    description: Watch, wonder, and listen to the world.
+    increments: { wis: 2 }
+  - id: help-at-the-healers
+    label: Help at the healers' house
+    description: Carry water, fold bandages, and learn how to comfort people.
+    increments: { wis: 1, con: 1 }
+  - id: sing-at-the-festival
+    label: Sing at the harvest festival
+    description: Everyone is watching, and you love it.
+    increments: { cha: 2 }
+  - id: swap-stories-at-the-inn
+    label: Swap stories with travelers at the inn
+    description: Make friends, hear news, and learn what people really mean.
+    increments: { cha: 1, wis: 1 }
+  - id: dance-at-the-fair
+    label: Learn every dance at the fair
+    description: Fancy footwork and a winning smile.
+    increments: { cha: 1, dex: 1 }

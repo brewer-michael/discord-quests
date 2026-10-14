@@ -1,0 +1,456 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "weapons": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "base": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          }
+        },
+        "required": ["id", "name", "base", "description"],
+        "additionalProperties": false
+      }
+    },
+    "armor": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "base": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          }
+        },
+        "required": ["id", "name", "base", "description"],
+        "additionalProperties": false
+      }
+    },
+    "gear": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "value": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": ["id", "name", "description", "value"],
+        "additionalProperties": false
+      }
+    },
+    "keepsakes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          }
+        },
+        "required": ["id", "name", "description"],
+        "additionalProperties": false
+      }
+    },
+    "wondrous": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "rarity": {
+            "type": "string",
+            "enum": ["common", "uncommon", "rare", "very-rare"]
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "effect": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "heal"
+                  },
+                  "dice": {
+                    "type": "string",
+                    "pattern": "^[0-9dkhl+\\- ]+$"
+                  }
+                },
+                "required": ["kind", "dice"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "light"
+                  },
+                  "radius": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": ["kind", "radius"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "bonus"
+                  },
+                  "to": {
+                    "type": "string",
+                    "enum": ["ac", "attack", "save", "check"]
+                  },
+                  "amount": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 3
+                  },
+                  "skill": {
+                    "type": "string",
+                    "enum": [
+                      "acrobatics",
+                      "animalHandling",
+                      "arcana",
+                      "athletics",
+                      "deception",
+                      "history",
+                      "insight",
+                      "intimidation",
+                      "investigation",
+                      "medicine",
+                      "nature",
+                      "perception",
+                      "performance",
+                      "persuasion",
+                      "religion",
+                      "sleightOfHand",
+                      "stealth",
+                      "survival"
+                    ]
+                  }
+                },
+                "required": ["kind", "to", "amount"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "cure_condition"
+                  },
+                  "condition": {
+                    "type": "string",
+                    "enum": [
+                      "blinded",
+                      "charmed",
+                      "frightened",
+                      "grappled",
+                      "invisible",
+                      "poisoned",
+                      "prone",
+                      "restrained",
+                      "stunned",
+                      "dazed"
+                    ]
+                  }
+                },
+                "required": ["kind", "condition"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "story"
+                  }
+                },
+                "required": ["kind"],
+                "additionalProperties": false
+              }
+            ]
+          }
+        },
+        "required": ["id", "name", "rarity", "description", "effect"],
+        "additionalProperties": false
+      }
+    },
+    "consumables": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "rarity": {
+            "type": "string",
+            "enum": ["common", "uncommon", "rare", "very-rare"]
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "effect": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "heal"
+                  },
+                  "dice": {
+                    "type": "string",
+                    "pattern": "^[0-9dkhl+\\- ]+$"
+                  }
+                },
+                "required": ["kind", "dice"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "light"
+                  },
+                  "radius": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": ["kind", "radius"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "bonus"
+                  },
+                  "to": {
+                    "type": "string",
+                    "enum": ["ac", "attack", "save", "check"]
+                  },
+                  "amount": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 3
+                  },
+                  "skill": {
+                    "type": "string",
+                    "enum": [
+                      "acrobatics",
+                      "animalHandling",
+                      "arcana",
+                      "athletics",
+                      "deception",
+                      "history",
+                      "insight",
+                      "intimidation",
+                      "investigation",
+                      "medicine",
+                      "nature",
+                      "perception",
+                      "performance",
+                      "persuasion",
+                      "religion",
+                      "sleightOfHand",
+                      "stealth",
+                      "survival"
+                    ]
+                  }
+                },
+                "required": ["kind", "to", "amount"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "cure_condition"
+                  },
+                  "condition": {
+                    "type": "string",
+                    "enum": [
+                      "blinded",
+                      "charmed",
+                      "frightened",
+                      "grappled",
+                      "invisible",
+                      "poisoned",
+                      "prone",
+                      "restrained",
+                      "stunned",
+                      "dazed"
+                    ]
+                  }
+                },
+                "required": ["kind", "condition"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "story"
+                  }
+                },
+                "required": ["kind"],
+                "additionalProperties": false
+              }
+            ]
+          }
+        },
+        "required": ["id", "name", "rarity", "description", "effect"],
+        "additionalProperties": false
+      }
+    },
+    "lootTables": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "gold": {
+            "type": "string",
+            "pattern": "^[0-9dkhl+\\- ]+$"
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "item": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9][a-z0-9-]*$"
+                },
+                "weight": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "qty": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  ],
+                  "items": false,
+                  "minItems": 2,
+                  "maxItems": 2
+                }
+              },
+              "required": ["item", "weight"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["id", "entries"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["weapons", "armor", "gear", "keepsakes", "wondrous", "consumables", "lootTables"],
+  "additionalProperties": false
+}

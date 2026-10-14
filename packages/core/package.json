@@ -10,6 +10,7 @@
     "./rules": "./src/rules/index.ts",
     "./srd": "./src/srd/index.ts",
     "./world": "./src/world/index.ts",
+    "./world-fs": "./src/world/fs.ts",
     "./story": "./src/story/index.ts",
     "./loom": "./src/loom/index.ts",
     "./deltas": "./src/deltas/index.ts",

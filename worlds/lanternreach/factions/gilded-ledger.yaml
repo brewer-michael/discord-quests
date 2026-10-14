@@ -1,0 +1,20 @@
+id: gilded-ledger
+name: The Gilded Ledger
+alignment: quick-way
+description: >-
+  A company of merchants who believe everything has a price, and the price is always going up. With the
+  lanterns dimming, they are buying up all the lantern oil they can find.
+goals:
+  - Own every drop of lantern oil in Lanternreach.
+  - Turn every problem into a profit.
+methods:
+  - Tolls, deals, fine print and favors owed.
+  - Shortcuts for anyone who can pay.
+leader: silas-coin
+clocks:
+  - id: corner-the-oil
+    name: Corner the Oil
+    segments: 6
+    description: The Ledger buys up the lantern oil of Lanternreach, village by village.
+    onFill: The Ledger owns every drop of oil, and the price triples overnight.
+startingDisposition: 0

@@ -1,0 +1,271 @@
+- id: gloom-mite
+  name: Gloom Mite
+  description: A shadow the size of a cat, all eyes and giggles. Hates light. Pops into smoke when bonked.
+  kind: shadow
+  size: tiny
+  cr: "1/8"
+  ac: 12
+  hp: 2d4
+  speed: 30
+  abilities: { str: 4, dex: 15, con: 10, int: 4, wis: 10, cha: 6 }
+  attacks:
+    - { name: Nibble, bonus: 4, damage: 1d4+2, damageType: cold }
+  traits:
+    - { name: Light Shy, description: "Has disadvantage on attacks while in bright light." }
+  morale: skittish
+  defeat: poofs
+  tags: [gloam]
+
+- id: gloam-skulker
+  name: Gloam Skulker
+  description: A slinking shadow with long fingers that pinches out candles.
+  kind: shadow
+  size: small
+  cr: "1/4"
+  ac: 13
+  hp: 3d6
+  speed: 30
+  abilities: { str: 8, dex: 15, con: 10, int: 6, wis: 10, cha: 8 }
+  attacks:
+    - { name: Shadow Swipe, bonus: 4, damage: 1d6+2, damageType: cold }
+  traits:
+    - { name: Light Shy, description: "Has disadvantage on attacks while in bright light." }
+  morale: normal
+  defeat: poofs
+  tags: [gloam]
+
+- id: shadow-wolf
+  name: Shadow Wolf
+  description: A wolf made of dusk, with eyes like two cold coins. Its howl makes lanterns flicker.
+  kind: shadow
+  size: medium
+  cr: "1/2"
+  ac: 13
+  hp: 4d8+4
+  speed: 40
+  abilities: { str: 12, dex: 15, con: 12, int: 3, wis: 12, cha: 6 }
+  attacks:
+    - name: Shadow Bite
+      bonus: 4
+      damage: 2d4+2
+      damageType: cold
+      effect: { condition: prone, save: str, dc: 11 }
+  traits:
+    - { name: Pack Tactics, description: "Has advantage when a packmate is next to its target." }
+  morale: normal
+  defeat: poofs
+  tags: [gloam]
+
+- id: gloam-knight
+  name: Gloam Knight
+  description: Empty armor full of shadow, marching in perfect step. Very serious. Not very clever.
+  kind: shadow
+  size: medium
+  cr: "2"
+  ac: 16
+  hp: 6d8+12
+  speed: 30
+  abilities: { str: 16, dex: 10, con: 14, int: 8, wis: 10, cha: 10 }
+  attacks:
+    - { name: Gloom Blade, bonus: 5, damage: 1d10+3, damageType: cold }
+  traits:
+    - { name: Light Shy, description: "Has disadvantage on attacks while in bright light." }
+  morale: brave
+  defeat: poofs
+  tags: [gloam]
+
+- id: gloam-warden
+  name: Gloam Warden
+  description: A towering shadow with a cloak of night and a lantern that shines darkness instead of light.
+  kind: shadow
+  size: large
+  cr: "4"
+  ac: 15
+  hp: 10d10+20
+  speed: 30
+  abilities: { str: 18, dex: 12, con: 15, int: 10, wis: 12, cha: 14 }
+  attacks:
+    - { name: Night Lash, bonus: 6, damage: 2d8+4, damageType: cold }
+    - name: Dark Lantern
+      bonus: 5
+      damage: 2d6
+      damageType: cold
+      range: [30, 60]
+      effect: { condition: frightened, save: wis, dc: 13 }
+  morale: brave
+  defeat: poofs
+  tags: [gloam, boss]
+
+- id: the-gloam-king
+  name: The Gloam King
+  description: A tall, grey king with a crown of cold iron and a long, lonely face. He has forgotten what warmth feels like.
+  kind: person
+  size: medium
+  cr: "5"
+  ac: 16
+  hp: 12d8+24
+  speed: 30
+  abilities: { str: 14, dex: 12, con: 15, int: 16, wis: 14, cha: 18 }
+  attacks:
+    - { name: Night Scepter, bonus: 6, damage: 2d6+3, damageType: cold }
+    - name: Command of Night
+      bonus: 6
+      damage: 2d8
+      damageType: cold
+      range: [60, 120]
+      effect: { condition: frightened, save: wis, dc: 14 }
+  morale: brave
+  defeat: surrenders
+  tags: [gloam, boss]
+
+- id: ledger-bruiser
+  name: Ledger Bruiser
+  description: A large, grumbly person hired by the Gilded Ledger. Paid by the hour, so in no hurry.
+  kind: person
+  size: medium
+  cr: "1/4"
+  ac: 12
+  hp: 2d8+2
+  speed: 30
+  abilities: { str: 14, dex: 10, con: 12, int: 9, wis: 10, cha: 9 }
+  attacks:
+    - { name: Cudgel, bonus: 3, damage: 1d6+2, damageType: bludgeoning }
+  morale: normal
+  defeat: surrenders
+  tags: [ledger]
+
+- id: marsh-snapper
+  name: Marsh Snapper
+  description: A grumpy turtle as big as a wheelbarrow. It mostly wants you off its log.
+  kind: beast
+  size: medium
+  cr: "1/2"
+  ac: 14
+  hp: 3d10+3
+  speed: 20
+  abilities: { str: 14, dex: 8, con: 13, int: 2, wis: 10, cha: 4 }
+  attacks:
+    - { name: Snap, bonus: 4, damage: 1d8+2, damageType: piercing }
+  morale: skittish
+  defeat: flees
+  tags: [marsh]
+
+- id: grumpy-boar
+  name: Grumpy Boar
+  description: A bristly boar with a bad temper and a very good nose.
+  kind: beast
+  size: medium
+  cr: "1/4"
+  ac: 11
+  hp: 2d8+2
+  speed: 40
+  abilities: { str: 13, dex: 11, con: 12, int: 2, wis: 9, cha: 5 }
+  attacks:
+    - { name: Tusk Shove, bonus: 3, damage: 1d6+1, damageType: bludgeoning }
+  morale: normal
+  defeat: flees
+  tags: [forest]
+
+- id: dust-moth
+  name: Dust Moth
+  description: A moth as big as a dinner plate, shedding glittery dust that makes eyes water.
+  kind: beast
+  size: small
+  cr: "1/8"
+  ac: 12
+  hp: 1d8
+  speed: 30
+  abilities: { str: 3, dex: 15, con: 10, int: 2, wis: 10, cha: 3 }
+  attacks:
+    - name: Dust Puff
+      bonus: 4
+      damage: 1d4
+      damageType: bludgeoning
+      effect: { condition: blinded, save: con, dc: 10 }
+  morale: skittish
+  defeat: flees
+  tags: [forest]
+
+- id: bramble-sprite
+  name: Bramble Sprite
+  description: A tiny mischief-maker made of twigs and thorns, who throws prickly darts and giggles.
+  kind: spirit
+  size: tiny
+  cr: "1/4"
+  ac: 13
+  hp: 2d4+2
+  speed: 30
+  abilities: { str: 3, dex: 16, con: 12, int: 10, wis: 12, cha: 12 }
+  attacks:
+    - { name: Thorn Dart, bonus: 5, damage: 1d4+3, damageType: piercing, range: [30, 60] }
+  morale: skittish
+  defeat: flees
+  tags: [forest]
+
+- id: clockwork-sentry
+  name: Clockwork Sentry
+  description: A copper guard built by the Tinkers of Copperpeak. Polite. Very insistent about passwords.
+  kind: construct
+  size: medium
+  cr: "1"
+  ac: 15
+  hp: 4d8+8
+  speed: 25
+  abilities: { str: 15, dex: 9, con: 14, int: 3, wis: 10, cha: 1 }
+  attacks:
+    - { name: Copper Fist, bonus: 4, damage: 1d8+2, damageType: bludgeoning }
+  traits:
+    - { name: Winds Down, description: "At 0 hit points it whirs, clicks and goes to sleep." }
+  morale: brave
+  defeat: faints
+  tags: [copperpeak]
+
+- id: glimmer-fox
+  name: Glimmer Fox
+  description: One of the Bargain Fox's helpers, a fox made of sparkles and smirks.
+  kind: spirit
+  size: small
+  cr: "1/4"
+  ac: 13
+  hp: 2d6+2
+  speed: 40
+  abilities: { str: 8, dex: 16, con: 12, int: 12, wis: 12, cha: 14 }
+  attacks:
+    - { name: Nip, bonus: 5, damage: 1d4+3, damageType: piercing }
+  morale: skittish
+  defeat: flees
+  tags: [fox]
+
+- id: bog-lump
+  name: Bog Lump
+  description: A grumbly heap of mud and reeds that just wants a nap. Very, very heavy.
+  kind: spirit
+  size: large
+  cr: "2"
+  ac: 11
+  hp: 7d10+14
+  speed: 20
+  abilities: { str: 18, dex: 6, con: 15, int: 5, wis: 10, cha: 6 }
+  attacks:
+    - { name: Mud Slam, bonus: 6, damage: 2d6+4, damageType: bludgeoning, effect: { condition: restrained, save: str, dc: 13 } }
+  morale: normal
+  defeat: flees
+  tags: [marsh]
+
+- id: snibbet
+  name: Snibbet
+  description: A small, grey, raggedy lantern-thief with eyes like puddles and cold, cold hands.
+  kind: person
+  size: small
+  cr: "0"
+  ac: 12
+  hp: 2d6
+  speed: 30
+  abilities: { str: 6, dex: 16, con: 10, int: 12, wis: 8, cha: 10 }
+  attacks:
+    - { name: Desperate Scratch, bonus: 2, damage: 1d2, damageType: bludgeoning }
+  traits:
+    - { name: Slippery, description: "Can always find a way to wriggle free and scamper off." }
+  morale: skittish
+  defeat: flees
+  tags: [covets-ember, pitiable]

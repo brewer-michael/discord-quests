@@ -1,0 +1,18 @@
+# Epilogue templates. {{deed}} and {{payoff}} are plain-language phrases; never numbers or game terms.
+subtle:
+  - Some said it was luck. Those who remembered {{deed}} said nothing, and smiled.
+  - >-
+    Long after, when the lanterns burned bright again, someone asked how it all came right at the very end.
+    Old Wick only looked at the heroes and said, "Kindness has a long memory."
+  - The road is long, my bright ones, and it remembers who walked it gently.
+  - Nobody could quite explain how {{payoff}}. But the heroes, thinking back, wondered.
+explicit:
+  - "Looking back: when you {{deed}}, you couldn't have known that one day {{payoff}}."
+  - It began with a small thing, {{deed}}. It ended with {{payoff}}.
+  - Of all the choices on the long road, it was this one that mattered most. You {{deed}}, and so {{payoff}}.
+echoes:
+  - Somewhere, {{anchor}} still tells the story of the day the heroes {{deed}}.
+  - Not every kindness came back around. Some were simply kind, and that was enough.
+closing:
+  - And the lanterns of Lanternreach burned warm and gold, all through the night.
+  - The Long Night ended, as long nights do, with a morning that felt like a promise.

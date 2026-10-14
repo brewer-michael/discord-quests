@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9-]*$"
+      },
+      "when": {
+        "type": "object",
+        "properties": {
+          "sceneKinds": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["exploration", "social", "combat", "travel", "rest", "crux", "choice"]
+            }
+          },
+          "terrain": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]*$"
+            }
+          }
+        },
+        "required": ["sceneKinds"],
+        "additionalProperties": false
+      },
+      "setup": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4000
+      },
+      "serves": {
+        "minItems": 1,
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "spared_one_acts",
+            "ally_arrives",
+            "knowledge_given",
+            "trusted_at_need",
+            "hidden_way",
+            "object_reveals",
+            "enemy_blunder",
+            "ambush_avoided"
+          ]
+        }
+      },
+      "introduces": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["npc", "place", "item"]
+          },
+          "archetype": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "tags": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]*$"
+            }
+          }
+        },
+        "required": ["kind", "name"],
+        "additionalProperties": false
+      },
+      "payoff": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4000
+      },
+      "severity": {
+        "type": "string",
+        "enum": ["mild", "moderate"]
+      }
+    },
+    "required": ["id", "when", "setup", "serves", "introduces", "payoff", "severity"],
+    "additionalProperties": false
+  }
+}

@@ -14,7 +14,8 @@
     "lint:fix": "biome check --write .",
     "world:validate": "tsx tools/world-validate.ts",
     "sim": "pnpm --filter @dq/sim start",
-    "check": "pnpm lint && pnpm typecheck && pnpm test"
+    "check": "pnpm lint && pnpm typecheck && pnpm test",
+    "world:schemas": "tsx tools/gen-json-schemas.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "catalog:",

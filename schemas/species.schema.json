@@ -1,0 +1,176 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9-]*$"
+      },
+      "name": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "description": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4000
+      },
+      "size": {
+        "type": "string",
+        "enum": ["small", "medium"]
+      },
+      "speed": {
+        "type": "integer",
+        "minimum": 20,
+        "maximum": 40
+      },
+      "traits": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]*$"
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4000
+            },
+            "effect": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "darkvision"
+                    },
+                    "range": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": ["kind", "range"],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "hp_per_level"
+                    },
+                    "amount": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 2
+                    }
+                  },
+                  "required": ["kind", "amount"],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "lucky"
+                    }
+                  },
+                  "required": ["kind"],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "skill"
+                    },
+                    "skill": {
+                      "type": "string",
+                      "enum": [
+                        "acrobatics",
+                        "animalHandling",
+                        "arcana",
+                        "athletics",
+                        "deception",
+                        "history",
+                        "insight",
+                        "intimidation",
+                        "investigation",
+                        "medicine",
+                        "nature",
+                        "perception",
+                        "performance",
+                        "persuasion",
+                        "religion",
+                        "sleightOfHand",
+                        "stealth",
+                        "survival"
+                      ]
+                    }
+                  },
+                  "required": ["kind", "skill"],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "advantage_vs_condition"
+                    },
+                    "condition": {
+                      "type": "string",
+                      "enum": [
+                        "blinded",
+                        "charmed",
+                        "frightened",
+                        "grappled",
+                        "invisible",
+                        "poisoned",
+                        "prone",
+                        "restrained",
+                        "stunned",
+                        "dazed"
+                      ]
+                    }
+                  },
+                  "required": ["kind", "condition"],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "flavor"
+                    }
+                  },
+                  "required": ["kind"],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "required": ["id", "name", "description", "effect"],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": ["id", "name", "description", "size", "speed", "traits"],
+    "additionalProperties": false
+  }
+}

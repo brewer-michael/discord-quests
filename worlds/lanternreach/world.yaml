@@ -1,0 +1,29 @@
+id: lanternreach
+name: Lanternreach
+version: 1
+tagline: Where the lanterns hold back the Long Night, for now.
+summary: >-
+  For a thousand years the Hearth-Lanterns of Lanternreach have burned with flame carried from the Ember,
+  a warm star-coal kept in the First Forge on top of Mount Cinder. Every spring the Lamplighters carry new
+  flame along the Old Road to every village. This year the flame never came. The Gloam King, who cannot
+  stand any light he did not make himself, has carried the Ember away to Gloamhold. One by one the lanterns
+  are dimming, and in the dark places the Gloam Host grows bold. Heroes must decide how to set things
+  right: the Long Road, slow and honest, or the Quick Way.
+audience: family
+startRegion: hearthmoor
+startingLevel: 1
+maxLevel: 10
+artStyle: >-
+  gentle storybook watercolor illustration, warm lantern light against cool blue twilight, soft edges,
+  friendly expressive characters, cozy and adventurous mood, child-friendly, no text, no words
+themes:
+  - Doing the right thing is worth the long way round.
+  - Small kindnesses have long memories.
+  - Light is meant to be shared, not kept.
+  - It is never too late to turn back toward the light.
+storyteller:
+  name: Old Wick
+  voice: >-
+    A cheerful old lamplighter telling the tale by the fire. Warm, playful and kind. Short sentences,
+    vivid sounds and smells, a little gentle humor. Speaks to the players as "my bright ones" now and then.
+    Never scolds; lets choices speak for themselves.

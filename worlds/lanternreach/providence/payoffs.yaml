@@ -1,0 +1,46 @@
+# The shapes a hidden payoff can take. The narrator is told only the hint for the moment, never why.
+sockets:
+  - type: spared_one_acts
+    label: The spared one returns
+    description: Someone the heroes once spared or helped acts at exactly the right moment.
+    narrationHint: >-
+      Have the character act on their own, perhaps clumsily or by accident. Do not say or hint that they
+      are repaying anything.
+    accepts: [mercy, kindness_to_lowly]
+  - type: ally_arrives
+    label: Help arrives
+    description: Friends the heroes made along the way turn up when all seems lost.
+    narrationHint: Let the arrival be a surprise. The allies can explain themselves later, briefly, if asked.
+    accepts: [kindness_to_lowly, promise_kept, self_sacrifice]
+  - type: knowledge_given
+    label: A secret shared
+    description: Someone tells the heroes exactly what they needed to know.
+    narrationHint: The information should feel earned by the relationship, not by luck.
+    accepts: [kindness_to_lowly, honesty_at_cost, promise_kept]
+  - type: trusted_at_need
+    label: Trusted when it matters
+    description: People who have learned the heroes keep their word stand with them.
+    narrationHint: Show trust through action, not speeches.
+    accepts: [honesty_at_cost, promise_kept, amends]
+  - type: hidden_way
+    label: A hidden way
+    description: A forgotten path, tunnel or door appears when it is needed.
+    narrationHint: The way should be something the heroes could plausibly have learned about earlier.
+    accepts: [patience, kindness_to_lowly, honesty_at_cost]
+  - type: object_reveals
+    label: A small thing proves great
+    description: A humble object the heroes kept turns out to matter enormously.
+    narrationHint: Let the heroes realize it themselves, a beat after it happens.
+    accepts: [keepsake_kept, patience]
+  - type: enemy_blunder
+    label: The enemy stumbles
+    description: The enemy's own pride, greed or confusion undoes them at the worst possible moment for them.
+    narrationHint: >-
+      The heroes' effort still falls short. The enemy's plan comes apart on its own, in a way no one could
+      have predicted.
+    accepts: [patience, honesty_at_cost, mercy, amends]
+  - type: ambush_avoided
+    label: Spared without knowing it
+    description: A delay or detour turns out to have kept the heroes out of danger.
+    narrationHint: The heroes learn about the danger they missed afterwards, from someone else.
+    accepts: [patience, kindness_to_lowly]

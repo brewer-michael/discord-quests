@@ -1,0 +1,48 @@
+- id: farmhand
+  name: Farmhand
+  description: You grew up feeding geese, fixing fences and getting up before the sun.
+  abilities: [str, con, wis]
+  skills: [athletics, animalHandling]
+  keepsakeSuggestions: [carved-wooden-bird, pressed-flower]
+
+- id: tinker-apprentice
+  name: Tinker's Apprentice
+  description: You spent years in a workshop full of springs, gears and half-finished gadgets.
+  abilities: [dex, int, con]
+  skills: [investigation, sleightOfHand]
+  keepsakeSuggestions: [brass-compass, old-key]
+
+- id: lantern-acolyte
+  name: Lantern Acolyte
+  description: You helped tend the lantern-shrine, trimming wicks and listening to the old stories.
+  abilities: [int, wis, cha]
+  skills: [insight, religion]
+  keepsakeSuggestions: [silver-bell, letter-never-sent]
+
+- id: wandering-minstrel
+  name: Wandering Minstrel
+  description: You traveled with a family of musicians, playing at every fair and festival.
+  abilities: [dex, cha, wis]
+  skills: [performance, persuasion]
+  keepsakeSuggestions: [patchwork-scarf, lucky-button]
+
+- id: forest-forager
+  name: Forest Forager
+  description: You know which mushrooms are tasty, which berries are not, and where the deer drink.
+  abilities: [dex, wis, con]
+  skills: [nature, survival]
+  keepsakeSuggestions: [pressed-flower, sea-glass]
+
+- id: street-scamp
+  name: Street Scamp
+  description: You grew up on busy market streets, quick on your feet and quicker with your hands.
+  abilities: [dex, int, cha]
+  skills: [sleightOfHand, stealth]
+  keepsakeSuggestions: [lucky-button, grandmothers-thimble]
+
+- id: river-kin
+  name: River Kin
+  description: You were raised on a houseboat, poling through the reeds and reading the weather.
+  abilities: [str, dex, wis]
+  skills: [athletics, perception]
+  keepsakeSuggestions: [sea-glass, carved-wooden-bird]

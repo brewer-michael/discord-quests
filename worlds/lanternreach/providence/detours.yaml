@@ -1,0 +1,65 @@
+# Quiet-hand detours: small bits of bad luck, each registered with a hidden purpose before it happens.
+# `{{npc}}`, `{{place}}`, `{{item}}` and `{{target}}` are filled in by the engine.
+- id: washed-out-ford
+  when: { sceneKinds: [travel], terrain: [river, stream, marsh] }
+  setup: Last night's rain has swallowed the ford. The only way on is the long path past the old mill.
+  serves: [hidden_way, knowledge_given]
+  introduces: { kind: npc, archetype: miller-child, name: the miller's child, tags: [lowly] }
+  payoff: "{{npc}}, the miller's child from the mill path, knows a tunnel under {{target}}."
+  severity: mild
+
+- id: thrown-shoe
+  when: { sceneKinds: [travel], terrain: [forest, mountain, meadow] }
+  setup: A boot strap snaps and a pack tears open. The nearest help is a tinker's camp well off the road.
+  serves: [knowledge_given, object_reveals]
+  introduces: { kind: npc, archetype: tinker, name: the wandering tinker, tags: [lowly] }
+  payoff: "{{npc}} recognizes the lock at {{target}}. They made it, years ago, and remember its secret."
+  severity: mild
+
+- id: hailstorm-cave
+  when: { sceneKinds: [travel, exploration], terrain: [] }
+  setup: A sudden hailstorm drives the heroes into a cave, where they lose half a day waiting it out.
+  serves: [hidden_way, ambush_avoided]
+  introduces: { kind: place, name: the Painted Cave, tags: [warden-marks] }
+  payoff: The old Warden markings painted in that cave show the hidden path at {{target}}.
+  severity: mild
+
+- id: turned-signpost
+  when: { sceneKinds: [travel], terrain: [meadow, mountain, ruins] }
+  setup: Someone has turned a signpost around. By the time anyone notices, they are at a shepherd's hut, miles off course.
+  serves: [ally_arrives, ambush_avoided]
+  introduces: { kind: npc, archetype: shepherd, name: the hill shepherd, tags: [lowly] }
+  payoff: "{{npc}} and their clever dogs come over the hill at just the right moment at {{target}}."
+  severity: mild
+
+- id: gull-steals-map
+  when: { sceneKinds: [travel, exploration], terrain: [coast, cliffs] }
+  setup: A gull snatches the map right out of a hero's hands and flaps away over the cliffs.
+  serves: [knowledge_given, trusted_at_need]
+  introduces: { kind: npc, archetype: lamp-boy, name: the lighthouse apprentice, tags: [lowly] }
+  payoff: "{{npc}}, who drew the heroes a new map, turns up at {{target}} with something they forgot to mention."
+  severity: mild
+
+- id: missed-the-ferry
+  when: { sceneKinds: [travel], terrain: [river, marsh, coast] }
+  setup: The heroes arrive at the ferry landing just in time to watch the morning ferry leave without them.
+  serves: [ambush_avoided]
+  introduces: { kind: place, name: the late ferry, tags: [] }
+  payoff: They learn the morning ferry they missed was swarmed by the Gloam Host. Being late kept them safe.
+  severity: mild
+
+- id: wrong-coat
+  when: { sceneKinds: [rest, social], terrain: [] }
+  setup: At an inn, a traveling glassblower leaves in a hurry, wearing a hero's coat by mistake.
+  serves: [object_reveals, ally_arrives]
+  introduces: { kind: npc, archetype: tinker, name: the traveling glassblower, tags: [lowly] }
+  payoff: "{{npc}} finds the heroes again at {{target}}, still wearing the coat, and with a glass lens that is exactly what they need."
+  severity: mild
+
+- id: mist-circles
+  when: { sceneKinds: [travel, exploration], terrain: [fen, marsh] }
+  setup: The mist turns the heroes around in circles until a giggling little light bobs out to see what all the grumbling is about.
+  serves: [hidden_way, knowledge_given]
+  introduces: { kind: npc, archetype: wisp, name: the giggling wisp, tags: [] }
+  payoff: "{{npc}} bobs out of nowhere at {{target}} and lights a path nobody else can see."
+  severity: mild

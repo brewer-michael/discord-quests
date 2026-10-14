@@ -1,0 +1,49 @@
+id: glass-dunes
+name: The Glass Dunes
+description: Dunes of sparkling sand that ring like glass when the wind blows over them. Beautiful by day. Very
+  cold by night.
+biome: desert
+terrain: [desert]
+levelBand: [6, 8]
+polygon:
+- [1329, 302]
+- [1320, 820]
+- [1180, 940]
+- [1129, 941]
+- [907, 566]
+- [931, 489]
+centroid: [1110, 600]
+edges:
+- to: copperpeak
+  travelDays: 3
+  road: false
+- to: gloamhold
+  travelDays: 3
+  road: false
+pois:
+- id: singing-stones
+  name: The Singing Stones
+  description: Tall glassy stones that hum different notes in the wind.
+  kind: landmark
+  at: [1150, 650]
+- id: oasis-of-echoes
+  name: The Oasis of Echoes
+  description: A tiny oasis where every word you say comes back three times.
+  kind: camp
+  at: [1060, 540]
+encounters:
+  chance: 0.25
+  table:
+  - creature: gloam-knight
+    count: [1, 2]
+    weight: 2
+  - creature: glimmer-fox
+    count: [2, 3]
+    weight: 1
+  - creature: shadow-wolf
+    count: [2, 4]
+    weight: 2
+secrets:
+- The Singing Stones play a warning tune when the Gloam Host is near, for anyone who knows how to listen.
+artPrompt: glittering desert dunes of glassy sand under a huge starry sky, tall humming crystal stones
+mood: dazzling, eerie

@@ -1,0 +1,283 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9-]*$"
+      },
+      "name": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "tag": {
+        "type": "string",
+        "enum": [
+          "cheat",
+          "deceive",
+          "break_promise",
+          "fox_bargain",
+          "trade_keepsake",
+          "abandon_ally",
+          "steal"
+        ]
+      },
+      "offeredBy": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["npc", "faction", "situation"]
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          }
+        },
+        "required": ["kind", "id"],
+        "additionalProperties": false
+      },
+      "offer": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4000
+      },
+      "price": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["keepsake", "trust", "promise", "favor_owed", "item", "gold", "none"]
+          },
+          "detail": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          }
+        },
+        "required": ["kind", "detail"],
+        "additionalProperties": false
+      },
+      "benefit": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "advantage_rolls"
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 5
+              }
+            },
+            "required": ["kind", "count"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "skip_travel"
+              },
+              "maxDays": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 5
+              }
+            },
+            "required": ["kind", "maxDays"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "item"
+              },
+              "item": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9-]*$"
+              }
+            },
+            "required": ["kind", "item"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "reveal_secret"
+              }
+            },
+            "required": ["kind"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "temp_hp"
+              },
+              "amount": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              }
+            },
+            "required": ["kind", "amount"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "auto_success"
+              },
+              "checks": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 2
+              }
+            },
+            "required": ["kind", "checks"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "gold"
+              },
+              "amount": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 500
+              }
+            },
+            "required": ["kind", "amount"],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "snare": {
+        "type": "object",
+        "properties": {
+          "severity": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3
+          },
+          "due": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "crux"
+                  }
+                },
+                "required": ["kind"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "anchor_reappears"
+                  }
+                },
+                "required": ["kind"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "after_beats"
+                  },
+                  "beats": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 12
+                  }
+                },
+                "required": ["kind", "beats"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "chapter_end"
+                  }
+                },
+                "required": ["kind"],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "effect": {
+            "type": "string",
+            "enum": ["withhold_socket", "borrowed_luck_recalled", "trust_lost", "fox_collects", "longer_way"]
+          },
+          "socket": {
+            "type": "string",
+            "enum": [
+              "spared_one_acts",
+              "ally_arrives",
+              "knowledge_given",
+              "trusted_at_need",
+              "hidden_way",
+              "object_reveals",
+              "enemy_blunder",
+              "ambush_avoided"
+            ]
+          },
+          "faction": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "hint": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          }
+        },
+        "required": ["severity", "due", "effect", "hint"],
+        "additionalProperties": false
+      },
+      "contexts": {
+        "minItems": 1,
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": ["exploration", "social", "combat", "travel", "rest", "crux", "choice"]
+        }
+      },
+      "minChapter": {
+        "default": 1,
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 9007199254740991
+      }
+    },
+    "required": ["id", "name", "tag", "offeredBy", "offer", "price", "benefit", "snare", "contexts"],
+    "additionalProperties": false
+  }
+}

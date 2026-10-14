@@ -1,0 +1,78 @@
+- id: hearthfolk
+  name: Hearthfolk
+  description: The everyday people of Lanternreach, found in every village and on every road.
+  size: medium
+  speed: 30
+  traits:
+    - id: resourceful
+      name: Resourceful
+      description: Hearthfolk wake up from a good night's rest ready for anything.
+      effect: { kind: flavor }
+    - id: quick-learner
+      name: Quick Learner
+      description: You are trained in Insight.
+      effect: { kind: skill, skill: insight }
+
+- id: sylvan
+  name: Sylvan
+  description: Tall, quiet woodland folk with leaf-green eyes, who remember songs older than the Old Road.
+  size: medium
+  speed: 30
+  traits:
+    - id: twilight-sight
+      name: Twilight Sight
+      description: You can see in dim light as if it were bright, up to 60 feet.
+      effect: { kind: darkvision, range: 60 }
+    - id: keen-senses
+      name: Keen Senses
+      description: You are trained in Perception.
+      effect: { kind: skill, skill: perception }
+
+- id: stoneborn
+  name: Stoneborn
+  description: Sturdy mountain folk with braided beards (all of them, even the children), famous for stubbornness.
+  size: medium
+  speed: 30
+  traits:
+    - id: twilight-sight
+      name: Twilight Sight
+      description: You can see in dim light as if it were bright, up to 60 feet.
+      effect: { kind: darkvision, range: 60 }
+    - id: stout
+      name: Stout
+      description: You gain 1 extra hit point every level.
+      effect: { kind: hp_per_level, amount: 1 }
+    - id: iron-tummy
+      name: Iron Tummy
+      description: You have advantage on saves against feeling Queasy.
+      effect: { kind: advantage_vs_condition, condition: poisoned }
+
+- id: pipkin
+  name: Pipkin
+  description: Small, round-cheeked folk who love second breakfasts and are much braver than they look.
+  size: small
+  speed: 30
+  traits:
+    - id: lucky
+      name: Lucky
+      description: When you roll a 1 on a d20 test, you can roll again and use the new roll.
+      effect: { kind: lucky }
+    - id: brave
+      name: Brave
+      description: You have advantage on saves against being Spooked.
+      effect: { kind: advantage_vs_condition, condition: frightened }
+
+- id: burrowkin
+  name: Burrowkin
+  description: Clever, whiskery little tinkerers who live in cozy burrows full of clocks.
+  size: small
+  speed: 30
+  traits:
+    - id: twilight-sight
+      name: Twilight Sight
+      description: You can see in dim light as if it were bright, up to 60 feet.
+      effect: { kind: darkvision, range: 60 }
+    - id: clever-paws
+      name: Clever Paws
+      description: You are trained in Investigation.
+      effect: { kind: skill, skill: investigation }

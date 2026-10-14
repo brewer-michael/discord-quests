@@ -1,0 +1,25 @@
+id: gloam-host
+name: The Gloam Host
+alignment: antagonist
+description: >-
+  The shadow-servants of the Gloam King: giggling gloom mites, slinking skulkers, shadow wolves and empty
+  marching armor. They hate light. A good bonk pops them into a puff of smoke.
+goals:
+  - Pinch out every lantern in Lanternreach.
+  - Keep the Ember locked away in Gloamhold forever.
+methods:
+  - Creeping in wherever the light is weak.
+  - Frightening people into giving up.
+leader: the-gloam-king
+clocks:
+  - id: long-night
+    name: The Long Night Spreads
+    segments: 8
+    description: Night grows longer and darker across Lanternreach.
+    onFill: Night covers every corner of Lanternreach, and the last lanterns sputter.
+  - id: ember-dims
+    name: The Ember Grows Cold
+    segments: 6
+    description: Locked away from the First Forge, the Ember grows colder and heavier.
+    onFill: The Ember is nearly out. Only the First Forge can save it now.
+startingDisposition: -3

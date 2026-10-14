@@ -1,0 +1,218 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9-]*$"
+      },
+      "name": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "description": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4000
+      },
+      "kind": {
+        "type": "string",
+        "enum": ["beast", "critter", "shadow", "person", "construct", "spirit"]
+      },
+      "size": {
+        "type": "string",
+        "enum": ["tiny", "small", "medium", "large", "huge"]
+      },
+      "cr": {
+        "type": "string",
+        "enum": ["0", "1", "2", "3", "4", "5", "6", "7", "8", "1/8", "1/4", "1/2"]
+      },
+      "ac": {
+        "type": "integer",
+        "minimum": 5,
+        "maximum": 25
+      },
+      "hp": {
+        "type": "string",
+        "pattern": "^[0-9dkhl+\\- ]+$"
+      },
+      "speed": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 120
+      },
+      "abilities": {
+        "type": "object",
+        "properties": {
+          "str": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20
+          },
+          "dex": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20
+          },
+          "con": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20
+          },
+          "int": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20
+          },
+          "wis": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20
+          },
+          "cha": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20
+          }
+        },
+        "required": ["str", "dex", "con", "int", "wis", "cha"],
+        "additionalProperties": false
+      },
+      "attacks": {
+        "minItems": 1,
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "bonus": {
+              "type": "integer",
+              "minimum": -2,
+              "maximum": 15
+            },
+            "damage": {
+              "type": "string",
+              "pattern": "^[0-9dkhl+\\- ]+$"
+            },
+            "damageType": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "range": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                }
+              ],
+              "items": false,
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "effect": {
+              "type": "object",
+              "properties": {
+                "condition": {
+                  "type": "string",
+                  "enum": [
+                    "blinded",
+                    "charmed",
+                    "frightened",
+                    "grappled",
+                    "invisible",
+                    "poisoned",
+                    "prone",
+                    "restrained",
+                    "stunned",
+                    "dazed"
+                  ]
+                },
+                "save": {
+                  "type": "string",
+                  "enum": ["str", "dex", "con", "int", "wis", "cha"]
+                },
+                "dc": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": ["condition", "save", "dc"],
+              "additionalProperties": false
+            }
+          },
+          "required": ["name", "bonus", "damage", "damageType"],
+          "additionalProperties": false
+        }
+      },
+      "traits": {
+        "default": [],
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4000
+            }
+          },
+          "required": ["name", "description"],
+          "additionalProperties": false
+        }
+      },
+      "morale": {
+        "type": "string",
+        "enum": ["brave", "normal", "skittish"]
+      },
+      "defeat": {
+        "type": "string",
+        "enum": ["faints", "flees", "surrenders", "poofs"]
+      },
+      "tags": {
+        "default": [],
+        "type": "array",
+        "items": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        }
+      }
+    },
+    "required": [
+      "id",
+      "name",
+      "description",
+      "kind",
+      "size",
+      "cr",
+      "ac",
+      "hp",
+      "speed",
+      "abilities",
+      "attacks",
+      "morale",
+      "defeat"
+    ],
+    "additionalProperties": false
+  }
+}

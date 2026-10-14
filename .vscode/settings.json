@@ -1,0 +1,23 @@
+{
+  "yaml.schemas": {
+    "./schemas/world.schema.json": "worlds/*/world.yaml",
+    "./schemas/content-rules.schema.json": "worlds/*/content-rules.yaml",
+    "./schemas/classes.schema.json": "worlds/*/classes.yaml",
+    "./schemas/paths.schema.json": "worlds/*/paths.yaml",
+    "./schemas/backgrounds.schema.json": "worlds/*/backgrounds.yaml",
+    "./schemas/species.schema.json": "worlds/*/species.yaml",
+    "./schemas/items.schema.json": "worlds/*/items.yaml",
+    "./schemas/creatures.schema.json": "worlds/*/creatures.yaml",
+    "./schemas/guided-options.schema.json": "worlds/*/guided-options.yaml",
+    "./schemas/shortcuts.schema.json": "worlds/*/shortcuts.yaml",
+    "./schemas/deflections.schema.json": "worlds/*/deflections.yaml",
+    "./schemas/region.schema.json": "worlds/*/regions/*.yaml",
+    "./schemas/faction.schema.json": "worlds/*/factions/*.yaml",
+    "./schemas/npcs.schema.json": "worlds/*/npcs/archetypes.yaml",
+    "./schemas/act.schema.json": "worlds/*/arc/*.yaml",
+    "./schemas/detours.schema.json": "worlds/*/providence/detours.yaml",
+    "./schemas/payoffs.schema.json": "worlds/*/providence/payoffs.yaml",
+    "./schemas/epilogue-lines.schema.json": "worlds/*/providence/epilogue-lines.yaml",
+    "./schemas/map.schema.json": "worlds/*/map/map.yaml"
+  }
+}

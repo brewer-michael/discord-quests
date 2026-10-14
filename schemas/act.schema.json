@@ -1,0 +1,410 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "number": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 5
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000
+    },
+    "detail": {
+      "type": "string",
+      "enum": ["full", "outline"]
+    },
+    "chapters": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "number": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "regions": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]*$"
+            }
+          },
+          "beats": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9][a-z0-9-]*$"
+                },
+                "title": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": ["exploration", "social", "combat", "travel", "rest", "crux", "choice"]
+                },
+                "region": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9][a-z0-9-]*$"
+                },
+                "poi": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9][a-z0-9-]*$"
+                },
+                "summary": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4000
+                },
+                "goals": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
+                  }
+                },
+                "requires": {
+                  "default": [],
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9][a-z0-9-]*$"
+                  }
+                },
+                "optional": {
+                  "default": false,
+                  "type": "boolean"
+                },
+                "milestone": {
+                  "default": false,
+                  "type": "boolean"
+                },
+                "quest": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[a-z0-9][a-z0-9-]*$"
+                    },
+                    "title": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "objective": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 4000
+                    }
+                  },
+                  "required": ["id", "title", "objective"],
+                  "additionalProperties": false
+                },
+                "offersShortcuts": {
+                  "default": [],
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9][a-z0-9-]*$"
+                  }
+                },
+                "introduces": {
+                  "default": [],
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9][a-z0-9-]*$"
+                  }
+                },
+                "sockets": {
+                  "default": [],
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "spared_one_acts",
+                      "ally_arrives",
+                      "knowledge_given",
+                      "trusted_at_need",
+                      "hidden_way",
+                      "object_reveals",
+                      "enemy_blunder",
+                      "ambush_avoided"
+                    ]
+                  }
+                },
+                "virtueOpportunities": {
+                  "default": [],
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "tag": {
+                        "type": "string",
+                        "enum": [
+                          "mercy",
+                          "honesty_at_cost",
+                          "patience",
+                          "promise_kept",
+                          "kindness_to_lowly",
+                          "self_sacrifice",
+                          "keepsake_kept",
+                          "amends"
+                        ]
+                      },
+                      "target": {
+                        "type": "string",
+                        "pattern": "^[a-z0-9][a-z0-9-]*$"
+                      },
+                      "note": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 4000
+                      }
+                    },
+                    "required": ["tag", "note"],
+                    "additionalProperties": false
+                  }
+                },
+                "decisive": {
+                  "default": false,
+                  "type": "boolean"
+                },
+                "crux": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": ["overwhelming_odds", "race_against_clock", "hold_the_line", "last_step"]
+                    },
+                    "check": {
+                      "type": "object",
+                      "properties": {
+                        "ability": {
+                          "type": "string",
+                          "enum": ["str", "dex", "con", "int", "wis", "cha"]
+                        },
+                        "skill": {
+                          "type": "string",
+                          "enum": [
+                            "acrobatics",
+                            "animalHandling",
+                            "arcana",
+                            "athletics",
+                            "deception",
+                            "history",
+                            "insight",
+                            "intimidation",
+                            "investigation",
+                            "medicine",
+                            "nature",
+                            "perception",
+                            "performance",
+                            "persuasion",
+                            "religion",
+                            "sleightOfHand",
+                            "stealth",
+                            "survival"
+                          ]
+                        },
+                        "label": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "dc": {
+                          "type": "object",
+                          "properties": {
+                            "base": {
+                              "type": "integer",
+                              "minimum": 5,
+                              "maximum": 30
+                            },
+                            "perEnemyClockSegment": {
+                              "default": 0,
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 3
+                            },
+                            "perSnareSeverity": {
+                              "default": 0,
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 3
+                            },
+                            "max": {
+                              "default": 30,
+                              "type": "integer",
+                              "minimum": 10,
+                              "maximum": 35
+                            }
+                          },
+                          "required": ["base"],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": ["ability", "label", "dc"],
+                      "additionalProperties": false
+                    },
+                    "clock": {
+                      "type": "object",
+                      "properties": {
+                        "faction": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9][a-z0-9-]*$"
+                        },
+                        "clock": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9][a-z0-9-]*$"
+                        }
+                      },
+                      "required": ["faction", "clock"],
+                      "additionalProperties": false
+                    },
+                    "sockets": {
+                      "minItems": 2,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "spared_one_acts",
+                              "ally_arrives",
+                              "knowledge_given",
+                              "trusted_at_need",
+                              "hidden_way",
+                              "object_reveals",
+                              "enemy_blunder",
+                              "ambush_avoided"
+                            ]
+                          },
+                          "accepts": {
+                            "minItems": 1,
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "mercy",
+                                "honesty_at_cost",
+                                "patience",
+                                "promise_kept",
+                                "kindness_to_lowly",
+                                "self_sacrifice",
+                                "keepsake_kept",
+                                "amends"
+                              ]
+                            }
+                          },
+                          "anchorTag": {
+                            "type": "string",
+                            "pattern": "^[a-z0-9][a-z0-9-]*$"
+                          },
+                          "faction": {
+                            "type": "string",
+                            "pattern": "^[a-z0-9][a-z0-9-]*$"
+                          },
+                          "hint": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 4000
+                          }
+                        },
+                        "required": ["type", "accepts", "hint"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "requiredGrace": {
+                      "type": "number",
+                      "minimum": 0.1,
+                      "maximum": 5
+                    },
+                    "onSuccess": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 4000
+                    },
+                    "onCostlySuccess": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 4000
+                    },
+                    "onFailForward": {
+                      "type": "object",
+                      "properties": {
+                        "beat": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9][a-z0-9-]*$"
+                        },
+                        "text": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 4000
+                        }
+                      },
+                      "required": ["text"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "check",
+                    "sockets",
+                    "requiredGrace",
+                    "onSuccess",
+                    "onCostlySuccess",
+                    "onFailForward"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": ["id", "title", "kind", "region", "summary", "goals"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["id", "number", "title", "summary", "regions", "beats"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["id", "number", "title", "summary", "detail", "chapters"],
+  "additionalProperties": false
+}

@@ -1,0 +1,51 @@
+id: copperpeak
+name: Copperpeak
+description: Copper-colored mountains full of chimneys, bells and the busy burrows of the Burrowkin tinkers. Usually
+  the bells ring all day. Lately they have gone quiet.
+biome: mountain
+terrain: [mountain, mine]
+levelBand: [3, 5]
+polygon:
+- [1129, 941]
+- [654, 946]
+- [718, 647]
+- [907, 566]
+centroid: [840, 760]
+edges:
+- to: whisperwood
+  travelDays: 3
+  road: true
+- to: old-road-ruins
+  travelDays: 3
+  road: true
+- to: glass-dunes
+  travelDays: 3
+  road: false
+pois:
+- id: bellhollow
+  name: Bellhollow
+  description: A tinker town built into the mountainside, every doorway hung with a bell.
+  kind: town
+  at: [860, 800]
+- id: tinkers-gate
+  name: The Tinkers' Gate
+  description: A huge copper gate guarded by polite but stubborn clockwork sentries.
+  kind: landmark
+  at: [800, 700]
+encounters:
+  chance: 0.2
+  table:
+  - creature: clockwork-sentry
+    count: [1, 2]
+    weight: 2
+  - creature: shadow-wolf
+    count: [1, 3]
+    weight: 2
+  - creature: gloam-skulker
+    count: [2, 3]
+    weight: 1
+secrets:
+- The Burrowkin forged the Lamp-Key that opens the Ember Vault, long before Gloamhold went dark.
+artPrompt: copper-colored mountains with little round doors, chimneys puffing steam and bells hanging everywhere,
+  at sunset
+mood: clanky, clever, too quiet

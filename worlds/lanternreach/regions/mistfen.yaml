@@ -1,0 +1,51 @@
+id: mistfen
+name: Mistfen
+description: A drowsy fen where the mist is so thick you can lose your own feet. Friendly wisps live here. So do
+  some unfriendly ones.
+biome: fen
+terrain: [fen, marsh]
+levelBand: [4, 6]
+polygon:
+- [596, 347]
+- [558, 531]
+- [457, 578]
+- [286, 461]
+- [312, 107]
+centroid: [430, 420]
+edges:
+- to: reedmarsh
+  travelDays: 2
+  road: false
+- to: saltwind-coast
+  travelDays: 2
+  road: false
+- to: old-road-ruins
+  travelDays: 2
+  road: true
+pois:
+- id: wisp-hollow
+  name: Wisp Hollow
+  description: A hidden hollow where the friendly wisps gather to tell stories.
+  kind: secret
+  at: [420, 360]
+- id: sunken-shrine
+  name: The Sunken Shrine
+  description: An old lantern-shrine half sunk in the bog, still faintly glowing.
+  kind: shrine
+  at: [480, 460]
+encounters:
+  chance: 0.3
+  table:
+  - creature: bog-lump
+    count: [1, 1]
+    weight: 2
+  - creature: gloam-skulker
+    count: [2, 4]
+    weight: 2
+  - creature: dust-moth
+    count: [2, 4]
+    weight: 1
+secrets:
+- The friendly wisps can lead you anywhere in the fen, if you can make them laugh.
+artPrompt: a dreamy foggy fen with little glowing wisps of light floating over dark water and twisted willow trees
+mood: sleepy, spooky, strange

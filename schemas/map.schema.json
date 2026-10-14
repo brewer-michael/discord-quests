@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "width": {
+      "type": "integer",
+      "minimum": 400,
+      "maximum": 4000
+    },
+    "height": {
+      "type": "integer",
+      "minimum": 300,
+      "maximum": 4000
+    },
+    "colors": {
+      "type": "object",
+      "properties": {
+        "sea": {
+          "type": "string"
+        },
+        "land": {
+          "type": "string"
+        },
+        "ink": {
+          "type": "string"
+        },
+        "fog": {
+          "type": "string"
+        }
+      },
+      "required": ["sea", "land", "ink", "fog"],
+      "additionalProperties": false
+    },
+    "baseImage": {
+      "type": "string"
+    },
+    "compass": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
+    }
+  },
+  "required": ["title", "width", "height", "colors", "compass"],
+  "additionalProperties": false
+}

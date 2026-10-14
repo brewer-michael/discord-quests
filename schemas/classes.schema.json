@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9-]*$"
+      },
+      "srdClass": {
+        "type": "string",
+        "enum": ["fighter", "rogue", "wizard", "cleric", "ranger", "bard"]
+      },
+      "name": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "tagline": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "description": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4000
+      },
+      "startingKit": {
+        "type": "object",
+        "properties": {
+          "weapons": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]*$"
+            }
+          },
+          "armor": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9-]*$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "shield": {
+            "type": "boolean"
+          },
+          "gear": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]*$"
+            }
+          }
+        },
+        "required": ["weapons", "armor", "shield", "gear"],
+        "additionalProperties": false
+      },
+      "suggestedSkills": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "acrobatics",
+            "animalHandling",
+            "arcana",
+            "athletics",
+            "deception",
+            "history",
+            "insight",
+            "intimidation",
+            "investigation",
+            "medicine",
+            "nature",
+            "perception",
+            "performance",
+            "persuasion",
+            "religion",
+            "sleightOfHand",
+            "stealth",
+            "survival"
+          ]
+        }
+      },
+      "suggestedSpells": {
+        "default": [],
+        "type": "array",
+        "items": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        }
+      },
+      "portraitPrompt": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4000
+      }
+    },
+    "required": [
+      "id",
+      "srdClass",
+      "name",
+      "tagline",
+      "description",
+      "startingKit",
+      "suggestedSkills",
+      "portraitPrompt"
+    ],
+    "additionalProperties": false
+  }
+}

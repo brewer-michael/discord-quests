@@ -1,0 +1,14 @@
+id: lamplighters-guild
+name: The Lamplighters' Guild
+alignment: long-road
+description: >-
+  The oldest guild in Lanternreach. Every spring the Lamplighters carry flame from the Ember along the Old
+  Road to every village, on foot, the whole way, because that is how it has always been done properly.
+goals:
+  - Keep every lantern in Lanternreach lit.
+  - Carry the flame to every village, however small.
+methods:
+  - Patience, hard work and sharing.
+  - Keeping careful records and keeping their word.
+leader: amberly-quill
+startingDisposition: 1

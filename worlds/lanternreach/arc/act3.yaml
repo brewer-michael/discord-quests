@@ -1,0 +1,142 @@
+id: act3
+number: 3
+title: The Last Step
+summary: >-
+  Into Gloamhold to take back the Ember, then up the Thousand Steps of Mount Cinder, where the hardest thing
+  of all is letting go.
+detail: outline
+chapters:
+  - id: ch7
+    number: 7
+    title: Into Gloamhold
+    summary: Across the singing dunes and into the cold fortress, to the Ember Vault.
+    regions: [glass-dunes, gloamhold]
+    beats:
+      - id: ch7-the-singing-dunes
+        title: The Singing Dunes
+        kind: travel
+        region: glass-dunes
+        poi: singing-stones
+        summary: The dunes ring like glass. Somewhere in the music is a warning, for anyone who listens.
+        goals:
+          - Cross the Glass Dunes to Gloamhold.
+        sockets: [ambush_avoided]
+      - id: ch7-the-cold-kitchens
+        title: The Cold Kitchens
+        kind: social
+        region: gloamhold
+        poi: cold-kitchens
+        summary: >-
+          Inside Gloamhold, the heroes find lost villagers working in kitchens where nobody has cooked a warm
+          meal in years.
+        goals:
+          - Find a way deeper into the fortress.
+        virtueOpportunities:
+          - tag: kindness_to_lowly
+            note: Share warmth and food with the kitchen helpers, even though it risks discovery.
+        sockets: [knowledge_given]
+      - id: ch7-the-ember-vault
+        title: The Ember Vault
+        kind: crux
+        region: gloamhold
+        poi: ember-vault
+        summary: >-
+          The Ember sits in a round vault deep in Gloamhold, and every Gloam Knight in the fortress is
+          marching toward it. The heroes must take the Ember and get out.
+        goals:
+          - Take back the Ember and escape the vault.
+        decisive: true
+        milestone: true
+        crux:
+          type: overwhelming_odds
+          check:
+            ability: dex
+            skill: stealth
+            label: Slip Away
+            dc: { base: 17, perEnemyClockSegment: 1, perSnareSeverity: 1, max: 30 }
+          clock: { faction: gloam-host, clock: ember-dims }
+          sockets:
+            - type: enemy_blunder
+              accepts: [patience, honesty_at_cost]
+              faction: gloam-host
+              hint: Two Gloam Knights start arguing about who is in charge, and the vault doors are left wide open.
+            - type: knowledge_given
+              accepts: [kindness_to_lowly, promise_kept]
+              hint: A kitchen helper the heroes were kind to shows them the cold kitchens' back door.
+            - type: object_reveals
+              accepts: [keepsake_kept]
+              hint: An old keepsake from home turns out to fit a forgotten keyhole in the vault wall.
+          requiredGrace: 1.4
+          onSuccess: The heroes slip out of Gloamhold with the Ember glowing in Hattie's old lantern.
+          onCostlySuccess: They escape with the Ember, but the Gloam King himself saw them, and he is following.
+          onFailForward:
+            text: They get the Ember out, but the whole Gloam Host is right behind them, and the Gloam King leads it.
+
+  - id: ch8
+    number: 8
+    title: Mount Cinder
+    summary: A thousand warm steps, a heavy Ember, and the last step of all.
+    regions: [mount-cinder]
+    beats:
+      - id: ch8-the-thousand-steps
+        title: The Thousand Steps
+        kind: travel
+        region: mount-cinder
+        poi: cinder-steps
+        summary: >-
+          The Ember grows heavier with every step, and it whispers that it would be so warm to keep it. The
+          heroes must climb anyway.
+        goals:
+          - Carry the Ember to the top of Mount Cinder.
+        virtueOpportunities:
+          - tag: self_sacrifice
+            note: Take a turn carrying the heavy Ember so a friend can rest.
+          - tag: patience
+            note: Keep climbing step by step, without looking for a shortcut.
+      - id: ch8-the-last-step
+        title: The Last Step
+        kind: crux
+        region: mount-cinder
+        poi: first-forge
+        summary: >-
+          At the First Forge, all that is left is to let the Ember go. But the Ember is warm and lovely, and
+          letting go is the hardest thing in the world.
+        goals:
+          - Give the Ember back to the First Forge.
+        requires: [ch8-the-thousand-steps]
+        decisive: true
+        milestone: true
+        crux:
+          type: last_step
+          check:
+            ability: wis
+            label: Let Go
+            dc: { base: 22, perEnemyClockSegment: 1, perSnareSeverity: 1, max: 32 }
+          clock: { faction: gloam-host, clock: ember-dims }
+          sockets:
+            - type: spared_one_acts
+              accepts: [mercy, kindness_to_lowly]
+              anchorTag: covets-ember
+              hint: >-
+                Snibbet lunges for the Ember, slips at the forge's edge, and the Ember tumbles into the fire.
+                Snibbet is pulled back to safety, warm for the first time in years.
+            - type: enemy_blunder
+              accepts: [patience, honesty_at_cost]
+              faction: gloam-host
+              hint: >-
+                The Gloam King grabs for the Ember himself, and its warmth is too much for his cold hands. He
+                lets go, and it falls into the forge.
+            - type: object_reveals
+              accepts: [keepsake_kept]
+              hint: A keepsake from home reminds the hero why they came, and their hand opens.
+          requiredGrace: 1.8
+          onSuccess: >-
+            With an aching heart and a brave one, the hero opens their hand. The Ember falls into the First
+            Forge, and light roars up the mountain and out across all of Lanternreach.
+          onCostlySuccess: >-
+            The Ember falls into the forge and the light returns, but something precious is lost in the
+            flames, and the road home will be quieter for it.
+          onFailForward:
+            text: >-
+              The Ember will not be let go of, and the Gloam King carries it back into the dark. But the story
+              is not over. It turns toward one last, long road.

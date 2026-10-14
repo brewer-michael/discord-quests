@@ -1,0 +1,202 @@
+archetypes:
+  - id: lantern-thief
+    label: Lantern-thief
+    description: A small, cold, raggedy creature who steals flames to warm their hands.
+    namePool: [Snibbet, Grimble, Twitch, Sooty]
+    quirks: [Talks to their own hands, Counts everything twice, Flinches at kindness]
+    voice: Quick, whispery, says "precious" and "mine" a lot, then apologizes.
+    tags: [lowly, pitiable]
+  - id: village-elder
+    label: Village elder
+    description: A fussy, kind-hearted village leader who worries about everything.
+    namePool: [Hobb, Marigold, Barnaby, Petunia]
+    quirks: [Polishes their spectacles when nervous, Quotes the village rules]
+    voice: Flustered and formal, with lots of "goodness me".
+  - id: old-lamplighter
+    label: Old lamplighter
+    description: A village lamplighter who has lit the same lantern every night for fifty years.
+    namePool: [Hattie, Wendell, Corra, Ambrose]
+    quirks: [Smells of lamp oil and peppermint, Hums while she works]
+    voice: Slow, warm and full of old sayings.
+  - id: lamplighter-elder
+    label: Lamplighter elder
+    description: A senior member of the Lamplighters' Guild, brisk and brave.
+    namePool: [Amberly, Tobias, Linnet, Rowan]
+    quirks: [Always has ink on one cheek, Never sits down]
+    voice: Brisk, clear and encouraging.
+    faction: lamplighters-guild
+  - id: river-elder
+    label: River elder
+    description: A wise old River Folk grandparent who knows every channel in the marsh.
+    namePool: [Granny Reed, Grandpa Sedge, Auntie Fern]
+    quirks: [Talks to herons, Never hurries]
+    voice: Dry, funny and kind. Calls everyone "duckling".
+    faction: river-folk
+    tags: [lowly]
+  - id: river-child
+    label: River child
+    description: A small, brave River Folk child.
+    namePool: [Tumble, Pip, Minnow, Dabble]
+    quirks: [Asks a hundred questions, Collects shiny pebbles]
+    voice: Excited and chatty, and very honest.
+    faction: river-folk
+    tags: [lowly]
+  - id: bargain-fox
+    label: Bargain fox
+    description: A fox in a velvet waistcoat who adores a good deal.
+    namePool: [Saffron, Velvet, Sly Tobias]
+    quirks: [Loves very long words, Never says no to a bargain]
+    voice: Smooth, delighted, calls everyone "my darlings".
+    creature: glimmer-fox
+    faction: court-of-the-bargain-fox
+  - id: ledger-merchant
+    label: Ledger merchant
+    description: A merchant of the Gilded Ledger, all gold buttons and fine print.
+    namePool: [Silas Coin, Prudence Penny, Mortimer Mint]
+    quirks: [Counts coins while talking, Has a price for everything]
+    voice: Smooth and businesslike, says "strictly business".
+    faction: gilded-ledger
+  - id: ledger-runner
+    label: Ledger runner
+    description: A sly stall-keeper who works for the Ledger on the side.
+    namePool: [Nib, Lark, Fidget]
+    quirks: [Winks too much, Always looking over their shoulder]
+    voice: Fast-talking and friendly-ish.
+    faction: gilded-ledger
+  - id: warden
+    label: Warden of the Old Road
+    description: A weathered ranger in a grey-green cloak.
+    namePool: [Bram Tallow, Ivy Thorn, Gareth Moss]
+    quirks: [Says very little, Notices everything]
+    voice: Quiet and steady. Every word is a promise.
+    faction: wardens-of-the-old-road
+  - id: gloam-lord
+    label: Gloam lord
+    description: A cold, proud ruler who has forgotten what warmth feels like.
+    namePool: [The Gloam King, The Grey King, The Cold Crown]
+    quirks: [Never raises his voice, Hates the color yellow]
+    voice: Cold, slow and lonely, as if the words are very heavy.
+    creature: the-gloam-king
+    faction: gloam-host
+  - id: miller-child
+    label: Miller's child
+    description: A miller's kid who knows every waterway and tunnel near the mill.
+    namePool: [Wren, Tobble, Ash]
+    quirks: [Covered in flour, Whistles through a gap in their teeth]
+    voice: Shy at first, then bursting with ideas.
+    tags: [lowly]
+  - id: tinker
+    label: Wandering tinker
+    description: A traveling tinker with a cart full of clanking pots and gadgets.
+    namePool: [Old Fennick, Bess Bramblegear, Cogsworth]
+    quirks: [Fixes things that aren't broken, Remembers every lock they ever made]
+    voice: Rambling and cheerful.
+    tags: [lowly]
+  - id: shepherd
+    label: Hill shepherd
+    description: A quiet shepherd with three clever dogs.
+    namePool: [Shepherd Moss, Elsie Crook, Tam]
+    quirks: [Talks mostly to the dogs, Knows every hill path]
+    voice: Slow, few words, kind eyes.
+    tags: [lowly]
+  - id: lamp-boy
+    label: Lamp-boy
+    description: A young lighthouse apprentice who still climbs the tower every night.
+    namePool: [Marlo, Sandy, Kip]
+    quirks: [Hopeful, Afraid of heights but climbs anyway]
+    voice: Earnest and a little breathless.
+    tags: [lowly]
+  - id: wisp
+    label: Friendly wisp
+    description: A floating light of the fen who loves jokes.
+    namePool: [Flicker, Glim, Sparkwhistle]
+    quirks: [Giggles, Changes color when happy]
+    voice: Tiny, tinkly and silly.
+  - id: kitchen-helper
+    label: Kitchen helper
+    description: A lost villager who has been stuck working in Gloamhold's cold kitchens.
+    namePool: [Dorrie, Hal, Nettle]
+    quirks: [Always shivering, Hums old village songs]
+    voice: Quiet and scared, but brave when it counts.
+    tags: [lowly]
+
+named:
+  - id: snibbet
+    name: Snibbet
+    archetype: lantern-thief
+    description: >-
+      A small, grey, raggedy lantern-thief with eyes like puddles. Long ago he was a Lamplighter's
+      apprentice named Pip, who kept a spark of the Ember for himself and has been cold ever since. He
+      steals flames to warm his hands, but they never last.
+    region: hearthmoor
+    role: The lantern-thief who covets the Ember
+    creature: snibbet
+    tags: [covets-ember, pitiable, lowly]
+    secret: Snibbet was once Pip, an apprentice Lamplighter. He knows the Lamp-House tunnels and every thieves' path.
+  - id: mayor-hobb
+    name: Mayor Hobb
+    archetype: village-elder
+    description: The fussy, worried mayor of Hearthmoor, who means well.
+    region: hearthmoor
+    role: Mayor of Hearthmoor
+  - id: hattie-wick
+    name: Hattie Wick
+    archetype: old-lamplighter
+    description: Hearthmoor's lamplighter for fifty years. Too old for the road now, but not too old to be brave.
+    region: hearthmoor
+    role: Gives the heroes their quest
+    faction: lamplighters-guild
+  - id: amberly-quill
+    name: Amberly Quill
+    archetype: lamplighter-elder
+    description: The head of the Lamplighters' Guild, brisk, brave and very tired.
+    region: reedmarsh
+    role: Leader of the Lamplighters
+    faction: lamplighters-guild
+  - id: granny-reed
+    name: Granny Reed
+    archetype: river-elder
+    description: The oldest of the River Folk, who has never once been lost in the marsh.
+    region: reedmarsh
+    role: Elder of the River Folk
+    faction: river-folk
+    tags: [lowly]
+  - id: tumble
+    name: Tumble
+    archetype: river-child
+    description: A small River Folk girl who chased a heron into the Whisperwood and got very lost.
+    region: whisperwood
+    role: Lost child, Granny Reed's great-granddaughter
+    faction: river-folk
+    tags: [lowly]
+  - id: saffron-the-fox
+    name: Saffron the Bargain Fox
+    archetype: bargain-fox
+    description: A fox in a plum velvet waistcoat with a tail like a sunset. Every deal she offers really works.
+    region: whisperwood
+    role: The trickster who offers the Quick Way
+    faction: court-of-the-bargain-fox
+  - id: silas-coin
+    name: Silas Coin
+    archetype: ledger-merchant
+    description: A Gilded Ledger merchant who owns the bridge into the Reedmarsh, and the toll on it.
+    region: reedmarsh
+    role: Keeper of Coin Bridge
+    faction: gilded-ledger
+  - id: bram-tallow
+    name: Bram Tallow
+    archetype: warden
+    description: The last captain of the Wardens, keeper of the Great Waystone's signal fire.
+    region: old-road-ruins
+    role: Captain of the Wardens
+    faction: wardens-of-the-old-road
+  - id: the-gloam-king
+    name: The Gloam King
+    archetype: gloam-lord
+    description: >-
+      Once the Lamp-Warden of Gloamhold, he decided light should belong to whoever was strong enough to hold
+      it. He took the Ember, and has been cold ever since he took it.
+    region: gloamhold
+    role: The one who stole the Ember
+    faction: gloam-host
+    creature: the-gloam-king

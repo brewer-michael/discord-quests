@@ -1,0 +1,93 @@
+- id: shieldheart
+  srdClass: fighter
+  name: Shieldheart
+  tagline: Stand in front so your friends can stand tall.
+  description: >-
+    Shieldhearts are the brave ones at the front, with a sturdy shield and a steady sword. They learned
+    to fight so that other people wouldn't have to.
+  startingKit:
+    weapons: [longsword, handaxe]
+    armor: warden-mail
+    shield: true
+    gear: [hearth-lantern, rope, trail-cakes, bedroll]
+  suggestedSkills: [athletics, perception]
+  portraitPrompt: a young hero in chain mail with a round wooden shield painted with a lantern
+
+- id: scout
+  srdClass: rogue
+  name: Scout
+  tagline: Quick feet, quiet steps, clever hands.
+  description: >-
+    Scouts slip ahead of the party, spot the trap before anyone steps in it, and open locks that were
+    never meant to be opened. Sneaky, yes. But a good Scout is sneaky for their friends.
+  startingKit:
+    weapons: [shortsword, shortbow]
+    armor: leather-jerkin
+    shield: false
+    gear: [hearth-lantern, rope, trail-cakes, lockpicks]
+  suggestedSkills: [stealth, acrobatics, perception, investigation]
+  portraitPrompt: a nimble young scout in a hooded green cloak crouched on a rooftop at dusk
+
+- id: lorewright
+  srdClass: wizard
+  name: Lorewright
+  tagline: Every spell is a story you can say out loud.
+  description: >-
+    Lorewrights study the old words that make sparks dance and doors whisper open. They carry notebooks
+    full of spells, doodles and questions.
+  startingKit:
+    weapons: [quarterstaff, dagger]
+    armor: null
+    shield: false
+    gear: [hearth-lantern, spell-notebook, trail-cakes, chalk]
+  suggestedSkills: [arcana, history]
+  suggestedSpells: [fire-bolt, light, mage-hand, magic-missile, shield, sleep]
+  portraitPrompt: a curious young wizard with ink-stained fingers and a glowing notebook
+
+- id: lanternkeeper
+  srdClass: cleric
+  name: Lanternkeeper
+  tagline: Carry the light, and share it.
+  description: >-
+    Lanternkeepers tend the light itself. They heal friends, steady frightened hearts, and can make
+    creatures of shadow flinch with a raised lantern.
+  startingKit:
+    weapons: [mace]
+    armor: scale-coat
+    shield: true
+    gear: [hearth-lantern, lantern-charm, healer-kit, trail-cakes]
+  suggestedSkills: [medicine, insight]
+  suggestedSpells: [sacred-flame, guidance, light, cure-wounds, healing-word, bless]
+  portraitPrompt: a kind young healer holding up a bright brass lantern in a dark forest
+
+- id: wayfarer
+  srdClass: ranger
+  name: Wayfarer
+  tagline: Every trail is a friend if you know how to listen.
+  description: >-
+    Wayfarers know the wild places. They can follow a trail across rocks, talk softly to nervous animals,
+    and hit a target from very far away.
+  startingKit:
+    weapons: [longbow, shortsword]
+    armor: studded-jerkin
+    shield: false
+    gear: [hearth-lantern, rope, trail-cakes, bedroll]
+  suggestedSkills: [survival, nature, perception]
+  suggestedSpells: [hunters-mark, goodberry, cure-wounds]
+  portraitPrompt: a young ranger with a longbow and a fox-fur hood standing on a misty hill
+
+- id: songspinner
+  srdClass: bard
+  name: Songspinner
+  tagline: A good song can win a fight before it starts.
+  description: >-
+    Songspinners turn music and stories into magic. They cheer up their friends, fluster their foes, and
+    talk their way out of (and into) all kinds of trouble.
+  startingKit:
+    weapons: [dagger, quarterstaff]
+    armor: leather-jerkin
+    shield: false
+    gear: [hearth-lantern, travel-lute, trail-cakes, journal]
+  suggestedSkills: [performance, persuasion, insight]
+  suggestedSpells: [vicious-mockery, minor-illusion, healing-word, sleep, faerie-fire]
+  portraitPrompt: a cheerful young bard with a patched lute and a feathered cap

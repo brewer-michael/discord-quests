@@ -1,0 +1,14 @@
+id: wardens-of-the-old-road
+name: The Wardens of the Old Road
+alignment: long-road
+description: >-
+  Rangers in grey-green cloaks who promised, long ago, to keep the Old Road safe for every traveler. There
+  are not many of them left, but they still keep that promise.
+goals:
+  - Keep the Old Road open and safe.
+  - Help any traveler in true need.
+methods:
+  - Watch-posts, signal fires and supply caches in hollow trees.
+  - Trust given slowly and kept forever.
+leader: bram-tallow
+startingDisposition: 0

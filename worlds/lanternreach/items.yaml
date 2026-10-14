@@ -1,0 +1,129 @@
+weapons:
+  - { id: longsword, name: Longsword, base: longsword, description: "A plain, well-loved blade." }
+  - { id: shortsword, name: Shortsword, base: shortsword, description: "Light and quick." }
+  - { id: dagger, name: Dagger, base: dagger, description: "Small enough to hide in a boot." }
+  - { id: handaxe, name: Handaxe, base: handaxe, description: "Good for kindling, better for throwing." }
+  - { id: quarterstaff, name: Walking Staff, base: quarterstaff, description: "A tall staff of ash wood, smooth from many miles." }
+  - { id: mace, name: Lantern Mace, base: mace, description: "A mace with a little lantern-shaped head." }
+  - { id: spear, name: Reed Spear, base: spear, description: "A River Folk spear, light and long." }
+  - { id: shortbow, name: Shortbow, base: shortbow, description: "A springy bow of yew." }
+  - { id: longbow, name: Longbow, base: longbow, description: "A tall bow taller than most Pipkins." }
+  - { id: sling, name: Sling, base: sling, description: "A leather strap and a pocketful of smooth stones." }
+  - { id: light-crossbow, name: Light Crossbow, base: light-crossbow, description: "A clicky, clacky crossbow." }
+  - { id: rapier, name: Rapier, base: rapier, description: "A thin, fancy blade with a curly guard." }
+
+armor:
+  - { id: quilted-coat, name: Quilted Coat, base: padded, description: "Thick and puffy, like wearing a blanket." }
+  - { id: leather-jerkin, name: Leather Jerkin, base: leather, description: "Supple leather that creaks a little." }
+  - { id: studded-jerkin, name: Studded Jerkin, base: studded-leather, description: "Leather dotted with brass studs." }
+  - { id: chain-shirt, name: Chain Shirt, base: chain-shirt, description: "Fine rings worn under a tunic." }
+  - { id: scale-coat, name: Scale Coat, base: scale-mail, description: "Overlapping metal scales like a fish." }
+  - { id: warden-mail, name: Warden Mail, base: chain-mail, description: "Heavy chain mail stamped with the Wardens' oak leaf." }
+  - { id: round-shield, name: Round Shield, base: shield, description: "A wooden shield painted with a lantern." }
+
+gear:
+  - { id: hearth-lantern, name: Hearth-Lantern, value: 5, description: "A brass lantern. It burns a long time on a little oil." }
+  - { id: rope, name: Rope (50 feet), value: 1, description: "Strong hempen rope." }
+  - { id: trail-cakes, name: Trail Cakes, value: 1, description: "Honey-oat cakes that keep for weeks. Five days' worth." }
+  - { id: bedroll, name: Bedroll, value: 1, description: "A warm blanket roll." }
+  - { id: lockpicks, name: Lockpicks, value: 25, description: "A little roll of slim picks and hooks." }
+  - { id: spell-notebook, name: Spell Notebook, value: 50, description: "A notebook of spells, notes and doodles." }
+  - { id: chalk, name: Chalk, value: 0, description: "For marking walls, trails and secret signs." }
+  - { id: lantern-charm, name: Lantern Charm, value: 5, description: "A little brass lantern on a cord, a Lanternkeeper's focus." }
+  - { id: healer-kit, name: Healer's Kit, value: 5, description: "Bandages, salves and a honey jar." }
+  - { id: travel-lute, name: Travel Lute, value: 35, description: "A small lute with a patched strap." }
+  - { id: journal, name: Journal, value: 2, description: "A blank book for songs and stories." }
+  - { id: lamp-oil, name: Lamp Oil, value: 1, description: "A flask of golden lantern oil." }
+  - { id: tinderbox, name: Tinderbox, value: 1, description: "Flint, steel and dry moss." }
+  - { id: whistle, name: Tin Whistle, value: 1, description: "Loud and shrill." }
+
+keepsakes:
+  - { id: grandmothers-thimble, name: Grandmother's Thimble, description: "A silver thimble, worn thin at the tip." }
+  - { id: carved-wooden-bird, name: Carved Wooden Bird, description: "A little wren, carved by someone who loved you." }
+  - { id: brass-compass, name: Brass Compass, description: "It doesn't point north. It points home." }
+  - { id: pressed-flower, name: Pressed Flower, description: "A blue flower pressed flat in a scrap of paper." }
+  - { id: lucky-button, name: Lucky Button, description: "A big shiny button that has never once let you down." }
+  - { id: sea-glass, name: Sea Glass, description: "A smooth green pebble of glass from a faraway shore." }
+  - { id: silver-bell, name: Silver Bell, description: "A tiny bell with a sound like a laugh." }
+  - { id: patchwork-scarf, name: Patchwork Scarf, description: "Every patch was sewn by a different friend." }
+  - { id: letter-never-sent, name: Letter Never Sent, description: "A sealed letter you have never been brave enough to deliver." }
+  - { id: old-key, name: Old Key, description: "An iron key. You don't know what it opens. Yet." }
+
+wondrous:
+  - id: lantern-of-steady-light
+    name: Lantern of Steady Light
+    rarity: uncommon
+    description: A lantern that never gutters, even in wind or rain.
+    effect: { kind: light, radius: 40 }
+  - id: warden-cloak
+    name: Warden Cloak
+    rarity: uncommon
+    description: A grey-green cloak that blends into leaves and stone.
+    effect: { kind: bonus, to: check, amount: 2, skill: stealth }
+  - id: copper-thinking-cap
+    name: Copper Thinking Cap
+    rarity: uncommon
+    description: A whirring copper cap that helps you puzzle things out.
+    effect: { kind: bonus, to: check, amount: 1, skill: investigation }
+  - id: fox-lantern
+    name: Fox-Lantern
+    rarity: uncommon
+    description: A lantern with a flame the color of a fox's tail. It shows you the quickest way. Not always the best way.
+    effect: { kind: bonus, to: check, amount: 2, skill: survival }
+  - id: oakheart-shield-charm
+    name: Oakheart Charm
+    rarity: rare
+    description: An acorn of polished bronze. Whoever carries it stands a little steadier.
+    effect: { kind: bonus, to: ac, amount: 1 }
+
+consumables:
+  - id: honey-tonic
+    name: Honey Tonic
+    rarity: common
+    description: A sweet golden drink that heals 2d4 + 2 hit points.
+    effect: { kind: heal, dice: 2d4+2 }
+  - id: starlight-salve
+    name: Starlight Salve
+    rarity: common
+    description: A cool, sparkly ointment that settles a queasy tummy.
+    effect: { kind: cure_condition, condition: poisoned }
+  - id: brave-tea
+    name: Brave Tea
+    rarity: common
+    description: Peppermint tea with a spoon of courage. Ends being Spooked.
+    effect: { kind: cure_condition, condition: frightened }
+  - id: glowstone
+    name: Glowstone
+    rarity: common
+    description: Shake it and it glows like a tiny moon for an hour.
+    effect: { kind: light, radius: 20 }
+
+lootTables:
+  - id: hearthmoor-odds
+    gold: 2d6
+    entries:
+      - { item: honey-tonic, weight: 3 }
+      - { item: lamp-oil, weight: 4, qty: [1, 3] }
+      - { item: brave-tea, weight: 2 }
+      - { item: glowstone, weight: 2 }
+  - id: whisperwood-finds
+    gold: 2d8
+    entries:
+      - { item: honey-tonic, weight: 3 }
+      - { item: glowstone, weight: 3 }
+      - { item: starlight-salve, weight: 2 }
+      - { item: warden-cloak, weight: 1 }
+  - id: reedmarsh-finds
+    gold: 3d6
+    entries:
+      - { item: honey-tonic, weight: 3 }
+      - { item: lamp-oil, weight: 3, qty: [1, 2] }
+      - { item: brave-tea, weight: 2 }
+      - { item: lantern-of-steady-light, weight: 1 }
+  - id: gloam-leavings
+    gold: 4d6
+    entries:
+      - { item: honey-tonic, weight: 4 }
+      - { item: glowstone, weight: 3 }
+      - { item: copper-thinking-cap, weight: 1 }
+      - { item: oakheart-shield-charm, weight: 1 }

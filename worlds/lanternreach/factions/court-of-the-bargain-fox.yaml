@@ -1,0 +1,13 @@
+id: court-of-the-bargain-fox
+name: The Court of the Bargain Fox
+alignment: quick-way
+description: >-
+  Saffron the Bargain Fox and her sparkling glimmer-foxes. The Fox loves a deal more than anything, and
+  every deal she offers really does work. Just not always the way you expect.
+goals:
+  - Make the cleverest bargains in all of Lanternreach.
+  - Collect favors, keepsakes and secrets.
+methods:
+  - Doors that skip the long way, borrowed luck, and mirrors that show secrets.
+leader: saffron-the-fox
+startingDisposition: 1

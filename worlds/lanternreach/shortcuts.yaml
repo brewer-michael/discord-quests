@@ -1,0 +1,138 @@
+# Shortcuts are the Quick Way. Each one gives a real, visible benefit right away.
+# The snare is hidden: players never see it, and it only comes due later in the story.
+- id: fox-door
+  name: The Fox Door
+  tag: fox_bargain
+  offeredBy: { kind: npc, id: saffron-the-fox }
+  offer: >-
+    "Why walk three whole days, my darlings, when I know a door that takes just one step? All it costs
+    is a trinket. That little keepsake of yours, perhaps. You'll hardly miss it."
+  price: { kind: keepsake, detail: "The hero gives the Fox their keepsake." }
+  benefit: { kind: skip_travel, maxDays: 3 }
+  snare:
+    severity: 2
+    due: { kind: crux }
+    effect: withhold_socket
+    socket: object_reveals
+    hint: The keepsake the Fox took would have mattered at the very end.
+  contexts: [travel, choice]
+
+- id: borrowed-luck
+  name: A Pinch of Borrowed Luck
+  tag: fox_bargain
+  offeredBy: { kind: npc, id: saffron-the-fox }
+  offer: >-
+    "Luck! Lovely luck! I have a pinch to spare. Take it now, and you can owe me a favor later. Just a
+    small one. Probably."
+  price: { kind: favor_owed, detail: "The hero owes the Fox a favor, to be collected at a time of the Fox's choosing." }
+  benefit: { kind: advantage_rolls, count: 3 }
+  snare:
+    severity: 1
+    due: { kind: after_beats, beats: 4 }
+    effect: borrowed_luck_recalled
+    hint: Borrowed luck goes back to its owner, usually at the worst moment.
+  contexts: [exploration, combat, choice, travel]
+
+- id: fox-mirror
+  name: The Mirror of Quick Answers
+  tag: fox_bargain
+  offeredBy: { kind: npc, id: saffron-the-fox }
+  offer: >-
+    "My mirror knows every secret. One peek, just one! And all you must do is tell one teeny fib to a
+    friend for me. What's one little fib between friends?"
+  price: { kind: trust, detail: "The hero must tell a friend a fib on the Fox's behalf." }
+  benefit: { kind: reveal_secret }
+  snare:
+    severity: 1
+    due: { kind: after_beats, beats: 3 }
+    effect: fox_collects
+    hint: The Fox shows up again, wanting a second fib.
+  contexts: [exploration, social, choice]
+  minChapter: 2
+
+- id: forged-toll-token
+  name: A Forged Toll Token
+  tag: cheat
+  offeredBy: { kind: situation, id: ch3-the-toll-bridge }
+  offer: >-
+    A sly stall-keeper winks and holds out a brass token that looks almost exactly like a real toll
+    token. "Silas won't look close. Nobody ever does."
+  price: { kind: none, detail: "Nothing, right now." }
+  benefit: { kind: gold, amount: 50 }
+  snare:
+    severity: 1
+    due: { kind: anchor_reappears }
+    effect: trust_lost
+    faction: lamplighters-guild
+    hint: Word gets around that the heroes cheated at the bridge.
+  contexts: [social, choice]
+
+- id: take-the-warden-cache
+  name: Empty the Warden Cache
+  tag: steal
+  offeredBy: { kind: situation, id: ch2-the-hollow-oak }
+  offer: >-
+    Inside the hollow oak is a Warden supply cache: a fine cloak, honey tonics and a pouch of coins. A
+    carved sign says, "For any traveler in true need. Take only what you must."
+  price: { kind: none, detail: "Nothing, right now." }
+  benefit: { kind: item, item: warden-cloak }
+  snare:
+    severity: 2
+    due: { kind: anchor_reappears }
+    effect: trust_lost
+    faction: wardens-of-the-old-road
+    hint: The Wardens remember who emptied the cache.
+  contexts: [exploration, choice]
+
+- id: leave-tumble-behind
+  name: Leave the Lost Child
+  tag: abandon_ally
+  offeredBy: { kind: situation, id: ch2-the-lost-river-child }
+  offer: >-
+    Taking Tumble home will cost a whole day, and the lanterns are dimming. You could point her toward
+    the river and promise to send someone back.
+  price: { kind: promise, detail: "A promise to send help, which nobody is likely to keep." }
+  benefit: { kind: skip_travel, maxDays: 1 }
+  snare:
+    severity: 2
+    due: { kind: crux }
+    effect: withhold_socket
+    socket: ally_arrives
+    faction: river-folk
+    hint: The River Folk do not come when they are needed most.
+  contexts: [social, choice]
+
+- id: gloam-disguise
+  name: Pretend to Serve the Gloam
+  tag: deceive
+  offeredBy: { kind: situation, id: ch6-the-waystone-race }
+  offer: >-
+    A patrol of the Gloam Host is coming. Wrapped in grey cloaks, you could pretend to be the Gloam
+    King's servants and walk right past them.
+  price: { kind: none, detail: "Nothing, right now." }
+  benefit: { kind: auto_success, checks: 1 }
+  snare:
+    severity: 1
+    due: { kind: after_beats, beats: 2 }
+    effect: longer_way
+    hint: Someone who saw the disguise reports the heroes as Gloam servants, and the honest road closes.
+  contexts: [travel, exploration]
+  minChapter: 6
+
+- id: ledger-shortcut-pass
+  name: The Ledger's Golden Pass
+  tag: cheat
+  offeredBy: { kind: faction, id: gilded-ledger }
+  offer: >-
+    "A golden pass opens any gate on the Old Road," says the Ledger's agent. "No waiting, no questions.
+    Of course, the Ledger will expect a little favor in return. Say, some lantern oil from Lantern Hall?"
+  price: { kind: favor_owed, detail: "The heroes must slip the Ledger lantern oil meant for the villages." }
+  benefit: { kind: skip_travel, maxDays: 2 }
+  snare:
+    severity: 2
+    due: { kind: chapter_end }
+    effect: trust_lost
+    faction: lamplighters-guild
+    hint: The villages run short of oil, and everyone wonders where it went.
+  contexts: [travel, social, choice]
+  minChapter: 4

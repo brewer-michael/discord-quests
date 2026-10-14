@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "levels": {
+      "type": "object",
+      "properties": {
+        "gentle": {
+          "type": "object",
+          "properties": {
+            "description": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4000
+            },
+            "rules": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4000
+              }
+            }
+          },
+          "required": ["description", "rules"],
+          "additionalProperties": false
+        },
+        "adventurous": {
+          "type": "object",
+          "properties": {
+            "description": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4000
+            },
+            "rules": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4000
+              }
+            }
+          },
+          "required": ["description", "rules"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["gentle", "adventurous"],
+      "additionalProperties": false
+    },
+    "bannedTerms": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 2
+      }
+    },
+    "substitutions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "avoid": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "prefer": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "required": ["avoid", "prefer"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["levels", "bannedTerms", "substitutions"],
+  "additionalProperties": false
+}

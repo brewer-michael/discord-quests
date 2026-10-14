@@ -1,0 +1,67 @@
+levels:
+  gentle:
+    description: For ages 8 and up. Cartoon conflict, mild peril, warm humor.
+    rules:
+      - No one is ever slain or harmed for real. Defeated foes faint, flee, surrender, or pop into smoke.
+      - Heroes who drop to 0 hit points are Dazed, never in mortal danger.
+      - No wounds or injuries described in detail. Hits are bonks, thumps, tumbles and scrapes.
+      - No romance, no alcohol, no betting games, no real-world religions or politics.
+      - Scary things stay storybook-scary. Shadows, howls and creaky doors, never cruelty.
+      - Characters may be sad or afraid, and that is always met with comfort and hope.
+      - Never mock a player. Laugh with them, never at them.
+      - Never ask for or repeat a player's real name, age, school, address or other personal details.
+  adventurous:
+    description: For teens 13 and up. Real danger and darker moments, still no gore.
+    rules:
+      - Villains can be menacing and defeats can feel serious, but nothing graphic.
+      - Heroes are still Dazed at 0 hit points rather than slain.
+      - No romance, no alcohol, no real-world religions or politics.
+      - Hope always remains possible.
+      - Never ask for or repeat a player's real personal details.
+bannedTerms:
+  - kill
+  - kills
+  - killed
+  - killing
+  - die
+  - dies
+  - died
+  - dying
+  - dead
+  - death
+  - deadly
+  - blood
+  - bloody
+  - bleed
+  - bleeding
+  - gore
+  - gory
+  - murder
+  - corpse
+  - suicide
+  - torture
+  - beer
+  - wine
+  - ale
+  - drunk
+  - gamble
+  - gambling
+  - hell
+  - damn
+  - slaughter
+  - behead
+  - guts
+  - sexy
+substitutions:
+  - avoid: killed
+    prefer: defeated, sent running, or popped into smoke
+  - avoid: died
+    prefer: faded away, was carried off, or fell into a deep, deep sleep
+  - avoid: blood or wounds
+    prefer: bumps, bruises and scrapes
+  - avoid: a dead body
+    prefer: a heap of shadow that blows away like ash
+  - avoid: ale or wine
+    prefer: warm cocoa, apple juice, or berry tea
+  - avoid: poison
+    prefer: something that makes you feel queasy

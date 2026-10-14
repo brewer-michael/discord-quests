@@ -1,0 +1,13 @@
+id: river-folk
+name: The River Folk
+alignment: neutral
+description: >-
+  Families who live on houseboats in the Reedmarsh. Most travelers hurry past them without a second look.
+  The River Folk notice who stops to help, and they never forget it.
+goals:
+  - Keep their families and boats safe.
+  - Be treated with a little respect.
+methods:
+  - Quiet watching, clever boat-handling, and helping their own.
+leader: granny-reed
+startingDisposition: 0

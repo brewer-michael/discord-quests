@@ -1,0 +1,65 @@
+id: whisperwood
+name: The Whisperwood
+description: An old forest where the trees seem to whisper whenever the wind goes still. The Old Road bends politely
+  around it. The paths inside do not.
+biome: forest
+terrain: [forest, stream]
+levelBand: [1, 3]
+polygon:
+- [718, 647]
+- [654, 946]
+- [548, 947]
+- [412, 707]
+- [457, 578]
+- [558, 531]
+centroid: [560, 700]
+edges:
+- to: hearthmoor
+  travelDays: 2
+  road: true
+- to: reedmarsh
+  travelDays: 2
+  road: false
+- to: copperpeak
+  travelDays: 3
+  road: true
+pois:
+- id: foxglove-glade
+  name: Foxglove Glade
+  description: A sunny glade full of foxgloves, where a certain fox likes to hold court.
+  kind: landmark
+  at: [520, 760]
+- id: whispering-stream
+  name: The Whispering Stream
+  description: A chattering stream that runs west toward the Reedmarsh.
+  kind: landmark
+  at: [480, 640]
+- id: the-hollow-oak
+  name: The Hollow Oak
+  description: A huge hollow oak carved with the Wardens' leaf, where travelers in need can find supplies.
+  kind: shrine
+  at: [600, 690]
+encounters:
+  chance: 0.3
+  table:
+  - creature: gloom-mite
+    count: [2, 4]
+    weight: 3
+  - creature: shadow-wolf
+    count: [1, 2]
+    weight: 2
+  - creature: grumpy-boar
+    count: [1, 1]
+    weight: 2
+  - creature: dust-moth
+    count: [1, 3]
+    weight: 2
+  - creature: bramble-sprite
+    count: [1, 3]
+    weight: 2
+lootTable: whisperwood-finds
+secrets:
+- The Wardens left supply caches in hollow trees for anyone in true need.
+- Hum along with the whispering trees and the twisty paths straighten out.
+artPrompt: an ancient whispering forest with mossy oaks, shafts of golden light, a winding path and a babbling stream
+mood: mysterious, a little magical

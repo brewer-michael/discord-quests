@@ -1,0 +1,53 @@
+id: hearthmoor
+name: Hearthmoor
+description: A sleepy village of thatched roofs, goose-filled lanes and one very tall lantern-post in the middle
+  of the square. Everyone knows everyone, and everyone has an opinion about the geese.
+biome: village
+terrain: [meadow, village, stream]
+levelBand: [1, 2]
+polygon:
+- [548, 947]
+- [260, 950]
+- [70, 800]
+- [69, 754]
+- [412, 707]
+centroid: [330, 830]
+edges:
+- to: whisperwood
+  travelDays: 2
+  road: true
+- to: reedmarsh
+  travelDays: 3
+  road: true
+pois:
+- id: hearthmoor-square
+  name: Lantern Square
+  description: The village square, with the great lantern-post in the middle and the bakery on the corner.
+  kind: town
+  at: [330, 840]
+- id: lamp-house
+  name: The Lamp-House
+  description: An old stone mill where the village keeps its lantern oil, wicks and the flame-coal.
+  kind: landmark
+  at: [270, 870]
+- id: goose-commons
+  name: Goose Commons
+  description: A muddy green ruled by a gang of very loud geese.
+  kind: landmark
+  at: [400, 880]
+encounters:
+  chance: 0.15
+  table:
+  - creature: gloom-mite
+    count: [1, 3]
+    weight: 3
+  - creature: grumpy-boar
+    count: [1, 1]
+    weight: 1
+lootTable: hearthmoor-odds
+secrets:
+- Hattie Wick keeps a spare wick from the very first lantern, hidden in her tea tin.
+- Old tunnels run under the Lamp-House from when it was a mill. Snibbet knows them well.
+artPrompt: a cozy thatched village at dusk gathered around a tall iron lantern-post in a cobbled square, geese,
+  warm glowing windows
+mood: cozy, then worried

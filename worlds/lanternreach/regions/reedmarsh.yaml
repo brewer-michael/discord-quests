@@ -1,0 +1,70 @@
+id: reedmarsh
+name: The Reedmarsh
+description: A maze of reeds, channels and houses on stilts, where the River Folk pole their flat boats. Lantern
+  Hall stands on tall legs in the middle, like a heron made of timber.
+biome: marsh
+terrain: [marsh, river]
+levelBand: [2, 3]
+polygon:
+- [457, 578]
+- [412, 707]
+- [69, 754]
+- [67, 618]
+- [286, 461]
+centroid: [300, 610]
+edges:
+- to: hearthmoor
+  travelDays: 3
+  road: true
+- to: whisperwood
+  travelDays: 2
+  road: false
+- to: saltwind-coast
+  travelDays: 3
+  road: true
+- to: mistfen
+  travelDays: 2
+  road: false
+pois:
+- id: silas-toll-bridge
+  name: Coin Bridge
+  description: A tall wooden bridge with a toll-gate, a striped awning and a sign that says PAY HERE.
+  kind: landmark
+  at: [380, 680]
+- id: lantern-hall
+  name: Lantern Hall
+  description: The great hall of the Lamplighters' Guild, built on stilts above the water.
+  kind: town
+  at: [280, 600]
+- id: reedhaven
+  name: Reedhaven
+  description: A floating village of River Folk houseboats tied together with rope bridges.
+  kind: town
+  at: [200, 640]
+- id: old-sluice
+  name: The Old Sluice
+  description: A forgotten water-tunnel beneath Lantern Hall, from the days before the stilts.
+  kind: secret
+  at: [290, 615]
+encounters:
+  chance: 0.25
+  table:
+  - creature: marsh-snapper
+    count: [1, 1]
+    weight: 2
+  - creature: gloom-mite
+    count: [2, 4]
+    weight: 2
+  - creature: gloam-skulker
+    count: [1, 3]
+    weight: 2
+  - creature: bog-lump
+    count: [1, 1]
+    weight: 1
+lootTable: reedmarsh-finds
+secrets:
+- The Old Sluice runs right under Lantern Hall, into its flooded cellar where the spare oil is kept.
+- Granny Reed has never once been lost in the marsh. She says the herons tell her the way.
+artPrompt: a misty marsh at twilight with tall reeds, flat boats with lanterns, and a great timber hall standing
+  on stilts above the water
+mood: watery, busy, anxious

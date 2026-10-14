@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9-]*$"
+      },
+      "name": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "description": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4000
+      },
+      "abilities": {
+        "type": "array",
+        "prefixItems": [
+          {
+            "type": "string",
+            "enum": ["str", "dex", "con", "int", "wis", "cha"]
+          },
+          {
+            "type": "string",
+            "enum": ["str", "dex", "con", "int", "wis", "cha"]
+          },
+          {
+            "type": "string",
+            "enum": ["str", "dex", "con", "int", "wis", "cha"]
+          }
+        ],
+        "items": false,
+        "minItems": 3,
+        "maxItems": 3
+      },
+      "skills": {
+        "type": "array",
+        "prefixItems": [
+          {
+            "type": "string",
+            "enum": [
+              "acrobatics",
+              "animalHandling",
+              "arcana",
+              "athletics",
+              "deception",
+              "history",
+              "insight",
+              "intimidation",
+              "investigation",
+              "medicine",
+              "nature",
+              "perception",
+              "performance",
+              "persuasion",
+              "religion",
+              "sleightOfHand",
+              "stealth",
+              "survival"
+            ]
+          },
+          {
+            "type": "string",
+            "enum": [
+              "acrobatics",
+              "animalHandling",
+              "arcana",
+              "athletics",
+              "deception",
+              "history",
+              "insight",
+              "intimidation",
+              "investigation",
+              "medicine",
+              "nature",
+              "perception",
+              "performance",
+              "persuasion",
+              "religion",
+              "sleightOfHand",
+              "stealth",
+              "survival"
+            ]
+          }
+        ],
+        "items": false,
+        "minItems": 2,
+        "maxItems": 2
+      },
+      "keepsakeSuggestions": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        }
+      }
+    },
+    "required": ["id", "name", "description", "abilities", "skills", "keepsakeSuggestions"],
+    "additionalProperties": false
+  }
+}
