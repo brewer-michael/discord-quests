@@ -8,7 +8,7 @@ Railway runs each part as its own service from this repository.
      (reference the Postgres service's `DATABASE_URL`), optionally `ANTHROPIC_API_KEY`, and `LOG_FORMAT=json`.
    - Keep it at **one replica**: the bot holds Discord's gateway connection and the round timers.
 3. Add a second service from the same repository for the **setup page**.
-   - Settings → Deploy → Custom start command: `pnpm --filter @dq/web start`
+   - Settings → Deploy → Custom start command: `node apps/web/node_modules/next/dist/bin/next start apps/web`
    - Variables: `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `MASTER_KEYS`, `DATABASE_URL`, `WEB_BASE_URL`
      (this service's public domain), `LOG_FORMAT=json`.
    - Generate a public domain, and add `https://<that domain>/auth/callback` as a redirect in the Discord

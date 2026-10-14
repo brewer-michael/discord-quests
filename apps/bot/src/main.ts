@@ -6,6 +6,7 @@ import { sql } from "drizzle-orm";
 import { createClient, wire } from "./bot";
 import type { BotContext } from "./context";
 import { loadEnv } from "./env";
+import { registerCommands } from "./register";
 import { RoundScheduler } from "./scheduler";
 
 const env = loadEnv();
@@ -58,5 +59,21 @@ async function shutdown(signal: string) {
 }
 process.on("SIGTERM", () => void shutdown("SIGTERM"));
 process.on("SIGINT", () => void shutdown("SIGINT"));
+
+if (env.REGISTER_COMMANDS !== "false") {
+  try {
+    const { count, scope } = await registerCommands({
+      token: env.DISCORD_TOKEN,
+      clientId: env.DISCORD_CLIENT_ID,
+      guildId: env.DISCORD_DEV_GUILD_ID,
+    });
+    log.info(`registered ${count} slash commands ${scope}`);
+  } catch (err) {
+    // The commands registered last time keep working; try again on the next start.
+    log.warn("could not register slash commands", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
 
 await client.login(env.DISCORD_TOKEN);

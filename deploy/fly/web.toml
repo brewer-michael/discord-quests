@@ -7,7 +7,7 @@ app = "discord-quests-web"
 primary_region = "iad"
 
 [processes]
-  app = "pnpm --filter @dq/web start"
+  app = "node apps/web/node_modules/next/dist/bin/next start apps/web"
 
 [env]
   PORT = "3000"

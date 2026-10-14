@@ -39,9 +39,11 @@ Without any AI configured the bot still works: the engine tells each turn itself
 ```sh
 pnpm install
 docker compose up -d postgres          # or point DATABASE_URL at a managed Postgres
-pnpm --filter @dq/bot register         # registers slash commands (instantly with DISCORD_DEV_GUILD_ID)
-pnpm --filter @dq/bot start            # applies migrations, then connects to Discord
+pnpm --filter @dq/bot start            # applies migrations, registers slash commands, connects to Discord
 ```
+
+Slash commands are registered every time the bot starts (instantly in one server with `DISCORD_DEV_GUILD_ID`,
+otherwise globally). `pnpm --filter @dq/bot register` does it by hand; `REGISTER_COMMANDS=false` skips it.
 
 And the setup page, in another terminal:
 
@@ -49,7 +51,7 @@ And the setup page, in another terminal:
 pnpm web:build && pnpm --filter @dq/web start   # or `pnpm web:dev` while developing
 ```
 
-Or with Docker: `docker compose --profile bot up -d` runs Postgres, the bot and the setup page.
+To run everything in Docker on a server, see [Deploying with Docker Compose](#deploying-with-docker-compose).
 
 The bot serves a health check at `http://localhost:8080/healthz`; the setup page listens on port 3000.
 
@@ -121,7 +123,83 @@ bot opens a private **DM screen** thread that only the DM is added to.
   safe for later. `/loom plant` adds a deed by hand. `/loom mode` switches the hidden hand off if the DM would
   rather handle it themselves.
 
-## Deploying
+## Deploying with Docker Compose
+
+`docker-compose.prod.yml` runs the whole thing on one server: Postgres, the bot, the setup page and, optionally,
+[Caddy](https://caddyserver.com) for automatic HTTPS.
+
+**You need** a Linux server with 2 GB of memory (or 1 GB plus swap: building the image runs the setup page's build),
+[Docker with the Compose plugin](https://docs.docker.com/engine/install/), and a domain name (for example
+`quests.example.com`) with a DNS record pointing at the server. Open ports 80 and 443.
+
+1. **Discord application:** follow [step 1](#1-create-the-discord-application) and use
+   `https://quests.example.com/auth/callback` as the OAuth2 redirect.
+2. **Get the code and configure it:**
+
+   ```sh
+   git clone https://github.com/brewer-michael/discord-quests.git && cd discord-quests
+   cp .env.example .env
+   ```
+
+   In `.env`, fill in:
+
+   | Variable | Value |
+   |---|---|
+   | `DISCORD_TOKEN`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` | From the Developer Portal |
+   | `MASTER_KEYS` | The output of `echo "v1:$(openssl rand -base64 32)"`. Keep a copy in a password manager |
+   | `POSTGRES_PASSWORD` | The output of `openssl rand -hex 24` |
+   | `DOMAIN` | `quests.example.com` |
+   | `WEB_BASE_URL` | `https://quests.example.com` |
+   | `ANTHROPIC_API_KEY` | Optional: a server-wide default for the story AI |
+
+   `DATABASE_URL` is ignored here; the stack builds its own from `POSTGRES_PASSWORD`.
+3. **Start it:**
+
+   ```sh
+   docker compose -f docker-compose.prod.yml --profile https up -d --build
+   ```
+
+   The first build takes a few minutes. Postgres starts, the database is migrated, then the bot and the setup page
+   start. The bot registers its slash commands, and Caddy fetches an HTTPS certificate for `DOMAIN`.
+4. **Check it:** `docker compose -f docker-compose.prod.yml ps` shows `bot` and `web` as healthy, and
+   `https://quests.example.com/guide` opens. If the bot isn't healthy, `docker compose -f docker-compose.prod.yml
+   logs bot` says why (usually a mistyped token).
+5. **Invite the bot** (the link is in [step 1](#1-create-the-discord-application) and on the setup site) and run
+   `/setup` in your server ([step 4](#4-set-up-each-server)).
+
+Tip: add `COMPOSE_FILE=docker-compose.prod.yml` and `COMPOSE_PROFILES=https` to `.env` and the commands below
+shorten to plain `docker compose …`. The examples assume you have.
+
+| To… | Run |
+|---|---|
+| Follow the logs | `docker compose logs -f bot` (or `web`, `caddy`) |
+| Update to the latest version | `git pull && docker compose up -d --build` (migrations and commands are handled on start) |
+| Back up the database | `docker compose exec -T postgres pg_dump -U dq -Fc dq > dq-$(date +%F).dump` |
+| Restore a backup | `docker compose stop bot web`, then `docker compose exec -T postgres pg_restore -U dq -d dq --clean --if-exists < dq-2026-01-31.dump`, then `docker compose up -d` |
+| Stop everything | `docker compose down` (the data stays in the `pgdata` volume; `down -v` would delete it) |
+
+A nightly backup with cron (`mkdir backups`, then `crontab -e`), keeping two weeks:
+
+```
+15 3 * * * cd /path/to/discord-quests && docker compose exec -T postgres pg_dump -U dq -Fc dq > backups/dq-$(date +\%F).dump && find backups -name 'dq-*.dump' -mtime +14 -delete
+```
+
+Copy backups off the server too. Notes:
+
+- **Postgres isn't reachable from outside.** No database port is published; only the stack's own containers can
+  connect.
+- **`POSTGRES_PASSWORD` is only read when the database is first created.** To change it later, run
+  `ALTER USER dq PASSWORD '…'` via `docker compose exec postgres psql -U dq`, then update `.env` and
+  `docker compose up -d`.
+- **Already running a reverse proxy** (nginx, Traefik, Cloudflare Tunnel)? Leave out the `https` profile and point
+  your proxy at `127.0.0.1:3000`, passing the original `Host` header (nginx: `proxy_set_header Host $host;`) or the
+  setup page will refuse its own forms. `WEB_PORT=0.0.0.0:3000` in `.env` publishes the page on every interface
+  instead.
+- **Without a domain**, for a trial on your own machine: leave out the `https` profile and set
+  `WEB_BASE_URL=http://localhost:3000` (and that redirect in the Developer Portal). Sign-in works on localhost only.
+- **Never scale the bot** (`--scale bot=2`): two bots would both answer every button.
+
+## Deploying elsewhere
 
 Ready-made configs: [`render.yaml`](../render.yaml) (Render Blueprint: database, bot and setup page),
 [`deploy/fly/`](../deploy/fly) (Fly.io: one app each for the bot and the setup page) and

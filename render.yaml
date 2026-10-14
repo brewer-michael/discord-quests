@@ -44,7 +44,7 @@ services:
     name: discord-quests-web
     runtime: docker
     dockerfilePath: ./Dockerfile
-    dockerCommand: pnpm --filter @dq/web start
+    dockerCommand: node apps/web/node_modules/next/dist/bin/next start apps/web
     plan: starter
     healthCheckPath: /privacy
     envVars:

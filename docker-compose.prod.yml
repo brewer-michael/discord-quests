@@ -1,0 +1,109 @@
+# Discord Quests on your own server: Postgres, the bot, the setup page and (optionally) HTTPS.
+#
+#   cp .env.example .env    # fill in the Discord, MASTER_KEYS, POSTGRES_PASSWORD and DOMAIN sections
+#   docker compose -f docker-compose.prod.yml --profile https up -d --build
+#
+# Leave out `--profile https` if you already run a reverse proxy: point it at 127.0.0.1:3000.
+# Full walkthrough: docs/RUNNING.md, "Deploying with Docker Compose".
+name: discord-quests
+
+x-env: &env
+  DATABASE_URL: postgres://dq:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/dq
+  LOG_FORMAT: json
+
+x-app: &app
+  build: .
+  image: discord-quests:local
+  env_file: .env
+  environment: *env
+  init: true
+  restart: unless-stopped
+  logging:
+    driver: local
+    options: { max-size: 10m, max-file: "5" }
+
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: dq
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: dq
+    # No published ports: only the services below can reach the database.
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dq -d dq"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    logging:
+      driver: local
+      options: { max-size: 10m, max-file: "5" }
+
+  # Applies database migrations, then exits. The bot and the setup page wait for it.
+  migrate:
+    <<: *app
+    command: ["node", "--import", "tsx", "packages/db/src/migrate-cli.ts"]
+    restart: "no"
+    healthcheck:
+      disable: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Exactly one bot: it holds the Discord connection and the turn timers. Never scale it.
+  bot:
+    <<: *app
+    environment:
+      <<: *env
+      RUN_MIGRATIONS: "false"
+    stop_grace_period: 30s
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  web:
+    <<: *app
+    command: ["node", "apps/web/node_modules/next/dist/bin/next", "start", "apps/web"]
+    environment:
+      <<: *env
+      PORT: "3000"
+    ports:
+      - "${WEB_PORT:-127.0.0.1:3000}:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/privacy').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  # Automatic HTTPS (Let's Encrypt) for the setup page. Needs DOMAIN in .env pointing at this server,
+  # and ports 80 and 443 open.
+  caddy:
+    image: caddy:2
+    environment:
+      DOMAIN: ${DOMAIN:-}
+    # Checked here rather than with ${DOMAIN:?}, which would be required even without the https profile.
+    entrypoint: ["sh", "-c"]
+    command:
+      - '[ -n "$$DOMAIN" ] || { echo "Set DOMAIN in .env to use the https profile" >&2; exit 1; }; exec caddy reverse-proxy --from "$$DOMAIN" --to web:3000'
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+    restart: unless-stopped
+    profiles: ["https"]
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

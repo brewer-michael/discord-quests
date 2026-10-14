@@ -75,7 +75,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: docker build -t discord-quests .
+      - run: docker build -t discord-quests -t discord-quests:local .
       - name: The runtime user can run pnpm without downloading it
         run: docker run --rm --network none discord-quests pnpm --version
       - name: The setup page starts and serves a page
@@ -85,8 +85,30 @@ jobs:
             -e MASTER_KEYS="v1:$(head -c 32 /dev/urandom | base64)" \
             -e DISCORD_CLIENT_ID=123456789 -e DISCORD_CLIENT_SECRET=not-a-secret \
             -e WEB_BASE_URL=http://localhost:3000 \
-            discord-quests pnpm --filter @dq/web start
+            discord-quests node apps/web/node_modules/next/dist/bin/next start apps/web
           for i in $(seq 1 30); do curl -fsS localhost:3000/privacy > /dev/null && break; sleep 2; done
           curl -fsS localhost:3000/privacy | grep -q "Privacy"
       - if: failure()
         run: docker logs web || true
+      - name: The production compose stack migrates the database and serves the setup page
+        run: |
+          docker rm -f web
+          cat > .env <<EOF
+          DISCORD_TOKEN=not-a-real-token
+          DISCORD_CLIENT_ID=123456789
+          DISCORD_CLIENT_SECRET=not-a-secret
+          MASTER_KEYS=v1:$(head -c 32 /dev/urandom | base64)
+          WEB_BASE_URL=http://localhost:3000
+          POSTGRES_PASSWORD=$(openssl rand -hex 24)
+          EOF
+          docker compose -f docker-compose.prod.yml config -q
+          docker compose -f docker-compose.prod.yml --profile https config -q
+          # The bot needs a real Discord token, so start only what the setup page needs.
+          docker compose -f docker-compose.prod.yml up -d --no-build web
+          for i in $(seq 1 30); do curl -fsS localhost:3000/privacy > /dev/null && break; sleep 2; done
+          curl -fsS localhost:3000/privacy | grep -q "Privacy"
+          test "$(docker inspect -f '{{.State.ExitCode}}' "$(docker compose -f docker-compose.prod.yml ps -aq migrate)")" = 0
+          docker compose -f docker-compose.prod.yml exec -T postgres \
+            psql -U dq -d dq -tAc "select count(*) from drizzle.__drizzle_migrations" | grep -qv '^0$'
+      - if: failure()
+        run: docker compose -f docker-compose.prod.yml logs || true

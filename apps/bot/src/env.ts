@@ -16,6 +16,7 @@ const Env = z.object({
   DEFAULT_DAILY_TOKEN_CAP: z.string().optional(),
   HEALTH_PORT: z.coerce.number().default(8080),
   RUN_MIGRATIONS: z.string().default("true"),
+  REGISTER_COMMANDS: z.string().default("true"),
 });
 export type BotEnv = z.infer<typeof Env>;
 
