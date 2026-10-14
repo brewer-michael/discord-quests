@@ -5,6 +5,7 @@ import { FakeLlm } from "@dq/engine/testing";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { commandsJson } from "./commands";
 import { battleMenu } from "./handlers/battle";
+import { renderSafetyLog } from "./handlers/campaign";
 import { decodeId, encodeId } from "./ids";
 import { RateLimiter } from "./rate-limit";
 import { countComponents, textLength } from "./render/common";
@@ -76,6 +77,39 @@ describe("custom ids", () => {
     ]) {
       expect(decodeId(raw), raw).toBeNull();
     }
+  });
+});
+
+describe("the guardian's safety log", () => {
+  it("says when and what kind, never the words, and keeps Not this anonymous", () => {
+    const text = renderSafetyLog([
+      {
+        at: new Date("2026-01-01T10:00:00Z"),
+        stage: "input",
+        verdict: "blocked",
+        categories: ["personal_info"],
+        userId: "42",
+      },
+      {
+        at: new Date("2026-01-01T10:05:00Z"),
+        stage: "xcard",
+        verdict: "steer_away",
+        categories: [],
+        userId: null,
+      },
+      ...Array.from({ length: 40 }, () => ({
+        at: new Date(),
+        stage: "input",
+        verdict: "blocked",
+        categories: ["banned_word"],
+        userId: "7",
+      })),
+    ]);
+    expect(text).toContain("real-life details");
+    expect(text).toContain("<@42>");
+    expect(text).toMatch(/someone pressed \*\*Not this\*\*/);
+    expect(text.length).toBeLessThanOrEqual(1900);
+    expect(renderSafetyLog([])).toMatch(/Nothing has been stopped/);
   });
 });
 

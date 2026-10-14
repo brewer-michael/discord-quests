@@ -7,10 +7,11 @@ import {
   guilds,
   promises,
   quests,
+  safetyEvents,
   scenes,
   turns,
 } from "@dq/db";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { chapterRecaps } from "./chronicle";
 import { type EngineDeps, GameError } from "./deps";
 import { createLoom } from "./loom-store";
@@ -170,7 +171,46 @@ export class CampaignService {
   async join(campaignId: string, userId: string, role: "player" | "guardian" | "spectator" = "player") {
     const c = await this.require(campaignId);
     if (c.status === "ended") throw new GameError("ended", "That campaign has ended.");
-    await this.deps.db.insert(campaignMembers).values({ campaignId, userId, role }).onConflictDoNothing();
+    const insert = this.deps.db.insert(campaignMembers).values({ campaignId, userId, role });
+    // Becoming a guardian is an upgrade a player can make too (a grown-up can watch over and play).
+    if (role === "guardian")
+      await insert.onConflictDoUpdate({
+        target: [campaignMembers.campaignId, campaignMembers.userId],
+        set: { role },
+      });
+    else await insert.onConflictDoNothing();
+  }
+
+  /** Host, DM, or a guardian looking after the table. */
+  async canSupervise(campaignId: string, userId: string): Promise<boolean> {
+    if (await this.isHostOrDm(campaignId, userId)) return true;
+    const [m] = await this.deps.db
+      .select()
+      .from(campaignMembers)
+      .where(and(eq(campaignMembers.campaignId, campaignId), eq(campaignMembers.userId, userId)));
+    return m?.role === "guardian";
+  }
+
+  /**
+   * What the safety checks stopped, for grown-ups: when, what kind, and who typed it.
+   * Never the words themselves, and never who used "Not this".
+   */
+  async safetyLog(campaignId: string, userId: string, limit = 25) {
+    if (!(await this.canSupervise(campaignId, userId)))
+      throw new GameError("not guardian", "Only the host, the DM or a guardian can see the safety log.");
+    const rows = await this.deps.db
+      .select()
+      .from(safetyEvents)
+      .where(eq(safetyEvents.campaignId, campaignId))
+      .orderBy(desc(safetyEvents.createdAt))
+      .limit(limit);
+    return rows.map((r) => ({
+      at: r.createdAt,
+      stage: r.stage,
+      verdict: r.verdict,
+      categories: r.categories,
+      userId: r.stage === "xcard" ? null : r.userId,
+    }));
   }
 
   async leave(campaignId: string, userId: string) {
@@ -199,8 +239,18 @@ export class CampaignService {
   }
 
   async setStatus(campaignId: string, userId: string, status: "paused" | "active" | "ended") {
-    if (!(await this.isHostOrDm(campaignId, userId)))
-      throw new GameError("not host", "Only the host or the DM can do that.");
+    // Guardians can pause and resume the table; only the host or DM can end it.
+    const allowed =
+      status === "ended"
+        ? await this.isHostOrDm(campaignId, userId)
+        : await this.canSupervise(campaignId, userId);
+    if (!allowed)
+      throw new GameError(
+        "not host",
+        status === "ended"
+          ? "Only the host or the DM can do that."
+          : "Only the host, the DM or a guardian can do that.",
+      );
     const c = await this.require(campaignId);
     if (c.status === "setup" && status !== "ended")
       throw new GameError("not started", "Start the campaign first.");

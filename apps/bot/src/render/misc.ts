@@ -50,6 +50,7 @@ export function renderHelp() {
         "**In a fight:** everyone picks ⚔️ Attack, ✨ Magic, 🛡️ Defend, 🤝 Distract or 🧪 Potion, then the round plays out in turn order. A hero knocked down is only Dazed and can Rally. Foes who give up can be spared with 🕊️.",
         "**Not this:** press it any time to quietly steer the story away from something. No one sees who pressed it.",
         "",
+        "**Grown-ups:** `/campaign guardian` lets you watch over a table: pause it any time and see what the safety checks stopped (never the words).",
         "**Running it yourself?** Start `/campaign new` and pick **A person runs it** as the storyteller. Each turn arrives in your private DM screen to send, edit, redo or rewrite. `/dm say` posts your own words; `/loom view` shows what the hidden hand is holding.",
       ].join("\n"),
     ),

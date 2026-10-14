@@ -309,6 +309,45 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
     expect(view.sceneTitle).not.toBe("Gloam in the Garden");
   });
 
+  it("lets a guardian watch over the table without seeing what was typed", async () => {
+    const engine = createEngine({ db: db.db, worlds, llm: new FakeLlm() });
+    const c = await engine.campaigns.create({
+      guildId: "g-fam",
+      channelId: "ch-fam",
+      name: "Family",
+      mode: "ai_dm",
+      createdBy: "host",
+    });
+    await engine.campaigns.join(c.id, "kid");
+    await engine.campaigns.join(c.id, "mum", "guardian");
+    await makeHero(engine, c.id, "kid", "scout", "Nib Quickfoot");
+    const view = await engine.turns.openCampaign(c.id, "host");
+    const blocked = await engine.turns.submitAction({
+      roundId: view.roundId as string,
+      userId: "kid",
+      kind: "freeform",
+      text: "this is sh1t",
+    });
+    expect(blocked.ok).toBe(false);
+    await engine.turns.xcard(c.id, "kid");
+
+    const log = await engine.campaigns.safetyLog(c.id, "mum");
+    expect(log).toHaveLength(2);
+    expect(log.find((e) => e.stage === "input")).toMatchObject({
+      userId: "kid",
+      categories: ["banned_word"],
+    });
+    expect(log.find((e) => e.stage === "xcard")?.userId).toBeNull();
+    expect(JSON.stringify(log)).not.toContain("sh1t");
+    await expect(engine.campaigns.safetyLog(c.id, "kid")).rejects.toThrow(/not guardian/);
+
+    await engine.campaigns.setStatus(c.id, "mum", "paused");
+    expect((await engine.campaigns.require(c.id)).status).toBe("paused");
+    await expect(engine.campaigns.setStatus(c.id, "mum", "ended")).rejects.toThrow(/not host/);
+    await expect(engine.campaigns.setStatus(c.id, "kid", "active")).rejects.toThrow();
+    await engine.campaigns.setStatus(c.id, "mum", "active");
+  });
+
   it("throws away planner notes that would give the game away", async () => {
     const llm = new FakeLlm({
       director: () => ({

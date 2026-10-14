@@ -102,6 +102,35 @@ export async function campaignStart(
   await refreshHub(ctx, c.id);
 }
 
+const SAFETY_WORDS: Record<string, string> = {
+  banned_word: "strong language",
+  personal_info: "real-life details",
+  too_long: "too long",
+  hidden_leak: "story secret",
+  meta_probe: "question about the game itself",
+  classifier_unavailable: "safety check was offline, so it was held back",
+};
+
+/** The guardian's view: when, what kind, and who. Never the words. */
+export function renderSafetyLog(
+  log: Array<{ at: Date; stage: string; verdict: string; categories: string[]; userId: string | null }>,
+): string {
+  if (log.length === 0) return "**Safety log**\nNothing has been stopped in this campaign. 🌟";
+  const lines = log.map((e) => {
+    const when = `<t:${Math.floor(e.at.getTime() / 1000)}:R>`;
+    if (e.stage === "xcard") return `- ${when} · someone pressed **Not this**, and the story steered away`;
+    const what = [...e.categories, ...(e.verdict === "classifier_unavailable" ? [e.verdict] : [])]
+      .map((c) => SAFETY_WORDS[c] ?? c.replaceAll("_", " "))
+      .join(", ");
+    const where = e.stage === "input" ? "typed by" : e.stage === "image" ? "picture for" : "story text near";
+    return `- ${when} · ${what || e.verdict.replaceAll("_", " ")} · ${where} ${e.userId ? `<@${e.userId}>` : "the storyteller"}`;
+  });
+  return `**Safety log** (newest first; the words themselves are never kept)\n${lines.join("\n")}`.slice(
+    0,
+    1900,
+  );
+}
+
 export async function campaignCommand(ctx: BotContext, i: ChatInputCommandInteraction) {
   const sub = i.options.getSubcommand();
   if (sub === "new") return campaignNew(ctx, i);
@@ -127,6 +156,18 @@ export async function campaignCommand(ctx: BotContext, i: ChatInputCommandIntera
           .filter(Boolean)
           .join("\n"),
       );
+      return;
+    }
+    case "guardian":
+      await ctx.engine.campaigns.join(c.id, i.user.id, "guardian");
+      await say(
+        i,
+        "You're watching over this table. You can `/campaign pause` and `/campaign resume` it, and `/campaign safety` shows what the safety checks stopped (never the words themselves). You can still make a hero and play too.",
+      );
+      return;
+    case "safety": {
+      const log = await ctx.engine.campaigns.safetyLog(c.id, i.user.id);
+      await say(i, renderSafetyLog(log));
       return;
     }
     case "pause":

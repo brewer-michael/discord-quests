@@ -40,8 +40,16 @@ export const COMMANDS = [
     .addSubcommand((s) => s.setName("leave").setDescription("Leave the campaign in this thread"))
     .addSubcommand((s) => s.setName("start").setDescription("Begin the adventure (host or DM)"))
     .addSubcommand((s) => s.setName("status").setDescription("Who's playing and where the story is"))
-    .addSubcommand((s) => s.setName("pause").setDescription("Pause the adventure (host or DM)"))
-    .addSubcommand((s) => s.setName("resume").setDescription("Resume the adventure (host or DM)"))
+    .addSubcommand((s) =>
+      s
+        .setName("guardian")
+        .setDescription("Watch over this table as a grown-up: pause it and see the safety log"),
+    )
+    .addSubcommand((s) =>
+      s.setName("safety").setDescription("What the safety checks stopped (host, DM or guardian)"),
+    )
+    .addSubcommand((s) => s.setName("pause").setDescription("Pause the adventure (host, DM or guardian)"))
+    .addSubcommand((s) => s.setName("resume").setDescription("Resume the adventure (host, DM or guardian)"))
     .addSubcommand((s) => s.setName("end").setDescription("End the adventure (host or DM)"))
     .addSubcommand((s) =>
       s
