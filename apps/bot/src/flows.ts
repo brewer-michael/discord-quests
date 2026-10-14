@@ -1,7 +1,8 @@
-import { GameError, type TurnView } from "@dq/engine";
+import { type DmDraft, GameError, type TurnView } from "@dq/engine";
 import type { Message, SendableChannels } from "discord.js";
 import type { BotContext } from "./context";
 import { notice, V2 } from "./render/common";
+import { renderDraft } from "./render/draft";
 import { freezeComponents, renderTurn, sceneAttachment } from "./render/turn";
 
 export async function sendableChannel(
@@ -83,20 +84,17 @@ export async function resolveAndPost(
   const typing = setInterval(() => void channel.sendTyping().catch(() => {}), 8000);
   void channel.sendTyping().catch(() => {});
   try {
-    const round = await ctx.engine.turns.getRound(roundId);
-    const view = await ctx.engine.turns.resolveRound(roundId);
-    if (!view) return;
-    if (round?.discordMessageId) {
-      const old = await channel.messages.fetch(round.discordMessageId).catch(() => null);
-      if (old)
-        await old
-          .edit({
-            components: freezeComponents(old.components.map((c) => c.toJSON())) as never,
-            flags: V2,
-          } as never)
-          .catch(() => {});
+    const result = await ctx.engine.turns.resolveRound(roundId);
+    if (!result) return;
+    if (result.kind === "draft") {
+      await postDraft(ctx, result.draft);
+      await channel
+        .send({ content: "-# 🕯️ The DM is looking over what happens next…", allowedMentions: { parse: [] } })
+        .catch(() => {});
+      return;
     }
-    await postTurn(ctx, channel, view);
+    await freezeRound(ctx, roundId, channel);
+    await postTurn(ctx, channel, result.view);
   } catch (e) {
     const msg =
       e instanceof GameError
@@ -136,4 +134,30 @@ export async function refreshWaiting(ctx: BotContext, roundId: string, channel: 
     return o;
   };
   await msg.edit({ components: json.map(update) as never, flags: V2 } as never).catch(() => {});
+}
+
+/** Removes the buttons from a round's message once it's been resolved. */
+export async function freezeRound(ctx: BotContext, roundId: string, channel: SendableChannels) {
+  const round = await ctx.engine.turns.getRound(roundId);
+  if (!round?.discordMessageId) return;
+  const old = await channel.messages.fetch(round.discordMessageId).catch(() => null);
+  if (old)
+    await old
+      .edit({
+        components: freezeComponents(old.components.map((c) => c.toJSON())) as never,
+        flags: V2,
+      } as never)
+      .catch(() => {});
+}
+
+/** Sends an Assist-mode draft to the DM's private screen. */
+export async function postDraft(ctx: BotContext, draft: DmDraft) {
+  const campaign = await ctx.engine.campaigns.get(draft.campaignId);
+  const screen = await sendableChannel(ctx, campaign?.dmThreadId ?? null);
+  if (!screen) {
+    ctx.log.warn("no DM screen for draft", { campaignId: draft.campaignId });
+    return;
+  }
+  const msg = await screen.send(renderDraft(draft) as never);
+  await ctx.engine.dm.setApprovalMessage(draft.approvalId, msg.id);
 }

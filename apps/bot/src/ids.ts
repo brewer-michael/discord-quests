@@ -18,7 +18,12 @@ export type CustomId =
   | { kind: "start"; campaignId: string }
   | { kind: "wizard"; campaignId: string; page: number; action: string }
   | { kind: "wizard-name"; campaignId: string }
-  | { kind: "levelup"; characterId: string };
+  | { kind: "levelup"; characterId: string }
+  | { kind: "approval"; approvalId: string; action: ApprovalAction }
+  | { kind: "approval-modal"; approvalId: string; action: ApprovalAction };
+
+export type ApprovalAction = "ok" | "edit" | "redo" | "write";
+const APPROVAL_ACTIONS: readonly string[] = ["ok", "edit", "redo", "write"];
 
 const CODES: Record<CustomId["kind"], string> = {
   choice: "ch",
@@ -36,6 +41,8 @@ const CODES: Record<CustomId["kind"], string> = {
   wizard: "wz",
   "wizard-name": "wzn",
   levelup: "lv",
+  approval: "ap",
+  "approval-modal": "apm",
 };
 const KINDS = Object.fromEntries(Object.entries(CODES).map(([k, v]) => [v, k])) as Record<
   string,
@@ -59,6 +66,10 @@ export function encodeId(id: CustomId): string {
       break;
     case "levelup":
       parts.push(id.characterId);
+      break;
+    case "approval":
+    case "approval-modal":
+      parts.push(id.approvalId, id.action);
       break;
     default:
       parts.push(id.campaignId);
@@ -94,6 +105,13 @@ export function decodeId(raw: string): CustomId | null {
     }
     case "levelup":
       return { kind, characterId: a };
+    case "approval":
+    case "approval-modal": {
+      const action = parts[3] ?? "";
+      return APPROVAL_ACTIONS.includes(action)
+        ? { kind, approvalId: a, action: action as ApprovalAction }
+        : null;
+    }
     default:
       return { kind, campaignId: a } as CustomId;
   }

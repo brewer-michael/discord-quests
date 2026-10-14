@@ -9,6 +9,7 @@ import {
   type LoomInput,
   type LoomResult,
   loomContext,
+  type NarrativeDirective,
   type SceneEntity,
   snarePressure,
 } from "@dq/core/loom";
@@ -19,9 +20,11 @@ import {
   IntentOutput,
   intentSystem,
   intentUser,
+  NARRATION_LIMITS,
   type NarrationMode,
   type NarratorOutput,
   type PublicSceneData,
+  type PublicSceneView,
   publicSceneView,
   SafetyOutput,
   type SceneSpecView,
@@ -49,6 +52,7 @@ import { checkPlayerText, isMetaProbe, pickDeflection } from "@dq/core/safety";
 import { chapterComplete, clockKey, cruxDc, storyProgress, tickClock } from "@dq/core/story";
 import type { WorldIndex } from "@dq/core/world";
 import {
+  approvalRequests,
   campaignRegions,
   campaigns,
   canonEntities,
@@ -69,10 +73,10 @@ import { and, eq, sql } from "drizzle-orm";
 import { buildFor } from "./character-rules";
 import { type EngineDeps, GameError, silentLogger } from "./deps";
 import { nextSceneSpec, type SceneEntityState, type SceneSpec } from "./director";
-import { loadLoom, saveLoom } from "./loom-store";
+import { clearPendingLoom, loadLoom, loadPendingLoom, saveLoom, savePendingLoom } from "./loom-store";
 import { narrate } from "./narrator";
 import { asStory, type StoryState } from "./story-state";
-import type { RollView, SubmitResult, TurnView } from "./views";
+import type { DmDraft, PreparedTurn, ResolveResult, RollView, SubmitResult, TurnView } from "./views";
 
 type CharacterRow = typeof characters.$inferSelect;
 type CampaignRow = typeof campaigns.$inferSelect;
@@ -401,10 +405,11 @@ export class TurnService {
 
   /**
    * Resolves a round: intents, dice, the loom, narration, validation, and one
-   * transaction that commits it all. Returns null if someone else is already
+   * transaction that commits it all. In Assist campaigns the result is a draft
+   * for the human DM instead. Returns null if someone else is already
    * resolving this round.
    */
-  async resolveRound(roundId: string): Promise<TurnView | null> {
+  async resolveRound(roundId: string): Promise<ResolveResult | null> {
     const db = this.deps.db;
     const [claimed] = await db
       .update(rounds)
@@ -413,7 +418,11 @@ export class TurnService {
       .returning();
     if (!claimed) return null;
     try {
-      return await this.resolveClaimed(claimed);
+      const [c] = await db.select().from(campaigns).where(eq(campaigns.id, claimed.campaignId));
+      const prepared = await this.prepare(claimed);
+      if (c?.mode === "assist" && c.dmUserId)
+        return { kind: "draft", draft: await this.saveDraft(prepared, c.dmUserId) };
+      return { kind: "turn", view: await this.commit(prepared.turn, prepared.loom, prepared.inputHash) };
     } catch (e) {
       await db
         .update(rounds)
@@ -423,7 +432,10 @@ export class TurnService {
     }
   }
 
-  private async resolveClaimed(round: typeof rounds.$inferSelect): Promise<TurnView> {
+  /** Everything up to (not including) the commit: intents, dice, loom, narration. Writes nothing. */
+  private async prepare(
+    round: typeof rounds.$inferSelect,
+  ): Promise<{ turn: PreparedTurn; loom: LoomResult; inputHash: string }> {
     const db = this.deps.db;
     const [c] = await db.select().from(campaigns).where(eq(campaigns.id, round.campaignId));
     if (!c) throw new GameError("no campaign", "That campaign doesn't exist.");
@@ -457,7 +469,7 @@ export class TurnService {
       closing,
     );
 
-    // 3. The loom.
+    // 3. The loom (unless the DM has switched it off).
     const completedAfter =
       closing && spec.beatId ? [...story.completedBeats, spec.beatId] : story.completedBeats;
     const chapterRef = spec.beatId ? index.beats.get(spec.beatId) : undefined;
@@ -506,7 +518,17 @@ export class TurnService {
       heroesDowned: [],
       partyDown: false,
     };
-    const loomResult = evaluateLoom(loom.state, input, ctx, deriveRng(loom.masterSeed, "loom", seq));
+    const loomOff = (c.settings as Record<string, unknown>).loomMode === "off";
+    const loomResult: LoomResult = loomOff
+      ? {
+          state: loom.state,
+          directives: [],
+          constraints: [],
+          effects: [],
+          crux: null,
+          audit: [{ step: "off", detail: "loom switched off by the DM" }],
+        }
+      : evaluateLoom(loom.state, input, ctx, deriveRng(loom.masterSeed, "loom", seq));
 
     // 4. What comes next.
     let storyAfter: StoryState = { ...story, completedBeats: completedAfter };
@@ -546,6 +568,7 @@ export class TurnService {
       canon: canonRows,
       steerAway: Boolean(story.steerAway),
     });
+    const choicesFor = nextSpec ? this.sceneSpecView(index, nextSpec) : view.scene;
     const narration = await narrate({
       llm: this.deps.llm,
       world,
@@ -553,27 +576,81 @@ export class TurnService {
       directives: loomResult.directives,
       scope: { guildId: c.guildId, campaignId: c.id },
       log: this.log,
-      choicesFor: nextSpec ? this.sceneSpecView(index, nextSpec) : view.scene,
+      choicesFor,
     });
 
-    // 6. Commit.
+    return {
+      turn: {
+        campaignId: c.id,
+        roundId: round.id,
+        roundN: round.n,
+        sceneId: sceneRow.id,
+        seq,
+        closing,
+        mode,
+        spec,
+        nextSpec,
+        actions: actions.map((a) => ({
+          characterId: a.characterId,
+          summary: a.summary,
+          passed: a.passed,
+          makesPromiseTo: a.makesPromiseTo,
+        })),
+        rolls: rollViews,
+        cruxLabel: crux?.label ?? null,
+        cruxSuccess: crux ? crux.check.success : null,
+        chapterEnded,
+        completedAfter,
+        promisesKept,
+        view,
+        choicesFor,
+        narration: narration.output,
+        fallback: narration.fallback,
+      },
+      loom: loomResult,
+      inputHash: hash(input),
+    };
+  }
+
+  /** Commits a prepared turn in one transaction and returns what to show the players. */
+  private async commit(prepared: PreparedTurn, loomResult: LoomResult, inputHash: string): Promise<TurnView> {
+    const db = this.deps.db;
+    const { seq, spec, nextSpec, closing, mode } = prepared;
+    const narration = { output: prepared.narration, fallback: prepared.fallback };
     const ruledHp = new Map<string, number>();
     return db.transaction(async (tx) => {
-      const [locked] = await tx.select().from(campaigns).where(eq(campaigns.id, c.id)).for("update");
+      const [locked] = await tx
+        .select()
+        .from(campaigns)
+        .where(eq(campaigns.id, prepared.campaignId))
+        .for("update");
       if (!locked || locked.turnSeq !== seq - 1)
         throw new GameError("conflict", "Someone else just moved the story on. Try again!");
+      const c = locked;
+      const { index } = this.deps.worlds.get(c.worldId);
+      const world = index.world;
+      const story = asStory(c.story);
+      const party = await tx
+        .select()
+        .from(characters)
+        .where(and(eq(characters.campaignId, c.id), eq(characters.status, "active")))
+        .orderBy(characters.createdAt);
 
       const levelUps: TurnView["levelUps"] = [];
-      storyAfter = {
-        ...storyAfter,
+      let storyAfter: StoryState = {
+        ...story,
+        completedBeats: prepared.completedAfter,
         roundsInScene: story.roundsInScene + 1,
         closeNextRound: !closing && narration.output.goalMet,
+        steerAway: false,
       };
+      if (closing && spec.kind === "travel")
+        storyAfter = { ...storyAfter, regionId: spec.regionId, poiId: null };
       await this.applyLoomEffects(tx, loomResult, party, storyAfter);
       const applied = await this.applyNarratorDeltas(
         tx,
         index,
-        locked,
+        c,
         storyAfter,
         party,
         narration.output.proposedDeltas,
@@ -585,9 +662,9 @@ export class TurnService {
         await tx
           .update(scenes)
           .set({ state: spec as unknown as Record<string, unknown> })
-          .where(eq(scenes.id, sceneRow.id));
+          .where(eq(scenes.id, prepared.sceneId));
       }
-      for (const a of actions) {
+      for (const a of prepared.actions) {
         if (
           a.makesPromiseTo &&
           (index.namedNpcs.has(a.makesPromiseTo) || spec.entities.some((e) => e.ref.id === a.makesPromiseTo))
@@ -597,7 +674,7 @@ export class TurnService {
             .values({ campaignId: c.id, npcId: a.makesPromiseTo, text: a.summary, madeTurn: seq });
         }
       }
-      for (const npcId of promisesKept) {
+      for (const npcId of prepared.promisesKept) {
         await tx
           .update(promises)
           .set({ status: "kept" })
@@ -605,12 +682,12 @@ export class TurnService {
             and(eq(promises.campaignId, c.id), eq(promises.npcId, npcId), eq(promises.status, "pending")),
           );
       }
-      await saveLoom(tx, c.id, seq, hash(input), loomResult);
+      await saveLoom(tx, c.id, seq, inputHash, loomResult);
 
       let roundId: string | null = null;
       let ended = false;
       if (closing) {
-        await tx.update(scenes).set({ endedTurn: seq }).where(eq(scenes.id, sceneRow.id));
+        await tx.update(scenes).set({ endedTurn: seq }).where(eq(scenes.id, prepared.sceneId));
         if (spec.kind === "travel") {
           await tx
             .insert(campaignRegions)
@@ -624,7 +701,7 @@ export class TurnService {
             ...new Set([...storyAfter.discoveredRegions, spec.regionId, ...neighbors]),
           ];
         }
-        if (crux && spec.beatId) {
+        if (prepared.cruxLabel && spec.beatId) {
           const cruxSpec = index.beats.get(spec.beatId)?.beat.crux;
           if (loomResult.crux?.outcome === "fail_forward" && cruxSpec?.clock) {
             storyAfter.clocks = tickClock(
@@ -635,7 +712,7 @@ export class TurnService {
             );
           }
         }
-        if (chapterEnded) {
+        if (prepared.chapterEnded) {
           storyAfter.clocks = tickClock(index, storyAfter.clocks, clockKey("gloam-host", "long-night"), 1);
           if (spec.actNumber >= 2)
             storyAfter.clocks = tickClock(index, storyAfter.clocks, clockKey("gloam-host", "ember-dims"), 1);
@@ -684,33 +761,55 @@ export class TurnService {
           storyAfter = { ...storyAfter, ended: true, sceneId: null };
         }
       } else {
-        roundId = await this.insertRound(tx, c.id, sceneRow.id, round.n + 1, narration.output.choices);
+        roundId = await this.insertRound(
+          tx,
+          c.id,
+          prepared.sceneId,
+          prepared.roundN + 1,
+          narration.output.choices,
+        );
       }
 
-      await tx.update(rounds).set({ status: "resolved" }).where(eq(rounds.id, round.id));
-      await tx.insert(turns).values({
-        campaignId: c.id,
-        seq,
-        roundId: round.id,
-        status: "committed",
-        stage: "committed",
-        data: {
-          mode,
-          actions: actions.map((a) => ({ characterId: a.characterId, summary: a.summary, passed: a.passed })),
-          rolls: rollViews,
-          narration: narration.output,
-          fallback: narration.fallback,
-        } as unknown as Record<string, unknown>,
-        committedAt: new Date(),
-      });
+      await tx.update(rounds).set({ status: "resolved" }).where(eq(rounds.id, prepared.roundId));
+      const turnData = {
+        mode,
+        actions: prepared.actions.map((a) => ({
+          characterId: a.characterId,
+          summary: a.summary,
+          passed: a.passed,
+        })),
+        rolls: prepared.rolls,
+        narration: narration.output,
+        fallback: narration.fallback,
+      } as unknown as Record<string, unknown>;
+      const [draftRow] = await tx
+        .select()
+        .from(turns)
+        .where(and(eq(turns.campaignId, c.id), eq(turns.seq, seq)));
+      if (draftRow) {
+        await tx
+          .update(turns)
+          .set({ status: "committed", stage: "committed", data: turnData, committedAt: new Date() })
+          .where(eq(turns.id, draftRow.id));
+      } else {
+        await tx.insert(turns).values({
+          campaignId: c.id,
+          seq,
+          roundId: prepared.roundId,
+          status: "committed",
+          stage: "committed",
+          data: turnData,
+          committedAt: new Date(),
+        });
+      }
       await tx.insert(events).values({
         campaignId: c.id,
         turnSeq: seq,
         type: closing ? "scene_closed" : "round_resolved",
         payload: {
-          sceneId: sceneRow.id,
+          sceneId: prepared.sceneId,
           beatId: spec.beatId,
-          cruxOutcome: crux ? (crux.check.success ? "success" : "failure") : null,
+          cruxOutcome: prepared.cruxSuccess === null ? null : prepared.cruxSuccess ? "success" : "failure",
         },
       });
       await tx
@@ -729,7 +828,7 @@ export class TurnService {
         seq,
         spec: nextSpec ?? spec,
         out: narration.output,
-        rolls: rollViews,
+        rolls: prepared.rolls,
         roundId,
         sceneChanged: Boolean(nextSpec),
         levelUps,
@@ -737,6 +836,202 @@ export class TurnService {
         fallback: narration.fallback,
       });
     });
+  }
+
+  // ------------------------------------------------------------ assist mode
+
+  /** Saves a prepared turn as a draft for the human DM. The hidden part stays in the loom schema. */
+  private async saveDraft(
+    prepared: { turn: PreparedTurn; loom: LoomResult; inputHash: string },
+    dmUserId: string,
+  ): Promise<DmDraft> {
+    const db = this.deps.db;
+    const approvalId = await db.transaction(async (tx) => {
+      await tx
+        .insert(turns)
+        .values({
+          campaignId: prepared.turn.campaignId,
+          seq: prepared.turn.seq,
+          roundId: prepared.turn.roundId,
+          status: "awaiting_approval",
+          stage: "narrated",
+          data: prepared.turn as unknown as Record<string, unknown>,
+        })
+        .onConflictDoUpdate({
+          target: [turns.campaignId, turns.seq],
+          set: {
+            status: "awaiting_approval",
+            stage: "narrated",
+            data: prepared.turn as unknown as Record<string, unknown>,
+          },
+        });
+      const [turnRow] = await tx
+        .select()
+        .from(turns)
+        .where(and(eq(turns.campaignId, prepared.turn.campaignId), eq(turns.seq, prepared.turn.seq)));
+      await savePendingLoom(tx, prepared.turn.campaignId, {
+        seq: prepared.turn.seq,
+        inputHash: prepared.inputHash,
+        result: prepared.loom,
+      });
+      const [req] = await tx
+        .insert(approvalRequests)
+        .values({
+          campaignId: prepared.turn.campaignId,
+          turnId: turnRow?.id as string,
+          dmUserId,
+          draft: { seq: prepared.turn.seq },
+        })
+        .returning();
+      return req?.id as string;
+    });
+    return this.draftFor(approvalId, prepared.turn, prepared.loom);
+  }
+
+  private draftFor(approvalId: string, turn: PreparedTurn, loom: LoomResult): DmDraft {
+    const notes = loom.directives.map((d) => `${d.kind.replaceAll("_", " ")}: ${d.text}`);
+    if (loom.crux) {
+      notes.unshift(
+        `Decisive moment: ${loom.crux.outcome.replaceAll("_", " ")}${loom.crux.socket ? ` (${loom.crux.socket.replaceAll("_", " ")})` : ""}${
+          loom.crux.withheldSockets.length
+            ? `; held back by earlier shortcuts: ${loom.crux.withheldSockets.join(", ")}`
+            : ""
+        }`,
+      );
+    }
+    return {
+      approvalId,
+      campaignId: turn.campaignId,
+      seq: turn.seq,
+      sceneTitle: (turn.nextSpec ?? turn.spec).title,
+      narration: turn.narration.narration,
+      npcLines: turn.narration.npcLines.map((l) => l.line),
+      rolls: turn.rolls,
+      choices: turn.narration.choices.map((c) => c.label),
+      actions: turn.actions.map((a) => a.summary),
+      dmNotes: notes,
+      fallback: turn.fallback,
+    };
+  }
+
+  private async loadDraft(approvalId: string, dmUserId: string) {
+    const db = this.deps.db;
+    const [req] = await db.select().from(approvalRequests).where(eq(approvalRequests.id, approvalId));
+    if (!req) throw new GameError("no draft", "That draft doesn't exist anymore.");
+    if (req.dmUserId !== dmUserId) throw new GameError("not dm", "Only this campaign's DM can do that.");
+    if (req.status !== "pending") throw new GameError("decided", "That draft has already been decided.");
+    const [turnRow] = await db.select().from(turns).where(eq(turns.id, req.turnId));
+    if (turnRow?.status !== "awaiting_approval") throw new GameError("stale", "That draft is out of date.");
+    const pending = await loadPendingLoom(db, req.campaignId);
+    const turn = turnRow.data as unknown as PreparedTurn;
+    if (!pending || pending.seq !== turn.seq) throw new GameError("stale", "That draft is out of date.");
+    return { req, turn, pending };
+  }
+
+  /** The current draft, for the DM's edit form. */
+  async getDmDraft(approvalId: string, dmUserId: string): Promise<DmDraft> {
+    const { turn, pending } = await this.loadDraft(approvalId, dmUserId);
+    return this.draftFor(approvalId, turn, pending.result);
+  }
+
+  /** Which round (and campaign) a draft belongs to. */
+  async draftRound(approvalId: string): Promise<{ roundId: string; campaignId: string } | null> {
+    const [req] = await this.deps.db
+      .select()
+      .from(approvalRequests)
+      .where(eq(approvalRequests.id, approvalId));
+    if (!req) return null;
+    const [turnRow] = await this.deps.db.select().from(turns).where(eq(turns.id, req.turnId));
+    return turnRow?.roundId ? { roundId: turnRow.roundId, campaignId: req.campaignId } : null;
+  }
+
+  /** The DM approves a draft, optionally with their own narration or choices. */
+  async approveDraft(
+    approvalId: string,
+    dmUserId: string,
+    edits: { narration?: string; choices?: string[] } = {},
+  ): Promise<TurnView> {
+    const { req, turn, pending } = await this.loadDraft(approvalId, dmUserId);
+    const final =
+      edits.narration !== undefined || edits.choices !== undefined ? this.applyDmEdits(turn, edits) : turn;
+    const view = await this.commit(final, pending.result, pending.inputHash);
+    await this.deps.db
+      .update(approvalRequests)
+      .set({
+        status: edits.narration !== undefined || edits.choices !== undefined ? "edited" : "approved",
+        dmEdits: edits,
+        decidedAt: new Date(),
+      })
+      .where(eq(approvalRequests.id, req.id));
+    await clearPendingLoom(this.deps.db, req.campaignId);
+    return view;
+  }
+
+  /** Writes the narration again, with the DM's guidance. Dice and the hidden hand stay as they were. */
+  async regenerateDraft(approvalId: string, dmUserId: string, guidance: string): Promise<DmDraft> {
+    const { req, turn, pending } = await this.loadDraft(approvalId, dmUserId);
+    const [c] = await this.deps.db.select().from(campaigns).where(eq(campaigns.id, req.campaignId));
+    if (!c) throw new GameError("no campaign", "That campaign doesn't exist.");
+    const { index } = this.deps.worlds.get(c.worldId);
+    const guided: NarrativeDirective[] = guidance.trim()
+      ? [
+          ...pending.result.directives,
+          {
+            kind: "dm_note",
+            text: `The DM's note for this turn: ${guidance.trim().slice(0, 500)}`,
+            mustNot: [],
+          },
+        ]
+      : pending.result.directives;
+    const narration = await narrate({
+      llm: this.deps.llm,
+      world: index.world,
+      view: turn.view as PublicSceneView,
+      directives: guided,
+      scope: { guildId: c.guildId, campaignId: c.id },
+      log: this.log,
+      choicesFor: turn.choicesFor,
+    });
+    const next: PreparedTurn = { ...turn, narration: narration.output, fallback: narration.fallback };
+    await this.deps.db
+      .update(turns)
+      .set({ data: next as unknown as Record<string, unknown> })
+      .where(eq(turns.id, req.turnId));
+    return this.draftFor(approvalId, next, pending.result);
+  }
+
+  private applyDmEdits(turn: PreparedTurn, edits: { narration?: string; choices?: string[] }): PreparedTurn {
+    const out = { ...turn, narration: { ...turn.narration } };
+    if (edits.narration !== undefined) {
+      const text = edits.narration.trim();
+      if (text.length < 10) throw new GameError("too short", "The narration needs at least a sentence.");
+      out.narration.narration = text.slice(0, NARRATION_LIMITS.narration);
+      out.fallback = false;
+    }
+    if (edits.choices !== undefined && turn.mode !== "finale") {
+      const labels = edits.choices
+        .map((l) => l.trim())
+        .filter(Boolean)
+        .slice(0, 4);
+      if (labels.length === 0) throw new GameError("no choices", "Give the players at least one choice.");
+      out.narration.choices = labels.map((label) => {
+        const existing = turn.narration.choices.find((c) => c.label.toLowerCase() === label.toLowerCase());
+        return (
+          existing ?? {
+            label: label.slice(0, 80),
+            intent: {
+              approach: label,
+              skill: "none",
+              difficulty: "medium",
+              deed: "none",
+              targetRef: null,
+              shortcutId: null,
+            },
+          }
+        );
+      });
+    }
+    return out;
   }
 
   private async resolveIntents(

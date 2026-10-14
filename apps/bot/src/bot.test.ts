@@ -1,3 +1,4 @@
+import { VIRTUE_TAGS } from "@dq/core/loom";
 import { createTestDb, TEST_DATABASE_URL } from "@dq/db/testing";
 import { createEngine, type DraftView, type TurnView, WorldCache } from "@dq/engine";
 import { FakeLlm } from "@dq/engine/testing";
@@ -5,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { commandsJson } from "./commands";
 import { decodeId, encodeId } from "./ids";
 import { countComponents, textLength } from "./render/common";
+import { draftModal, renderDraft } from "./render/draft";
 import { renderHub } from "./render/hub";
 import { renderAbout, renderHelp, renderJournal, renderPrivacy } from "./render/misc";
 import { freezeComponents, renderTurn } from "./render/turn";
@@ -44,6 +46,8 @@ describe("custom ids", () => {
       { kind: "wizard", campaignId: UUID, page: 1, action: "inc-str" },
       { kind: "levelup", characterId: UUID },
       { kind: "map-focus", campaignId: UUID },
+      { kind: "approval", approvalId: UUID, action: "redo" },
+      { kind: "approval-modal", approvalId: UUID, action: "write" },
     ] as const;
     for (const id of ids) {
       const raw = encodeId(id);
@@ -60,6 +64,8 @@ describe("custom ids", () => {
       "dq:ch:not-a-uuid:1",
       `dq:ch:${UUID}:99`,
       `other:ch:${UUID}:1`,
+      `dq:ap:${UUID}:launch`,
+      `dq:ap:${UUID}`,
     ]) {
       expect(decodeId(raw), raw).toBeNull();
     }
@@ -70,12 +76,23 @@ describe("slash commands", () => {
   it("are valid", () => {
     const json = commandsJson();
     expect(json.map((c) => c.name)).toEqual(
-      expect.arrayContaining(["campaign", "character", "act", "map", "xcard"]),
+      expect.arrayContaining(["campaign", "character", "act", "map", "xcard", "dm", "loom"]),
     );
     for (const c of json) {
       expect(c.name).toMatch(/^[a-z]{1,32}$/);
       expect(c.description.length).toBeLessThanOrEqual(100);
     }
+  });
+});
+
+describe("/loom plant", () => {
+  it("offers exactly the deeds the engine accepts", () => {
+    const loom = commandsJson().find((c) => c.name === "loom");
+    const plant = loom?.options?.find((o) => o.name === "plant") as
+      | { options: Array<{ name: string; choices?: Array<{ value: string }> }> }
+      | undefined;
+    const kinds = plant?.options.find((o) => o.name === "kind")?.choices?.map((c) => c.value);
+    expect(kinds?.toSorted()).toEqual([...VIRTUE_TAGS].sort());
   });
 });
 
@@ -120,6 +137,30 @@ describe("renderers stay within Discord's limits", () => {
     expect(frozen).not.toContain('"type":1,');
     expect(frozen).toContain("The Thief in the Lamp-House");
     expect(frozen).not.toContain("What do you do?");
+  });
+
+  it("the DM's draft screen, even at maximum length", () => {
+    const draft = {
+      approvalId: UUID,
+      campaignId: UUID,
+      seq: 7,
+      sceneTitle: "The Siege of Lantern Hall",
+      narration: "x".repeat(3500),
+      npcLines: Array.from({ length: 4 }, () => "y".repeat(400)),
+      rolls: view.rolls,
+      choices: Array.from({ length: 4 }, () => "z".repeat(80)),
+      actions: Array.from({ length: 6 }, () => "a".repeat(200)),
+      dmNotes: Array.from({ length: 6 }, () => "n".repeat(500)),
+      fallback: true,
+    };
+    const json = JSON.stringify(checkLimits(renderDraft(draft)));
+    expect(json).toContain("Send it");
+    for (const action of ["edit", "redo", "write"] as const) {
+      const modal = draftModal(draft, UUID, action).toJSON();
+      expect(modal.custom_id.length).toBeLessThanOrEqual(100);
+      expect(decodeId(modal.custom_id)).toEqual({ kind: "approval-modal", approvalId: UUID, action });
+      expect(modal.title.length).toBeLessThanOrEqual(45);
+    }
   });
 
   it("the hub and info pages", () => {
@@ -235,7 +276,9 @@ describe.skipIf(!TEST_DATABASE_URL)("a whole campaign renders cleanly", () => {
         kind: "choice",
         choiceIndex: turns % Math.max(1, view.choices.length),
       });
-      view = (await engine.turns.resolveRound(roundId)) as TurnView;
+      const res = await engine.turns.resolveRound(roundId);
+      if (res?.kind !== "turn") throw new Error("expected a turn");
+      view = res.view;
       turns++;
     }
     checkLimits(renderTurn(view));

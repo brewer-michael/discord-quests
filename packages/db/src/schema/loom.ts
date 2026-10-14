@@ -15,6 +15,8 @@ export const campaignLoom = loom.table("campaign_loom", {
   masterSeed: text("master_seed").notNull(),
   tuning: jsonb("tuning").$type<Record<string, unknown>>().notNull().default({}),
   state: jsonb("state").$type<Record<string, unknown>>().notNull(),
+  /** A loom result waiting for a human DM's approval (Assist mode). */
+  pending: jsonb("pending").$type<Record<string, unknown> | null>(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

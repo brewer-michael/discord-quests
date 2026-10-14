@@ -274,7 +274,9 @@ export type NarrativeDirective =
     }
   | { kind: "detour_payoff"; text: string; mustNot: string[] }
   | { kind: "bearer_glimpse"; text: string; mustNot: string[] }
-  | { kind: "snare_springs"; effect: SnareEffect; text: string; mustNot: string[] };
+  | { kind: "snare_springs"; effect: SnareEffect; text: string; mustNot: string[] }
+  /** Not from the loom: a human DM's note for the narrator in Assist mode. */
+  | { kind: "dm_note"; text: string; mustNot: string[] };
 
 /** What the story director must respect. Reasons are never included. */
 export type DirectorConstraint =

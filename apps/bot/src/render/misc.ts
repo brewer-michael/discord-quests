@@ -48,6 +48,8 @@ export function renderHelp() {
         "",
         "**Handy commands:** `/character sheet`, `/map`, `/journal`, `/roll 1d20+3`, `/character levelup`",
         "**Not this:** press it any time to quietly steer the story away from something. No one sees who pressed it.",
+        "",
+        "**Running it yourself?** Start `/campaign new` and pick **A person runs it** as the storyteller. Each turn arrives in your private DM screen to send, edit, redo or rewrite. `/dm say` posts your own words; `/loom view` shows what the hidden hand is holding.",
       ].join("\n"),
     ),
   );

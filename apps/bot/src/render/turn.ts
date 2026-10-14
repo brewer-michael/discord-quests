@@ -1,3 +1,4 @@
+import { NARRATION_LIMITS } from "@dq/core/narration";
 import type { TurnView } from "@dq/engine";
 import {
   ActionRowBuilder,
@@ -40,7 +41,7 @@ export function renderTurn(view: TurnView, opts: TurnRenderOptions = {}) {
       `## ${view.sceneTitle}\n-# ${view.locationName}${view.fallback ? " · told by the engine while the storyteller rests" : ""}`,
     ),
   );
-  c.addTextDisplayComponents(text(view.narration));
+  c.addTextDisplayComponents(text(clip(view.narration, NARRATION_LIMITS.narration)));
   if (view.npcLines.length > 0) {
     c.addTextDisplayComponents(text(view.npcLines.map((l) => `> **${esc(l.name)}:** ${l.line}`).join("\n")));
   }

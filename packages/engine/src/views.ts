@@ -1,4 +1,6 @@
+import type { NarratorOutput, PublicSceneData, SceneSpecView } from "@dq/core/narration";
 import type { ImageBrief } from "@dq/core/safety";
+import type { SceneSpec } from "./director";
 
 /** Everything the Discord bot needs to render a turn. No hidden state. */
 export interface TurnView {
@@ -67,3 +69,45 @@ export type SubmitResult =
   | { ok: true; allSubmitted: boolean; waitingOn: string[] }
   | { ok: true; deflection: string }
   | { ok: false; message: string };
+
+/** A resolved round before it is committed. Public data only (the hidden part lives in the loom schema). */
+export interface PreparedTurn {
+  campaignId: string;
+  roundId: string;
+  roundN: number;
+  sceneId: string;
+  seq: number;
+  closing: boolean;
+  mode: "opening" | "continue" | "close_and_open" | "finale";
+  spec: SceneSpec;
+  nextSpec: SceneSpec | null;
+  actions: Array<{ characterId: string; summary: string; passed: boolean; makesPromiseTo: string | null }>;
+  rolls: RollView[];
+  cruxLabel: string | null;
+  cruxSuccess: boolean | null;
+  chapterEnded: boolean;
+  completedAfter: string[];
+  promisesKept: string[];
+  view: PublicSceneData;
+  choicesFor: SceneSpecView;
+  narration: NarratorOutput;
+  fallback: boolean;
+}
+
+/** What the human DM sees before a turn goes out in Assist mode. */
+export interface DmDraft {
+  approvalId: string;
+  campaignId: string;
+  seq: number;
+  sceneTitle: string;
+  narration: string;
+  npcLines: string[];
+  rolls: RollView[];
+  choices: string[];
+  actions: string[];
+  /** Spoilers for the DM only: what the hidden hand is doing this turn. */
+  dmNotes: string[];
+  fallback: boolean;
+}
+
+export type ResolveResult = { kind: "turn"; view: TurnView } | { kind: "draft"; draft: DmDraft };

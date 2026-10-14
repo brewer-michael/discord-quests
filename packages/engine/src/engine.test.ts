@@ -125,8 +125,8 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
         expect(res.ok).toBe(true);
       }
       const next = await engine.turns.resolveRound(roundId);
-      expect(next).not.toBeNull();
-      view = next as NonNullable<typeof next>;
+      expect(next?.kind).toBe("turn");
+      view = (next as { kind: "turn"; view: typeof view }).view;
       if (!sawSnibbetMercy) {
         const loom = await loadLoom(db.db, c.id);
         sawSnibbetMercy = loom.state.threads.some((t) => t.anchor?.id === "snibbet" && t.tag === "mercy");
@@ -176,7 +176,7 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
     });
     expect(res.ok).toBe(true);
     const next = await engine.turns.resolveRound(view.roundId as string);
-    expect(next?.narration.length).toBeGreaterThan(10);
+    expect(next?.kind === "turn" && next.view.narration.length).toBeGreaterThan(10);
   });
 
   it("blocks unsafe text and deflects questions about hidden luck", async () => {
@@ -227,6 +227,77 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
       engine.turns.resolveRound(view.roundId as string),
     ]);
     expect(results.filter(Boolean)).toHaveLength(1);
+  });
+
+  it("in Assist mode, turns wait for the DM, who can redo, edit and approve them", async () => {
+    const engine = createEngine({ db: db.db, worlds, llm: new FakeLlm() });
+    const c = await engine.campaigns.create({
+      guildId: "g7",
+      channelId: "ch9",
+      name: "Assisted",
+      mode: "assist",
+      createdBy: "dm1",
+      dmUserId: "dm1",
+    });
+    await engine.campaigns.join(c.id, "kid1");
+    await makeHero(engine, c.id, "kid1", "shieldheart", "Tumbleweed");
+    const opening = await engine.turns.openCampaign(c.id, "dm1");
+    await engine.turns.submitAction({
+      roundId: opening.roundId as string,
+      userId: "kid1",
+      kind: "choice",
+      choiceIndex: 0,
+    });
+    const res = await engine.turns.resolveRound(opening.roundId as string);
+    expect(res?.kind).toBe("draft");
+    const draft = (res as { kind: "draft"; draft: import("./views").DmDraft }).draft;
+    expect(draft.choices.length).toBeGreaterThan(0);
+
+    // Players can't act while the DM decides, and only the DM can decide.
+    expect(await engine.turns.resolveRound(opening.roundId as string)).toBeNull();
+    await expect(engine.turns.approveDraft(draft.approvalId, "kid1")).rejects.toThrow();
+
+    const redone = await engine.turns.regenerateDraft(draft.approvalId, "dm1", "Make the geese funnier.");
+    expect(redone.approvalId).toBe(draft.approvalId);
+    const view = await engine.turns.approveDraft(draft.approvalId, "dm1", {
+      narration: "The geese honk in perfect harmony, and everyone laughs.",
+      choices: ["Bow to the geese", "Ask Hattie what's going on"],
+    });
+    expect(view.narration).toContain("geese honk");
+    expect(view.choices.map((x) => x.label)).toEqual(["Bow to the geese", "Ask Hattie what's going on"]);
+    await expect(engine.turns.approveDraft(draft.approvalId, "dm1")).rejects.toThrow(/decided/);
+
+    // Committed history still holds no hidden state.
+    const history = JSON.stringify(await db.db.select().from(turns).where(eq(turns.campaignId, c.id)));
+    expect(history).not.toContain("sincerity");
+  });
+
+  it("gives the Assist DM loom tools: view, plant, switch off", async () => {
+    const engine = createEngine({ db: db.db, worlds, llm: new FakeLlm() });
+    const c = await engine.campaigns.create({
+      guildId: "g8",
+      channelId: "ch10",
+      name: "Loom tools",
+      mode: "assist",
+      createdBy: "dm2",
+      dmUserId: "dm2",
+    });
+    await expect(engine.dm.loomView(c.id, "someone")).rejects.toThrow();
+    await engine.dm.plant(c.id, "dm2", {
+      tag: "mercy",
+      npcId: "snibbet",
+      summary: "spared Snibbet at the mill",
+      size: "large",
+    });
+    const view = await engine.dm.loomView(c.id, "dm2");
+    expect(view.threads[0]).toMatchObject({
+      deed: "spared Snibbet at the mill",
+      anchor: "Snibbet",
+      reservedForFinale: true,
+    });
+    expect(view.bearers).toEqual([{ name: "Snibbet", presence: "shadowing" }]);
+    await engine.dm.setLoomMode(c.id, "dm2", "off");
+    expect((await engine.campaigns.get(c.id))?.settings).toMatchObject({ loomMode: "off" });
   });
 
   it("purges a campaign completely", async () => {

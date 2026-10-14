@@ -1,0 +1,1 @@
+ALTER TABLE "loom"."campaign_loom" ADD COLUMN "pending" jsonb;

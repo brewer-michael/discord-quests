@@ -52,6 +52,20 @@ The bot serves a health check at `http://localhost:8080/healthz`.
 4. Each turn, players press a choice (or **Something else…** to describe their own). When everyone has chosen, or
    the round timer runs out (3 minutes by default), the story continues.
 
+### With a human DM (Assist mode)
+
+Start with `/campaign new storyteller:A person runs it, the bot helps dm:@you`. Alongside the table thread, the
+bot opens a private **DM screen** thread that only the DM is added to.
+
+- Each turn is written as a draft and posted to the DM screen first. The DM can **Send it**, **Edit** the narration
+  and choices, **Redo with a note** ("make it spookier"), or **Write my own**. Players see nothing until the DM
+  sends it.
+- Drafts include notes on what the hidden hand is doing that turn. They appear only on the DM screen.
+- `/dm say` posts the DM's own words to the table.
+- `/loom view` lists the deeds waiting to matter, the shortcuts that will come back around, and who is being kept
+  safe for later. `/loom plant` adds a deed by hand. `/loom mode` switches the hidden hand off if the DM would
+  rather handle it themselves.
+
 ## Hosting notes
 
 - Any container host works (Railway, Fly.io, Render, a small VPS). One bot process comfortably serves thousands

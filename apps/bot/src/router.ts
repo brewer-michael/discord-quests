@@ -9,6 +9,7 @@ import {
   wizardNameButton,
   wizardNameSubmit,
 } from "./handlers/character";
+import { approvalButton, approvalModal, dmCommand, loomCommand } from "./handlers/dm";
 import {
   actCommand,
   choiceButton,
@@ -51,6 +52,10 @@ export async function route(ctx: BotContext, i: Interaction): Promise<void> {
           return await xcard(ctx, i);
         case "setup":
           return await setup(ctx, i);
+        case "dm":
+          return await dmCommand(ctx, i);
+        case "loom":
+          return await loomCommand(ctx, i);
         case "help":
           return void (await i.reply(renderHelp() as never));
         case "about":
@@ -113,6 +118,12 @@ export async function route(ctx: BotContext, i: Interaction): Promise<void> {
         return;
       case "levelup":
         if (i.isButton() || i.isStringSelectMenu()) await levelUpInteraction(ctx, i, id.characterId);
+        return;
+      case "approval":
+        if (i.isButton()) await approvalButton(ctx, i, id.approvalId, id.action);
+        return;
+      case "approval-modal":
+        if (i.isModalSubmit()) await approvalModal(ctx, i, id.approvalId, id.action);
         return;
     }
   } catch (e) {

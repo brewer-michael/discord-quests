@@ -48,6 +48,29 @@ export async function saveLoom(
   });
 }
 
+export interface PendingLoom {
+  seq: number;
+  inputHash: string;
+  result: LoomResult;
+}
+
+/** A loom result waiting on the DM's approval in Assist mode. */
+export async function savePendingLoom(db: DbOrTx, campaignId: string, pending: PendingLoom): Promise<void> {
+  await db
+    .update(campaignLoom)
+    .set({ pending: pending as unknown as Record<string, unknown> })
+    .where(eq(campaignLoom.campaignId, campaignId));
+}
+
+export async function loadPendingLoom(db: DbOrTx, campaignId: string): Promise<PendingLoom | null> {
+  const [row] = await db.select().from(campaignLoom).where(eq(campaignLoom.campaignId, campaignId));
+  return (row?.pending as unknown as PendingLoom | null) ?? null;
+}
+
+export async function clearPendingLoom(db: DbOrTx, campaignId: string): Promise<void> {
+  await db.update(campaignLoom).set({ pending: null }).where(eq(campaignLoom.campaignId, campaignId));
+}
+
 /** Spoiler view for an Assist-mode DM: qualitative only, never raw weights. */
 export async function dmLoomView(db: DbOrTx, campaignId: string) {
   const { state } = await loadLoom(db, campaignId);

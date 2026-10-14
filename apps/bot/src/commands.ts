@@ -91,6 +91,76 @@ export const COMMANDS = [
     .setDescription("Quietly steer the story away from something. Nobody sees who used it.")
     .setContexts(GUILD),
   new SlashCommandBuilder()
+    .setName("dm")
+    .setDescription("Tools for the human DM of an Assist-mode campaign")
+    .setContexts(GUILD)
+    .addSubcommand((s) =>
+      s
+        .setName("say")
+        .setDescription("Post your own words to the table")
+        .addStringOption((o) =>
+          o.setName("text").setDescription("What the table hears").setMaxLength(1500).setRequired(true),
+        ),
+    ),
+  new SlashCommandBuilder()
+    .setName("loom")
+    .setDescription("The hidden hand (DM only, Assist mode)")
+    .setContexts(GUILD)
+    .addSubcommand((s) => s.setName("view").setDescription("See what the hidden hand is holding"))
+    .addSubcommand((s) =>
+      s
+        .setName("plant")
+        .setDescription("Plant a good deed that will matter later")
+        .addStringOption((o) =>
+          o
+            .setName("kind")
+            .setDescription("What kind of deed")
+            .setRequired(true)
+            .addChoices(
+              { name: "Mercy", value: "mercy" },
+              { name: "Honesty that cost something", value: "honesty_at_cost" },
+              { name: "Patience (refused a shortcut)", value: "patience" },
+              { name: "A promise kept", value: "promise_kept" },
+              { name: "Kindness to someone small", value: "kindness_to_lowly" },
+              { name: "Giving something up for others", value: "self_sacrifice" },
+              { name: "A keepsake kept", value: "keepsake_kept" },
+              { name: "Making amends", value: "amends" },
+            ),
+        )
+        .addStringOption((o) =>
+          o
+            .setName("what")
+            .setDescription("What happened, in a few words")
+            .setMaxLength(200)
+            .setRequired(true),
+        )
+        .addStringOption((o) =>
+          o.setName("who").setDescription("A named character it's tied to (optional)").setMaxLength(60),
+        )
+        .addStringOption((o) =>
+          o
+            .setName("weight")
+            .setDescription("How much it should matter")
+            .addChoices(
+              { name: "A little", value: "small" },
+              { name: "Some", value: "medium" },
+              { name: "A lot", value: "large" },
+            ),
+        ),
+    )
+    .addSubcommand((s) =>
+      s
+        .setName("mode")
+        .setDescription("Turn the hidden hand on or off for this campaign")
+        .addStringOption((o) =>
+          o
+            .setName("mode")
+            .setDescription("On or off")
+            .setRequired(true)
+            .addChoices({ name: "On", value: "auto" }, { name: "Off (I'll handle it)", value: "off" }),
+        ),
+    ),
+  new SlashCommandBuilder()
     .setName("setup")
     .setDescription("Set up story and image providers for this server")
     .setContexts(GUILD),
