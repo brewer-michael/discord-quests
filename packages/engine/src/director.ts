@@ -1,3 +1,4 @@
+import type { CombatState } from "@dq/core/combat";
 import { type AnchorRef, bearersForScene, type LoomState } from "@dq/core/loom";
 import type { OpportunityView } from "@dq/core/narration";
 import type { SceneKind } from "@dq/core/story";
@@ -41,6 +42,8 @@ export interface SceneSpec {
   isCrux: boolean;
   chapterNumber: number;
   actNumber: number;
+  /** The fight in this scene, if there is one. */
+  combat?: CombatState;
 }
 
 const TARGET_ROUNDS: Record<SceneKind, number> = {

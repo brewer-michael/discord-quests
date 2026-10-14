@@ -214,6 +214,8 @@ export const CreatureDef = z.strictObject({
   traits: z.array(z.strictObject({ name: Short, description: Text })).default([]),
   morale: z.enum(["brave", "normal", "skittish"]),
   defeat: z.enum(["faints", "flees", "surrenders", "poofs"]),
+  /** The faction it serves, if any. Sparing it counts as mercy toward that faction. */
+  faction: Id.optional(),
   tags: z.array(Id).default([]),
 });
 export type CreatureDef = z.infer<typeof CreatureDef>;
@@ -443,6 +445,12 @@ export const BeatDef = z.strictObject({
     .default([]),
   decisive: z.boolean().default(false),
   crux: CruxSpec.optional(),
+  /** Who the heroes face in a combat beat (counts are for a party of three). Defaults to the region's table. */
+  foes: z
+    .array(
+      z.strictObject({ creature: Id, count: z.tuple([z.number().int().min(1), z.number().int().max(8)]) }),
+    )
+    .optional(),
 });
 export type BeatDef = z.infer<typeof BeatDef>;
 

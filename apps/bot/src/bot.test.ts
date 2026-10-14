@@ -4,6 +4,7 @@ import { createEngine, type DraftView, type TurnView, WorldCache } from "@dq/eng
 import { FakeLlm } from "@dq/engine/testing";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { commandsJson } from "./commands";
+import { battleMenu } from "./handlers/battle";
 import { decodeId, encodeId } from "./ids";
 import { countComponents, textLength } from "./render/common";
 import { draftModal, renderDraft } from "./render/draft";
@@ -48,6 +49,9 @@ describe("custom ids", () => {
       { kind: "map-focus", campaignId: UUID },
       { kind: "approval", approvalId: UUID, action: "redo" },
       { kind: "approval-modal", approvalId: UUID, action: "write" },
+      { kind: "battle", roundId: UUID, action: "magic" },
+      { kind: "battle-pick", roundId: UUID, action: "magic", arg: "healing-word" },
+      { kind: "battle-pick", roundId: UUID, action: "attack" },
     ] as const;
     for (const id of ids) {
       const raw = encodeId(id);
@@ -65,6 +69,8 @@ describe("custom ids", () => {
       `dq:ch:${UUID}:99`,
       `other:ch:${UUID}:1`,
       `dq:ap:${UUID}:launch`,
+      `dq:bt:${UUID}:explode`,
+      `dq:bp:${UUID}:magic:Not_An_Id`,
       `dq:ap:${UUID}`,
     ]) {
       expect(decodeId(raw), raw).toBeNull();
@@ -124,6 +130,7 @@ describe("renderers stay within Discord's limits", () => {
     levelUps: [],
     campaignEnded: false,
     fallback: false,
+    combat: null,
   };
 
   it("turn messages, even at maximum length", () => {
@@ -161,6 +168,50 @@ describe("renderers stay within Discord's limits", () => {
       expect(decodeId(modal.custom_id)).toEqual({ kind: "approval-modal", approvalId: UUID, action });
       expect(modal.title.length).toBeLessThanOrEqual(45);
     }
+  });
+
+  it("battles, even with a crowd", () => {
+    const battle: TurnView = {
+      ...view,
+      sceneKind: "combat",
+      choices: [],
+      combat: {
+        phase: "fighting",
+        round: 3,
+        foes: Array.from({ length: 8 }, (_, i) => ({
+          id: `foe-${i + 1}`,
+          name: `Extremely Long-Named Gloam Skulker ${"ABCDEFGH"[i]}`,
+          condition: i === 7 ? "gave up" : "nearly done",
+          status: i === 7 ? "at_mercy" : i === 6 ? "fled" : "fighting",
+        })),
+        heroes: Array.from({ length: 6 }, (_, i) => ({
+          id: `h${i}`,
+          name: `Hero Number ${i}`,
+          hp: i,
+          hpMax: 12,
+          down: i === 0,
+        })),
+        order: Array.from({ length: 14 }, (_, i) => `Combatant With A Long Name ${i}`),
+        log: [],
+      },
+    };
+    const json = JSON.stringify(checkLimits(renderTurn(battle, { waitingOn: ["Pip", "Mira"] })));
+    expect(json).toContain("Spare");
+    expect(json).toContain("Battle · round 4");
+    expect(json).not.toContain("What do you do?");
+    const over = JSON.stringify(
+      checkLimits(
+        renderTurn({ ...battle, combat: { ...battle.combat!, phase: "aftermath" }, choices: view.choices }),
+      ),
+    );
+    expect(over).toContain("The fight is over");
+    expect(over).not.toContain('"Attack"');
+    const picks = Array.from({ length: 30 }, (_, i) => ({
+      label: "x".repeat(120),
+      value: `foe-${i}`,
+      description: "y".repeat(120),
+    }));
+    checkLimits(battleMenu(UUID, "magic", "healing-word", "Who gets Healing Word?", picks));
   });
 
   it("the hub and info pages", () => {
@@ -267,15 +318,35 @@ describe.skipIf(!TEST_DATABASE_URL)("a whole campaign renders cleanly", () => {
     await engine.characters.finalize(c.id, "u1");
     let view = await engine.turns.openCampaign(c.id, "u1");
     let turns = 0;
-    while (!view.campaignEnded && turns < 80) {
+    let fights = 0;
+    while (!view.campaignEnded && turns < 120) {
       checkLimits(renderTurn(view, { waitingOn: [] }));
       const roundId = view.roundId as string;
-      await engine.turns.submitAction({
-        roundId,
-        userId: "u1",
-        kind: "choice",
-        choiceIndex: turns % Math.max(1, view.choices.length),
-      });
+      if (view.combat?.phase === "fighting") {
+        fights++;
+        const options = await engine.turns.combatOptions(roundId, "u1");
+        checkLimits(
+          battleMenu(
+            roundId,
+            "attack",
+            undefined,
+            "Which foe?",
+            (options?.foes ?? []).map((f) => ({ label: f.name, value: f.id })),
+          ),
+        );
+        await engine.turns.submitAction({
+          roundId,
+          userId: "u1",
+          kind: "combat",
+          action: { kind: "attack", targetId: options?.foes[0]?.id },
+        });
+      } else
+        await engine.turns.submitAction({
+          roundId,
+          userId: "u1",
+          kind: "choice",
+          choiceIndex: turns % Math.max(1, view.choices.length),
+        });
       const res = await engine.turns.resolveRound(roundId);
       if (res?.kind !== "turn") throw new Error("expected a turn");
       view = res.view;
@@ -283,5 +354,6 @@ describe.skipIf(!TEST_DATABASE_URL)("a whole campaign renders cleanly", () => {
     }
     checkLimits(renderTurn(view));
     expect(view.campaignEnded).toBe(true);
+    expect(fights).toBeGreaterThan(0);
   }, 60_000);
 });

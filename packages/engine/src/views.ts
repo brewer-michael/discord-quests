@@ -1,5 +1,6 @@
 import type { NarratorOutput, PublicSceneData, SceneSpecView } from "@dq/core/narration";
 import type { ImageBrief } from "@dq/core/safety";
+import type { CombatView } from "./combat";
 import type { SceneSpec } from "./director";
 
 /** Everything the Discord bot needs to render a turn. No hidden state. */
@@ -22,6 +23,8 @@ export interface TurnView {
   campaignEnded: boolean;
   /** True when the narrator was unavailable and the engine told the turn itself. */
   fallback: boolean;
+  /** The fight in this scene, if any. When it's on, players pick battle actions instead of choices. */
+  combat: CombatView | null;
 }
 
 export interface RollView {
@@ -92,6 +95,14 @@ export interface PreparedTurn {
   choicesFor: SceneSpecView;
   narration: NarratorOutput;
   fallback: boolean;
+  /** Results of a fight round, applied on commit. */
+  combat: {
+    heroes: Array<{ id: string; hp: number; tempHp: number; conditions: string[] }>;
+    usedItems: Array<{ heroId: string; itemId: string }>;
+    usedSlots: Array<{ heroId: string; level: number }>;
+    log: string[];
+    outcome: "ongoing" | "victory" | "party_down";
+  } | null;
 }
 
 /** What the human DM sees before a turn goes out in Assist mode. */

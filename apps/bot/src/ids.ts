@@ -20,7 +20,14 @@ export type CustomId =
   | { kind: "wizard-name"; campaignId: string }
   | { kind: "levelup"; characterId: string }
   | { kind: "approval"; approvalId: string; action: ApprovalAction }
-  | { kind: "approval-modal"; approvalId: string; action: ApprovalAction };
+  | { kind: "approval-modal"; approvalId: string; action: ApprovalAction }
+  | { kind: "battle"; roundId: string; action: BattleAction }
+  | { kind: "battle-pick"; roundId: string; action: BattleAction; arg?: string };
+
+/** The battle buttons. Picks carry a spell or item id when a second choice is needed. */
+export type BattleAction = "attack" | "magic" | "defend" | "help" | "potion" | "spare";
+const BATTLE_ACTIONS: readonly string[] = ["attack", "magic", "defend", "help", "potion", "spare"];
+const ARG = /^[a-z0-9-]{1,40}$/;
 
 export type ApprovalAction = "ok" | "edit" | "redo" | "write";
 const APPROVAL_ACTIONS: readonly string[] = ["ok", "edit", "redo", "write"];
@@ -43,6 +50,8 @@ const CODES: Record<CustomId["kind"], string> = {
   levelup: "lv",
   approval: "ap",
   "approval-modal": "apm",
+  battle: "bt",
+  "battle-pick": "bp",
 };
 const KINDS = Object.fromEntries(Object.entries(CODES).map(([k, v]) => [v, k])) as Record<
   string,
@@ -70,6 +79,13 @@ export function encodeId(id: CustomId): string {
     case "approval":
     case "approval-modal":
       parts.push(id.approvalId, id.action);
+      break;
+    case "battle":
+      parts.push(id.roundId, id.action);
+      break;
+    case "battle-pick":
+      parts.push(id.roundId, id.action);
+      if (id.arg) parts.push(id.arg);
       break;
     default:
       parts.push(id.campaignId);
@@ -111,6 +127,16 @@ export function decodeId(raw: string): CustomId | null {
       return APPROVAL_ACTIONS.includes(action)
         ? { kind, approvalId: a, action: action as ApprovalAction }
         : null;
+    }
+    case "battle": {
+      const action = parts[3] ?? "";
+      return BATTLE_ACTIONS.includes(action) ? { kind, roundId: a, action: action as BattleAction } : null;
+    }
+    case "battle-pick": {
+      const action = parts[3] ?? "";
+      const arg = parts[4];
+      if (!BATTLE_ACTIONS.includes(action) || (arg !== undefined && !ARG.test(arg))) return null;
+      return { kind, roundId: a, action: action as BattleAction, ...(arg ? { arg } : {}) };
     }
     default:
       return { kind, campaignId: a } as CustomId;

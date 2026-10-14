@@ -88,6 +88,9 @@ chapters:
           - Defend the village from the gloom mites.
           - Learn that the Gloam Host fears light.
         milestone: true
+        foes:
+          - { creature: gloom-mite, count: [2, 3] }
+          - { creature: gloam-skulker, count: [1, 1] }
 
   - id: ch2
     number: 2
@@ -162,6 +165,9 @@ chapters:
         goals:
           - Get through the night.
           - Keep the Hearth-Lantern lit.
+        foes:
+          - { creature: shadow-wolf, count: [2, 2] }
+          - { creature: gloom-mite, count: [1, 2] }
 
   - id: ch3
     number: 3

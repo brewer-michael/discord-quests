@@ -399,7 +399,7 @@ export const pendingActions = pgTable(
       .notNull()
       .references(() => characters.id, { onDelete: "cascade" }),
     userId: text("user_id").notNull(),
-    kind: text("kind").$type<"choice" | "freeform" | "pass">().notNull(),
+    kind: text("kind").$type<"choice" | "freeform" | "pass" | "combat">().notNull(),
     payload: jsonb("payload").$type<Record<string, unknown>>().notNull().default({}),
     interactionId: text("interaction_id"),
     submittedAt: createdAt(),

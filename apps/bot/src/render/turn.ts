@@ -36,19 +36,33 @@ export function renderTurn(view: TurnView, opts: TurnRenderOptions = {}) {
       ),
     );
   }
-  c.addTextDisplayComponents(
-    text(
-      `## ${view.sceneTitle}\n-# ${view.locationName}${view.fallback ? " · told by the engine while the storyteller rests" : ""}`,
-    ),
-  );
-  c.addTextDisplayComponents(text(clip(view.narration, NARRATION_LIMITS.narration)));
-  if (view.npcLines.length > 0) {
-    c.addTextDisplayComponents(text(view.npcLines.map((l) => `> **${esc(l.name)}:** ${l.line}`).join("\n")));
-  }
-  if (view.rolls.length > 0) {
+  const header = `## ${view.sceneTitle}\n-# ${view.locationName}${view.fallback ? " · told by the engine while the storyteller rests" : ""}`;
+  const narration = clip(view.narration, NARRATION_LIMITS.narration);
+  // The story always shows in full; everything else shares what's left, most useful first.
+  let left = TEXT_BUDGET - header.length - narration.length;
+  const take = (s: string, cap: number) => {
+    const room = Math.min(cap, left);
+    if (!s || room < 40) return "";
+    const out = clip(s, room);
+    left -= out.length;
+    return out;
+  };
+  const battle = view.combat ? take(battlePanel(view.combat), 900) : "";
+  const rolls = take(view.rolls.map(DICE).join("\n"), 900);
+  const voices = take(view.npcLines.map((l) => `> **${esc(l.name)}:** ${l.line}`).join("\n"), 1200);
+  const order =
+    view.combat?.phase === "fighting" && view.roundId
+      ? take(`-# Turn order: ${view.combat.order.map(esc).join(" → ")}`, 300)
+      : "";
+
+  c.addTextDisplayComponents(text(header));
+  c.addTextDisplayComponents(text(narration));
+  if (voices) c.addTextDisplayComponents(text(voices));
+  if (rolls) {
     c.addSeparatorComponents(divider());
-    c.addTextDisplayComponents(text(view.rolls.map(DICE).join("\n")));
+    c.addTextDisplayComponents(text(rolls));
   }
+  if (view.combat) renderBattle(c, view, opts, battle, order);
   if (view.roundId && view.choices.length > 0) {
     c.addSeparatorComponents(divider());
     c.addTextDisplayComponents(text("**What do you do?**"));
@@ -117,6 +131,98 @@ export function renderTurn(view: TurnView, opts: TurnRenderOptions = {}) {
     );
   }
   return { components: [c], flags: V2, allowedMentions: { parse: [] as never[] } };
+}
+
+/** A little health bar for heroes: ▰▰▰▱▱. */
+function bar(hp: number, max: number): string {
+  const filled = max > 0 ? Math.round((Math.max(0, hp) / max) * 5) : 0;
+  return "▰".repeat(filled) + "▱".repeat(5 - filled);
+}
+
+/** Leaves room for button labels and the "waiting on" line. */
+const TEXT_BUDGET = 3650;
+
+function battlePanel(cb: NonNullable<TurnView["combat"]>): string {
+  const fighting = cb.phase === "fighting";
+  const foes = cb.foes
+    .map((f) =>
+      f.status === "fighting"
+        ? `👾 **${esc(f.name)}**: ${f.condition}`
+        : f.status === "at_mercy"
+          ? `🏳️ **${esc(f.name)}**: ${f.condition}`
+          : `-# ~~${esc(f.name)}~~ ${f.condition}`,
+    )
+    .join("\n");
+  const heroes = cb.heroes
+    .map(
+      (h) =>
+        `${h.down ? "💫" : "🛡️"} **${esc(h.name)}** ${bar(h.hp, h.hpMax)} ${h.hp}/${h.hpMax}${h.down ? " · dazed" : ""}`,
+    )
+    .join("\n");
+  return `### ⚔️ ${fighting ? `Battle · round ${cb.round + 1}` : "The fight is over"}\n${foes}\n\n${heroes}`;
+}
+
+function renderBattle(
+  c: ContainerBuilder,
+  view: TurnView,
+  opts: TurnRenderOptions,
+  panel: string,
+  order: string,
+) {
+  const cb = view.combat;
+  if (!cb) return;
+  if (panel) {
+    c.addSeparatorComponents(divider());
+    c.addTextDisplayComponents(text(panel));
+  }
+  if (cb.phase !== "fighting" || !view.roundId) return;
+  if (order) c.addTextDisplayComponents(text(order));
+  const roundId = view.roundId;
+  const b = (
+    action: "attack" | "magic" | "defend" | "help" | "potion" | "spare",
+    label: string,
+    emoji: string,
+    style: ButtonStyle,
+  ) =>
+    new ButtonBuilder()
+      .setCustomId(encodeId({ kind: "battle", roundId, action }))
+      .setLabel(label)
+      .setEmoji(emoji)
+      .setStyle(style);
+  c.addActionRowComponents(
+    new ActionRowBuilder<ButtonBuilder>().addComponents(
+      b("attack", "Attack", "⚔️", ButtonStyle.Danger),
+      b("magic", "Magic", "✨", ButtonStyle.Primary),
+      b("defend", "Defend", "🛡️", ButtonStyle.Secondary),
+      b("help", "Distract", "🤝", ButtonStyle.Secondary),
+      b("potion", "Potion", "🧪", ButtonStyle.Secondary),
+    ),
+  );
+  const second = new ActionRowBuilder<ButtonBuilder>();
+  if (cb.foes.some((f) => f.status === "at_mercy"))
+    second.addComponents(b("spare", "Spare", "🕊️", ButtonStyle.Success));
+  second.addComponents(
+    new ButtonBuilder()
+      .setCustomId(encodeId({ kind: "freeform", roundId }))
+      .setLabel("Something else…")
+      .setEmoji("✏️")
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId(encodeId({ kind: "resolve", roundId }))
+      .setLabel("Next round")
+      .setEmoji("⏩")
+      .setStyle(ButtonStyle.Success),
+  );
+  c.addActionRowComponents(second);
+  if (opts.waitingOn) {
+    c.addTextDisplayComponents(
+      text(
+        opts.waitingOn.length > 0
+          ? `-# Waiting on: ${opts.waitingOn.map(esc).join(", ")}`
+          : "-# Everyone has chosen. The story continues…",
+      ),
+    );
+  }
 }
 
 export function sceneAttachment(bytes: Buffer, mime: string) {

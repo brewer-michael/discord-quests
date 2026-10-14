@@ -14,6 +14,7 @@
     - { name: Light Shy, description: "Has disadvantage on attacks while in bright light." }
   morale: skittish
   defeat: poofs
+  faction: gloam-host
   tags: [gloam]
 
 - id: gloam-skulker
@@ -31,7 +32,8 @@
   traits:
     - { name: Light Shy, description: "Has disadvantage on attacks while in bright light." }
   morale: normal
-  defeat: poofs
+  defeat: surrenders
+  faction: gloam-host
   tags: [gloam]
 
 - id: shadow-wolf
@@ -53,7 +55,8 @@
   traits:
     - { name: Pack Tactics, description: "Has advantage when a packmate is next to its target." }
   morale: normal
-  defeat: poofs
+  defeat: faints
+  faction: gloam-host
   tags: [gloam]
 
 - id: gloam-knight
@@ -71,7 +74,8 @@
   traits:
     - { name: Light Shy, description: "Has disadvantage on attacks while in bright light." }
   morale: brave
-  defeat: poofs
+  defeat: surrenders
+  faction: gloam-host
   tags: [gloam]
 
 - id: gloam-warden
@@ -93,7 +97,8 @@
       range: [30, 60]
       effect: { condition: frightened, save: wis, dc: 13 }
   morale: brave
-  defeat: poofs
+  defeat: surrenders
+  faction: gloam-host
   tags: [gloam, boss]
 
 - id: the-gloam-king
@@ -116,6 +121,7 @@
       effect: { condition: frightened, save: wis, dc: 14 }
   morale: brave
   defeat: surrenders
+  faction: gloam-host
   tags: [gloam, boss]
 
 - id: ledger-bruiser
@@ -132,6 +138,7 @@
     - { name: Cudgel, bonus: 3, damage: 1d6+2, damageType: bludgeoning }
   morale: normal
   defeat: surrenders
+  faction: gilded-ledger
   tags: [ledger]
 
 - id: marsh-snapper
@@ -234,6 +241,7 @@
     - { name: Nip, bonus: 5, damage: 1d4+3, damageType: piercing }
   morale: skittish
   defeat: flees
+  faction: court-of-the-bargain-fox
   tags: [fox]
 
 - id: bog-lump

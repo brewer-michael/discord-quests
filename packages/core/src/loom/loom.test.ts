@@ -408,7 +408,10 @@ describe("guarantees", () => {
 
   it("never weaves a thread twice, never exceeds the providence budget outside cruxes, and keeps bearers alive", () => {
     fc.assert(
-      fc.property(fc.string(), fc.array(step, { minLength: 5, maxLength: 40 }), (seed, steps) => {
+      fc.property(fc.string(), fc.array(step, { minLength: 5, maxLength: 40 }), (seed, shuffled) => {
+        // Stories only move forward, so play the beats in story order.
+        const position = new Map(index.beatOrder.map((b, i) => [b.beat.id, i]));
+        const steps = [...shuffled].sort((a, b) => (position.get(a.beat) ?? 0) - (position.get(b.beat) ?? 0));
         const { state, results } = play(seed, steps);
         const wovenIds = results.flatMap((r) => r.crux?.wovenThreadIds ?? []);
         expect(new Set(wovenIds).size).toBe(wovenIds.length);

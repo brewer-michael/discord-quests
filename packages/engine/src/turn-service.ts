@@ -1,4 +1,14 @@
 import { createHash } from "node:crypto";
+import {
+  type CombatAction,
+  CombatActionSchema,
+  canCast,
+  fightingFoes,
+  foeCondition,
+  foesAtMercy,
+  isDownHero,
+  resolveCombatRound,
+} from "@dq/core/combat";
 import { type DeltaContext, type DeltaProposal, validateDeltas } from "@dq/core/deltas";
 import {
   compileEpilogue,
@@ -69,8 +79,17 @@ import {
   type Tx,
   turns,
 } from "@dq/db";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { buildFor } from "./character-rules";
+import {
+  aftermathChoices,
+  type CombatView,
+  combatView,
+  heroesFor,
+  rollViewsFrom,
+  syncEntities,
+  withEncounter,
+} from "./combat";
 import { type EngineDeps, GameError, silentLogger } from "./deps";
 import { nextSceneSpec, type SceneEntityState, type SceneSpec } from "./director";
 import { clearPendingLoom, loadLoom, loadPendingLoom, saveLoom, savePendingLoom } from "./loom-store";
@@ -140,9 +159,16 @@ export class TurnService {
     const { index } = this.deps.worlds.get(c.worldId);
     const loom = await loadLoom(db, campaignId);
     const story = asStory(c.story);
-    const spec = nextSceneSpec(index, story, loom.state);
-    if (!spec) throw new GameError("empty world", "This world has no story to tell yet.");
+    const planned = nextSceneSpec(index, story, loom.state);
+    if (!planned) throw new GameError("empty world", "This world has no story to tell yet.");
     const seq = c.turnSeq + 1;
+    const spec = withEncounter(
+      index,
+      planned,
+      party,
+      heroesFor(index, party, await this.inventoryFor(party)),
+      deriveRng(loom.masterSeed, "rules", seq, "encounter"),
+    );
     const settings = campaignSettings(c);
 
     const view = this.publicView({
@@ -175,7 +201,15 @@ export class TurnService {
       if (locked?.status !== "setup")
         throw new GameError("already started", "This campaign has already started.");
       const sceneId = await this.insertScene(tx, campaignId, spec, seq);
-      const roundId = await this.insertRound(tx, campaignId, sceneId, 1, narration.output.choices);
+      const fightStarts = spec.combat?.phase === "fighting";
+      const roundId = await this.insertRound(
+        tx,
+        campaignId,
+        sceneId,
+        1,
+        fightStarts ? [] : narration.output.choices,
+        fightStarts ? "combat" : "exploration",
+      );
       const nextStory: StoryState = {
         ...story,
         sceneId,
@@ -233,6 +267,8 @@ export class TurnService {
         levelUps: [],
         ended: false,
         fallback: narration.fallback,
+        combat: spec.combat ? combatView(spec.combat, party) : null,
+        ...(fightStarts ? { choices: [] } : {}),
       });
     });
   }
@@ -253,9 +289,11 @@ export class TurnService {
   async submitAction(input: {
     roundId: string;
     userId: string;
-    kind: "choice" | "freeform" | "pass";
+    kind: "choice" | "freeform" | "pass" | "combat";
     choiceIndex?: number;
     text?: string;
+    /** A battle action (see CombatActionSchema). */
+    action?: unknown;
     interactionId?: string;
   }): Promise<SubmitResult> {
     const db = this.deps.db;
@@ -279,7 +317,15 @@ export class TurnService {
     const { index } = this.deps.worlds.get(c.worldId);
 
     let payload: Record<string, unknown> = {};
-    if (input.kind === "choice") {
+    if (round.kind === "combat" && input.kind === "choice")
+      return { ok: false, message: "Pick a battle action instead." };
+    if (round.kind !== "combat" && input.kind === "combat")
+      return { ok: false, message: "There's no fight going on right now." };
+    if (input.kind === "combat") {
+      const parsed = CombatActionSchema.safeParse(input.action);
+      if (!parsed.success) return { ok: false, message: "That action isn't available." };
+      payload = { action: parsed.data };
+    } else if (input.kind === "choice") {
       const choices = round.choices as StoredChoice[];
       const idx = input.choiceIndex ?? -1;
       if (!choices[idx]) return { ok: false, message: "That choice isn't available." };
@@ -452,22 +498,27 @@ export class TurnService {
     const settings = campaignSettings(c);
     const ctx = loomContext(index);
 
+    const inventory = await this.inventoryFor(party);
+
     // 1. Intents.
     const actions = await this.resolveIntents(c, index, spec, party, acted, round.choices as StoredChoice[]);
 
-    // 2. Dice.
-    const closing = spec.isCrux || story.closeNextRound || story.roundsInScene + 1 >= spec.targetRounds;
-    const { rollViews, failures, crux } = this.rollDice(
-      index,
-      loom.masterSeed,
-      seq,
-      spec,
-      story,
-      party,
-      actions,
-      loom.state,
-      closing,
-    );
+    // 2. Dice: a round of a fight, or checks.
+    const fight =
+      spec.combat?.phase === "fighting"
+        ? this.fightRound(index, loom.masterSeed, seq, spec.combat, party, inventory, actions, acted)
+        : null;
+    const sceneSpec = fight ? syncEntities(spec, fight.result.state) : spec;
+    const closing = fight
+      ? fight.result.state.phase === "over"
+      : spec.isCrux ||
+        story.closeNextRound ||
+        story.roundsInScene + 1 >= spec.targetRounds ||
+        spec.combat?.phase === "aftermath";
+    const { rollViews, failures, crux } = fight
+      ? { rollViews: fight.rolls, failures: [], crux: null }
+      : this.rollDice(index, loom.masterSeed, seq, spec, story, party, actions, loom.state, closing);
+    const partyDown = fight?.result.state.outcome === "party_down";
 
     // 3. The loom (unless the DM has switched it off).
     const completedAfter =
@@ -493,30 +544,37 @@ export class TurnService {
         beatId: spec.beatId,
         regionId: spec.regionId,
         terrain: index.regions.get(spec.regionId)?.terrain ?? [],
-        entities: spec.entities.map(toLoomEntity),
+        // A foe spared this round was at the heroes' mercy when they chose.
+        entities: sceneSpec.entities.map((e) =>
+          toLoomEntity(
+            fight?.result.spared.includes(e.ref.id) ? { ...e, status: "at_mercy", present: true } : e,
+          ),
+        ),
         offeredShortcuts: spec.offeredShortcuts,
         lieBenefit: false,
       },
-      deedCandidates: actions.flatMap((a) => a.deeds),
+      deedCandidates: [...actions.flatMap((a) => a.deeds), ...(fight?.mercy ?? [])],
       promisesKept,
-      check: crux
-        ? {
-            kind: "crux",
-            beatId: spec.beatId as string,
-            success: crux.check.success,
-            margin: crux.check.margin,
-            pSuccess: crux.p,
-          }
-        : failures[0]
+      check: partyDown
+        ? { kind: "failure", stakes: "high", margin: -5, characterIds: party.map((p) => p.id) }
+        : crux
           ? {
-              kind: "failure",
-              stakes: failures[0].stakes,
-              margin: failures[0].margin,
-              characterIds: [failures[0].characterId],
+              kind: "crux",
+              beatId: spec.beatId as string,
+              success: crux.check.success,
+              margin: crux.check.margin,
+              pSuccess: crux.p,
             }
-          : null,
-      heroesDowned: [],
-      partyDown: false,
+          : failures[0]
+            ? {
+                kind: "failure",
+                stakes: failures[0].stakes,
+                margin: failures[0].margin,
+                characterIds: [failures[0].characterId],
+              }
+            : null,
+      heroesDowned: fight?.result.downed ?? [],
+      partyDown,
     };
     const loomOff = (c.settings as Record<string, unknown>).loomMode === "off";
     const loomResult: LoomResult = loomOff
@@ -534,7 +592,16 @@ export class TurnService {
     let storyAfter: StoryState = { ...story, completedBeats: completedAfter };
     if (closing && spec.kind === "travel")
       storyAfter = { ...storyAfter, regionId: spec.regionId, poiId: null };
-    const nextSpec = closing ? nextSceneSpec(index, storyAfter, loomResult.state) : null;
+    const plannedNext = closing ? nextSceneSpec(index, storyAfter, loomResult.state) : null;
+    const nextSpec = plannedNext
+      ? withEncounter(
+          index,
+          plannedNext,
+          party,
+          heroesFor(index, party, inventory),
+          deriveRng(loom.masterSeed, "rules", seq, "encounter"),
+        )
+      : null;
     const mode: NarrationMode = !closing ? "continue" : nextSpec ? "close_and_open" : "finale";
     const epilogue =
       mode === "finale"
@@ -556,10 +623,10 @@ export class TurnService {
       index,
       mode,
       contentLevel: settings.contentLevel,
-      spec,
+      spec: sceneSpec,
       nextSpec,
-      party,
-      actions,
+      party: fight ? this.partyAfterFight(party, fight.result.heroes) : party,
+      actions: fight ? [] : actions,
       rolls: rollViews,
       crux: crux ? { label: crux.label, success: crux.check.success } : null,
       epilogue,
@@ -567,6 +634,20 @@ export class TurnService {
       quests: questRows,
       canon: canonRows,
       steerAway: Boolean(story.steerAway),
+      ...(fight
+        ? {
+            battle: {
+              round: fight.result.state.round,
+              log: fight.result.events.map((e) => e.text),
+              foes: fightingFoes(fight.result.state).map((f) => ({
+                name: f.name,
+                condition: foeCondition(f),
+              })),
+              outcome: fight.result.state.outcome ?? "ongoing",
+              atMercy: foesAtMercy(fight.result.state).map((f) => f.name),
+            },
+          }
+        : {}),
     });
     const choicesFor = nextSpec ? this.sceneSpecView(index, nextSpec) : view.scene;
     const narration = await narrate({
@@ -588,7 +669,7 @@ export class TurnService {
         seq,
         closing,
         mode,
-        spec,
+        spec: sceneSpec,
         nextSpec,
         actions: actions.map((a) => ({
           characterId: a.characterId,
@@ -606,9 +687,185 @@ export class TurnService {
         choicesFor,
         narration: narration.output,
         fallback: narration.fallback,
+        combat: fight
+          ? {
+              heroes: fight.result.heroes.map((h) => ({
+                id: h.id,
+                hp: h.hp,
+                tempHp: h.tempHp,
+                conditions: h.conditions,
+              })),
+              usedItems: fight.result.usedItems,
+              usedSlots: fight.result.usedSlots,
+              log: fight.result.events.map((e) => e.text),
+              outcome: fight.result.state.outcome ?? "ongoing",
+            }
+          : null,
       },
       loom: loomResult,
       inputHash: hash(input),
+    };
+  }
+
+  /** One round of a fight: everyone's chosen action, then initiative order. */
+  private fightRound(
+    index: WorldIndex,
+    seed: string,
+    seq: number,
+    combat: NonNullable<SceneSpec["combat"]>,
+    party: CharacterRow[],
+    inventory: Array<typeof inventoryItems.$inferSelect>,
+    actions: ResolvedAction[],
+    acted: Array<typeof pendingActions.$inferSelect>,
+  ) {
+    const heroes = heroesFor(index, party, inventory);
+    const byChar = new Map(acted.map((a) => [a.characterId, a]));
+    const chosen: Record<string, CombatAction> = {};
+    for (const h of heroes) {
+      const a = byChar.get(h.id);
+      const ra = actions.find((x) => x.characterId === h.id);
+      if (a?.kind === "combat") {
+        const parsed = CombatActionSchema.safeParse(a.payload.action);
+        chosen[h.id] = parsed.success ? parsed.data : { kind: "defend" };
+      } else if (a?.kind === "freeform" && ra && !ra.passed) {
+        // A clever idea of the player's own. A skill check decides whether it works.
+        const p = party.find((x) => x.id === h.id) as CharacterRow;
+        const targetId =
+          ra.targetRef && combat.foes.some((f) => f.id === ra.targetRef) ? ra.targetRef : undefined;
+        if (ra.skill || ra.ability) {
+          const check = resolveCheck(
+            {
+              modifier: this.modifierFor(index, p, ra.skill, ra.ability),
+              dc: DIFFICULTY_DC[ra.difficulty],
+              mode: checkRollMode(p.conditions.filter(isCondition)),
+            },
+            deriveRng(seed, "rules", seq, `trick:${h.id}`),
+          );
+          const v = rollView(h.name, ra.skill ? SKILL_NAMES[ra.skill] : "Clever idea", check);
+          chosen[h.id] = {
+            kind: "trick",
+            summary: ra.summary,
+            success: check.success,
+            ...(targetId ? { targetId } : {}),
+            roll: {
+              label: v.label,
+              natural: v.natural,
+              rolls: v.rolls,
+              modifier: v.modifier,
+              total: v.total,
+              against: v.difficulty,
+              success: v.success,
+              mode: v.mode,
+            },
+          };
+        } else
+          chosen[h.id] = {
+            kind: "trick",
+            summary: ra.summary,
+            success: true,
+            ...(targetId ? { targetId } : {}),
+          };
+      } else chosen[h.id] = { kind: "defend" };
+    }
+    const result = resolveCombatRound(
+      combat,
+      heroes,
+      chosen,
+      index.creatures,
+      deriveRng(seed, "rules", seq, "combat"),
+    );
+    const mercy: DeedCandidate[] = result.events
+      .filter((e) => e.kind === "spare" && e.targetId)
+      .flatMap((e) => {
+        const entity = combat.foes.find((f) => f.id === e.targetId);
+        if (!entity) return [];
+        return [
+          {
+            tag: "mercy" as const,
+            actorIds: [e.actorId],
+            anchor: {
+              kind: "faction" as const,
+              id: entity.id,
+              name: entity.name,
+              ...this.foeFaction(index, entity.creatureId),
+            },
+            evidence: { forgoneBenefit: 1 },
+            source: "choice" as const,
+            confidence: 1,
+            summary: `let ${entity.name} go free`,
+          },
+        ];
+      });
+    return { result, mercy, rolls: rollViewsFrom(result.events, new Set(party.map((p) => p.id))) };
+  }
+
+  private foeFaction(index: WorldIndex, creatureId: string): { faction?: string; tags?: string[] } {
+    const c = index.creatures.get(creatureId);
+    return { ...(c?.faction ? { faction: c.faction } : {}), tags: c?.tags ?? [] };
+  }
+
+  private partyAfterFight(
+    party: CharacterRow[],
+    heroes: Array<{ id: string; hp: number; conditions: string[] }>,
+  ) {
+    return party.map((p) => {
+      const h = heroes.find((x) => x.id === p.id);
+      return h ? { ...p, hp: h.hp, conditions: h.conditions } : p;
+    });
+  }
+
+  private async inventoryFor(party: readonly CharacterRow[]) {
+    if (party.length === 0) return [];
+    return this.deps.db
+      .select()
+      .from(inventoryItems)
+      .where(
+        inArray(
+          inventoryItems.characterId,
+          party.map((p) => p.id),
+        ),
+      );
+  }
+
+  private modifierFor(index: WorldIndex, p: CharacterRow, skill: Skill | null, ability: Ability | null) {
+    const build = buildFor(index, p);
+    if (!build) return 0;
+    const d = deriveStats(build);
+    if (skill) return d.skills[skill];
+    if (ability) return d.modifiers[ability];
+    return 0;
+  }
+
+  /** What a hero can do in the current fight, for the battle buttons. */
+  async combatOptions(roundId: string, userId: string) {
+    const db = this.deps.db;
+    const [round] = await db.select().from(rounds).where(eq(rounds.id, roundId));
+    if (round?.status !== "collecting" || round.kind !== "combat") return null;
+    const [c] = await db.select().from(campaigns).where(eq(campaigns.id, round.campaignId));
+    const [sceneRow] = await db.select().from(scenes).where(eq(scenes.id, round.sceneId));
+    const combat = (sceneRow?.state as unknown as SceneSpec | undefined)?.combat;
+    if (!c || !combat) return null;
+    const party = await this.party(c.id);
+    const me = party.find((p) => p.userId === userId);
+    if (!me) return null;
+    const { index } = this.deps.worlds.get(c.worldId);
+    const hero = heroesFor(index, [me], await this.inventoryFor([me]))[0];
+    if (!hero) return null;
+    return {
+      heroName: hero.name,
+      down: isDownHero(hero),
+      attacks: hero.attacks.map((a) => ({ id: a.id, name: a.name, ranged: a.ranged })),
+      spells: hero.spells.map((sp) => ({
+        id: sp.id,
+        name: sp.name,
+        level: sp.level,
+        target: sp.target,
+        available: canCast(hero, sp.id),
+      })),
+      potions: hero.potions.map((pt) => ({ itemId: pt.itemId, name: pt.name, qty: pt.qty })),
+      foes: fightingFoes(combat).map((f) => ({ id: f.id, name: f.name, condition: foeCondition(f) })),
+      atMercy: foesAtMercy(combat).map((f) => ({ id: f.id, name: f.name })),
+      allies: party.map((p) => ({ id: p.id, name: p.name, hp: p.hp, hpMax: p.hpMax })),
     };
   }
 
@@ -630,22 +887,23 @@ export class TurnService {
       const { index } = this.deps.worlds.get(c.worldId);
       const world = index.world;
       const story = asStory(c.story);
-      const party = await tx
-        .select()
-        .from(characters)
-        .where(and(eq(characters.campaignId, c.id), eq(characters.status, "active")))
-        .orderBy(characters.createdAt);
+      let party = await this.partyTx(tx, c.id);
 
       const levelUps: TurnView["levelUps"] = [];
       let storyAfter: StoryState = {
         ...story,
         completedBeats: prepared.completedAfter,
         roundsInScene: story.roundsInScene + 1,
-        closeNextRound: !closing && narration.output.goalMet,
+        // Only the dice end a fight, never the narrator.
+        closeNextRound: !closing && !prepared.combat && !spec.combat && narration.output.goalMet,
         steerAway: false,
       };
       if (closing && spec.kind === "travel")
         storyAfter = { ...storyAfter, regionId: spec.regionId, poiId: null };
+      if (prepared.combat) {
+        await this.applyFight(tx, prepared.combat, party, ruledHp);
+        party = await this.partyTx(tx, c.id);
+      }
       await this.applyLoomEffects(tx, loomResult, party, storyAfter);
       const applied = await this.applyNarratorDeltas(
         tx,
@@ -658,7 +916,7 @@ export class TurnService {
         seq,
         spec,
       );
-      if (applied.entitiesChanged && !closing) {
+      if ((applied.entitiesChanged || prepared.combat) && !closing) {
         await tx
           .update(scenes)
           .set({ state: spec as unknown as Record<string, unknown> })
@@ -687,7 +945,13 @@ export class TurnService {
       let roundId: string | null = null;
       let ended = false;
       if (closing) {
-        await tx.update(scenes).set({ endedTurn: seq }).where(eq(scenes.id, prepared.sceneId));
+        await tx
+          .update(scenes)
+          .set({ endedTurn: seq, state: spec as unknown as Record<string, unknown> })
+          .where(eq(scenes.id, prepared.sceneId));
+        // Beaten heroes are rescued and wake up safe; arriving somewhere new (or a rest) is a good night's sleep.
+        if (prepared.combat?.outcome === "party_down") await this.rescue(tx, party);
+        else if (spec.kind === "travel" || spec.kind === "rest") await this.longRest(tx, party);
         if (spec.kind === "travel") {
           await tx
             .insert(campaignRegions)
@@ -746,7 +1010,15 @@ export class TurnService {
         }
         if (nextSpec) {
           const sceneId = await this.insertScene(tx, c.id, nextSpec, seq);
-          roundId = await this.insertRound(tx, c.id, sceneId, 1, narration.output.choices);
+          const fightStarts = nextSpec.combat?.phase === "fighting";
+          roundId = await this.insertRound(
+            tx,
+            c.id,
+            sceneId,
+            1,
+            fightStarts ? [] : narration.output.choices,
+            fightStarts ? "combat" : "exploration",
+          );
           storyAfter = {
             ...storyAfter,
             sceneId,
@@ -761,12 +1033,15 @@ export class TurnService {
           storyAfter = { ...storyAfter, ended: true, sceneId: null };
         }
       } else {
+        const fightOn = spec.combat?.phase === "fighting";
+        const mercyNow = prepared.combat && spec.combat?.phase === "aftermath";
         roundId = await this.insertRound(
           tx,
           c.id,
           prepared.sceneId,
           prepared.roundN + 1,
-          narration.output.choices,
+          fightOn ? [] : mercyNow && spec.combat ? aftermathChoices(spec.combat) : narration.output.choices,
+          fightOn ? "combat" : "exploration",
         );
       }
 
@@ -822,11 +1097,14 @@ export class TurnService {
         })
         .where(eq(campaigns.id, c.id));
 
+      const shown = nextSpec ?? spec;
+      const partyNow = await this.partyTx(tx, c.id);
+      const mercyNow = Boolean(!closing && prepared.combat && spec.combat?.phase === "aftermath");
       return this.turnView({
         c: locked,
         index,
         seq,
-        spec: nextSpec ?? spec,
+        spec: shown,
         out: narration.output,
         rolls: prepared.rolls,
         roundId,
@@ -834,8 +1112,89 @@ export class TurnService {
         levelUps,
         ended,
         fallback: narration.fallback,
+        combat:
+          shown.combat && !ended
+            ? combatView(shown.combat, partyNow, nextSpec ? [] : (prepared.combat?.log ?? []))
+            : null,
+        ...(shown.combat?.phase === "fighting" && roundId
+          ? { choices: [] }
+          : mercyNow && spec.combat
+            ? { choices: aftermathChoices(spec.combat) }
+            : {}),
       });
     });
+  }
+
+  private async partyTx(tx: Tx, campaignId: string) {
+    return tx
+      .select()
+      .from(characters)
+      .where(and(eq(characters.campaignId, campaignId), eq(characters.status, "active")))
+      .orderBy(characters.createdAt);
+  }
+
+  /** Writes a fight round's results: hit points, conditions, spent spell slots and potions. */
+  private async applyFight(
+    tx: Tx,
+    fight: NonNullable<PreparedTurn["combat"]>,
+    party: CharacterRow[],
+    ruledHp: Map<string, number>,
+  ) {
+    for (const h of fight.heroes) {
+      const p = party.find((x) => x.id === h.id);
+      if (!p) continue;
+      const resources = { ...p.resources };
+      for (const u of fight.usedSlots.filter((x) => x.heroId === h.id))
+        resources[`slotsUsed${u.level}`] = (resources[`slotsUsed${u.level}`] ?? 0) + 1;
+      ruledHp.set(p.id, h.hp - p.hp);
+      await tx
+        .update(characters)
+        .set({
+          hp: Math.max(0, Math.min(p.hpMax, h.hp)),
+          tempHp: Math.max(0, h.tempHp),
+          conditions: h.conditions,
+          resources,
+        })
+        .where(eq(characters.id, p.id));
+    }
+    for (const u of fight.usedItems) {
+      await tx
+        .update(inventoryItems)
+        .set({ qty: sql`${inventoryItems.qty} - 1` })
+        .where(and(eq(inventoryItems.characterId, u.heroId), eq(inventoryItems.itemId, u.itemId)));
+    }
+    if (fight.usedItems.length > 0)
+      await tx
+        .delete(inventoryItems)
+        .where(
+          and(
+            inArray(inventoryItems.characterId, [...new Set(fight.usedItems.map((u) => u.heroId))]),
+            sql`${inventoryItems.qty} <= 0`,
+          ),
+        );
+  }
+
+  /** A good night's sleep: full health, troubles shaken off, magic back. */
+  private async longRest(tx: Tx, party: CharacterRow[]) {
+    for (const p of party) {
+      const resources = Object.fromEntries(
+        Object.entries(p.resources).filter(([k]) => !k.startsWith("slotsUsed")),
+      );
+      await tx
+        .update(characters)
+        .set({ hp: p.hpMax, tempHp: 0, conditions: [], resources })
+        .where(eq(characters.id, p.id));
+    }
+  }
+
+  /** After the whole party is knocked dazed: everyone wakes up safe with half their health. */
+  private async rescue(tx: Tx, party: CharacterRow[]) {
+    for (const p of party) {
+      await tx
+        .update(characters)
+        .set({ hp: Math.max(p.hp, Math.ceil(p.hpMax / 2)), conditions: [] })
+        .where(eq(characters.id, p.id));
+    }
   }
 
   // ------------------------------------------------------------ assist mode
@@ -1089,6 +1448,7 @@ export class TurnService {
         passed: true,
       };
       if (!a || a.kind === "pass") return base;
+      if (a.kind === "combat") return { ...base, summary: "acts in the fight", passed: false };
       if (a.kind === "choice") {
         const choice = choices[Number(a.payload.choiceIndex)];
         if (!choice) return base;
@@ -1589,9 +1949,10 @@ export class TurnService {
     campaignId: string,
     sceneId: string,
     n: number,
-    choices: NarratorOutput["choices"],
+    choices: NarratorOutput["choices"] | StoredChoice[],
+    kind: "exploration" | "combat" = "exploration",
   ): Promise<string> {
-    const [row] = await tx.insert(rounds).values({ campaignId, sceneId, n, choices }).returning();
+    const [row] = await tx.insert(rounds).values({ campaignId, sceneId, n, choices, kind }).returning();
     if (!row) throw new Error("could not create round");
     return row.id;
   }
@@ -1711,6 +2072,9 @@ export class TurnService {
     levelUps: TurnView["levelUps"];
     ended: boolean;
     fallback: boolean;
+    combat?: CombatView | null;
+    /** Overrides the narrator's choices (battle rounds have none; the mercy moment has its own). */
+    choices?: Array<{ label: string }>;
   }): TurnView {
     const v = this.sceneSpecView(args.index, args.spec);
     const nameOf = (ref: string) =>
@@ -1727,13 +2091,14 @@ export class TurnService {
       narration: args.out.narration,
       npcLines: args.out.npcLines.map((l) => ({ name: nameOf(l.npcRef), line: l.line })),
       rolls: args.rolls,
-      choices: args.out.choices.map((ch, i) => ({ index: i, label: ch.label })),
+      choices: (args.choices ?? args.out.choices).map((ch, i) => ({ index: i, label: ch.label })),
       roundId: args.roundId,
       sceneChanged: args.sceneChanged,
       imageBrief: args.out.imageBrief,
       levelUps: args.levelUps,
       campaignEnded: args.ended,
       fallback: args.fallback,
+      combat: args.combat ?? null,
     };
   }
 }

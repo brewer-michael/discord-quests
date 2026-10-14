@@ -184,8 +184,18 @@ export function fallbackNarration(
 ): NarratorOutput {
   const parts: string[] = [];
   if (view.mode === "opening") parts.push(`${view.scene.title}. ${view.scene.summary}`);
-  for (const a of view.actions) parts.push(`${a.characterName} ${a.summary.replace(/\.$/, "")}.`);
-  for (const r of view.rolls)
+  if (view.battle) {
+    parts.push(...view.battle.log);
+    if (view.battle.outcome === "party_down")
+      parts.push(
+        "The heroes are overwhelmed and everything goes dizzy. When they wake, they are safe, and the story goes on.",
+      );
+    else if (view.battle.atMercy.length > 0)
+      parts.push(
+        `${view.battle.atMercy.join(", ")} ${view.battle.atMercy.length === 1 ? "waits" : "wait"} to see what the heroes will do.`,
+      );
+  } else for (const a of view.actions) parts.push(`${a.characterName} ${a.summary.replace(/\.$/, "")}.`);
+  for (const r of view.battle ? [] : view.rolls)
     parts.push(
       r.success
         ? `${r.characterName}'s ${r.label.toLowerCase()} works!`

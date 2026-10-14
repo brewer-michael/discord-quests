@@ -393,6 +393,38 @@
                     "onFailForward"
                   ],
                   "additionalProperties": false
+                },
+                "foes": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "creature": {
+                        "type": "string",
+                        "pattern": "^[a-z0-9][a-z0-9-]*$"
+                      },
+                      "count": {
+                        "type": "array",
+                        "prefixItems": [
+                          {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 9007199254740991
+                          },
+                          {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 8
+                          }
+                        ],
+                        "items": false,
+                        "minItems": 2,
+                        "maxItems": 2
+                      }
+                    },
+                    "required": ["creature", "count"],
+                    "additionalProperties": false
+                  }
                 }
               },
               "required": ["id", "title", "kind", "region", "summary", "goals"],

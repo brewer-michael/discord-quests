@@ -13,6 +13,8 @@ It can be the dungeon master itself (**AI-DM mode**) or help a human dungeon mas
 - **Stats tracked for you.** Rules are based on the fifth-edition System Reference Document (see
   [NOTICE.md](NOTICE.md)). Young players can choose *Guided* mode and pick story options instead of
   spending points by hand.
+- **Gentle battles.** Turn-based fights with initiative, spells and potions, where nobody is ever badly
+  hurt: foes faint, run off or pop into smoke, heroes at zero are only Dazed, and a beaten foe can be spared.
 - **Scene art** when the party reaches a new place or challenge, from the image provider you choose.
 - **Your choice of AI.** Story and image providers are configured on the web setup page: Claude (the
   default), OpenAI-compatible services, Gemini, local models, or your own custom endpoint.

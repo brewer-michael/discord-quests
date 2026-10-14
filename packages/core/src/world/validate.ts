@@ -196,6 +196,8 @@ export function validateWorld(world: World): WorldIssue[] {
   for (const c of world.creatures) {
     checkDice("creatures.yaml", `${c.id}.hp`, c.hp, err);
     for (const atk of c.attacks) checkDice("creatures.yaml", `${c.id}.attacks`, atk.damage, err);
+    if (c.faction && !idx.factions.has(c.faction))
+      err("creatures.yaml", c.id, `unknown faction "${c.faction}"`);
   }
 
   // Factions and NPCs.
@@ -293,6 +295,11 @@ export function validateWorld(world: World): WorldIssue[] {
     const file = `arc/${act.id}.yaml`;
     const where = `${ref.chapter.id}.${beat.id}`;
     if (!idx.regions.has(beat.region)) err(file, where, `unknown region "${beat.region}"`);
+    for (const f of beat.foes ?? []) {
+      if (!idx.creatures.has(f.creature)) err(file, where, `unknown creature "${f.creature}" in foes`);
+      if (f.count[0] > f.count[1]) err(file, where, "foes count min exceeds max");
+    }
+    if (beat.foes && beat.kind !== "combat") err(file, where, "only combat beats can list foes");
     if (beat.poi) {
       const poi = idx.pois.get(beat.poi);
       if (!poi) err(file, where, `unknown poi "${beat.poi}"`);

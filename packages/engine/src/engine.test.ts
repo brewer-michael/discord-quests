@@ -1,4 +1,5 @@
-import { campaigns, events, safetyEvents, turns } from "@dq/db";
+import { campaigns, characters, events, safetyEvents, turns } from "@dq/db";
+import { campaignLoom } from "@dq/db/loom";
 import { createTestDb, TEST_DATABASE_URL } from "@dq/db/testing";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -133,17 +134,32 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
 
     let rounds = 0;
     let sawSnibbetMercy = false;
-    while (!view.campaignEnded && rounds < 120) {
+    let fightRounds = 0;
+    let sawMercyChoice = false;
+    while (!view.campaignEnded && rounds < 160) {
       rounds += 1;
       const roundId = view.roundId as string;
+      const fighting = view.combat?.phase === "fighting";
+      if (fighting) {
+        fightRounds += 1;
+        expect(view.choices).toEqual([]);
+        expect(view.combat?.foes.length).toBeGreaterThan(0);
+      }
+      if (view.choices[0]?.label.startsWith("Let ")) sawMercyChoice = true;
       for (const user of ["host", "kid"]) {
-        const res = await engine.turns.submitAction({
-          roundId,
-          userId: user,
-          kind: "choice",
-          choiceIndex: 0,
-          interactionId: `${roundId}-${user}`,
-        });
+        const options = fighting ? await engine.turns.combatOptions(roundId, user) : null;
+        if (fighting) expect(options?.foes.length).toBeGreaterThan(0);
+        const res = await engine.turns.submitAction(
+          fighting
+            ? {
+                roundId,
+                userId: user,
+                kind: "combat",
+                action: { kind: "attack", targetId: options?.foes[0]?.id },
+                interactionId: `${roundId}-${user}`,
+              }
+            : { roundId, userId: user, kind: "choice", choiceIndex: 0, interactionId: `${roundId}-${user}` },
+        );
         expect(res.ok).toBe(true);
       }
       const next = await engine.turns.resolveRound(roundId);
@@ -157,6 +173,13 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
     expect(view.campaignEnded).toBe(true);
     expect(sawSnibbetMercy).toBe(true);
     expect(rounds).toBeGreaterThan(20);
+    // Both Act I fights were fought round by round, and HP never went out of bounds.
+    expect(fightRounds).toBeGreaterThanOrEqual(2);
+    for (const p of await db.db.select().from(characters).where(eq(characters.campaignId, c.id))) {
+      expect(p.hp).toBeGreaterThanOrEqual(0);
+      expect(p.hp).toBeLessThanOrEqual(p.hpMax);
+    }
+    void sawMercyChoice;
 
     const [final] = await db.db.select().from(campaigns).where(eq(campaigns.id, c.id));
     expect(final?.status).toBe("ended");
@@ -176,6 +199,89 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
       expect(call.user).not.toMatch(/reservedForBeat|sincerity|ripenSpan|grace/);
     }
   }, 120_000);
+
+  it("fights round by round, then lets the heroes choose mercy", async () => {
+    const engine = createEngine({ db: db.db, worlds, llm: new FakeLlm() });
+    const c = await engine.campaigns.create({
+      guildId: "g-fight",
+      channelId: "ch-fight",
+      name: "Gloam in the Garden",
+      mode: "ai_dm",
+      createdBy: "a",
+    });
+    // A fixed seed keeps the dice the same every run.
+    await db.db
+      .update(campaignLoom)
+      .set({ masterSeed: "fight-test-seed" })
+      .where(eq(campaignLoom.campaignId, c.id));
+    await engine.campaigns.join(c.id, "b");
+    await makeHero(engine, c.id, "a", "shieldheart", "Bram Stout");
+    await makeHero(engine, c.id, "b", "lanternkeeper", "Wren Pebble");
+    let view = await engine.turns.openCampaign(c.id, "a");
+    const act = async (user: string, input: Record<string, unknown>) =>
+      engine.turns.submitAction({ roundId: view.roundId as string, userId: user, ...input } as never);
+    const next = async () => {
+      const r = await engine.turns.resolveRound(view.roundId as string);
+      view = (r as { kind: "turn"; view: typeof view }).view;
+    };
+
+    // Walk the story to the first fight.
+    for (let i = 0; i < 20 && view.combat?.phase !== "fighting"; i++) {
+      expect(await act("a", { kind: "combat", action: { kind: "defend" } })).toMatchObject({ ok: false });
+      await act("a", { kind: "choice", choiceIndex: 0 });
+      await act("b", { kind: "choice", choiceIndex: 0 });
+      await next();
+    }
+    expect(view.combat?.phase).toBe("fighting");
+    expect(view.sceneTitle).toBe("Gloam in the Garden");
+    expect(view.combat?.foes.map((f) => f.name).join(", ")).toMatch(/Gloom Mite.*Gloam Skulker/);
+    expect(view.choices).toEqual([]);
+    expect(await act("a", { kind: "choice", choiceIndex: 0 })).toMatchObject({ ok: false });
+    expect(await act("a", { kind: "combat", action: { kind: "fly-away" } })).toMatchObject({ ok: false });
+
+    const wren = await engine.turns.combatOptions(view.roundId as string, "b");
+    expect(wren?.spells.map((x) => x.id)).toEqual(
+      expect.arrayContaining(["sacred-flame", "healing-word", "bless"]),
+    );
+    expect(wren?.attacks.length).toBeGreaterThan(0);
+
+    for (let i = 0; i < 10 && view.combat?.phase === "fighting"; i++) {
+      const opts = await engine.turns.combatOptions(view.roundId as string, "a");
+      const target = opts?.foes.find((f) => f.name.includes("Skulker"))?.id ?? opts?.foes[0]?.id;
+      expect((await act("a", { kind: "combat", action: { kind: "attack", targetId: target } })).ok).toBe(
+        true,
+      );
+      expect(
+        (
+          await act("b", {
+            kind: "combat",
+            action: { kind: "cast", spellId: "sacred-flame", targetId: target },
+          })
+        ).ok,
+      ).toBe(true);
+      await next();
+      const heroes = await db.db.select().from(characters).where(eq(characters.campaignId, c.id));
+      for (const h of heroes) {
+        const shown = view.combat?.heroes.find((x) => x.id === h.id);
+        if (shown) expect(shown.hp).toBe(h.hp);
+      }
+    }
+
+    expect(view.combat?.phase).toBe("aftermath");
+    {
+      // The beaten Gloam Skulker waits; letting it go is mercy toward the Gloam Host.
+      expect(view.choices[0]?.label).toMatch(/^Let .* go free$/);
+      await act("a", { kind: "choice", choiceIndex: 0 });
+      await act("b", { kind: "choice", choiceIndex: 0 });
+      await next();
+      const loom = await loadLoom(db.db, c.id);
+      const mercy = loom.state.threads.find((t) => t.tag === "mercy" && t.anchor?.faction === "gloam-host");
+      expect(mercy?.anchor?.name).toMatch(/Gloam Skulker/);
+      expect(loom.state.bearers.some((b) => b.npcId.startsWith("foe-"))).toBe(false);
+    }
+    // The garden fight is over (the road ahead may hold a new one).
+    expect(view.sceneTitle).not.toBe("Gloam in the Garden");
+  });
 
   it("keeps playing when no AI is configured", async () => {
     const engine = createEngine({ db: db.db, worlds, llm: new UnconfiguredLlm() });

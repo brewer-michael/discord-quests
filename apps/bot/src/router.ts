@@ -1,5 +1,6 @@
 import type { Interaction } from "discord.js";
 import type { BotContext } from "./context";
+import { battleButton, battlePick } from "./handlers/battle";
 import { campaignCommand, campaignJoin, campaignStart } from "./handlers/campaign";
 import {
   characterCommand,
@@ -121,6 +122,12 @@ export async function route(ctx: BotContext, i: Interaction): Promise<void> {
         return;
       case "approval":
         if (i.isButton()) await approvalButton(ctx, i, id.approvalId, id.action);
+        return;
+      case "battle":
+        if (i.isButton()) await battleButton(ctx, i, id.roundId, id.action);
+        return;
+      case "battle-pick":
+        if (i.isStringSelectMenu()) await battlePick(ctx, i, id.roundId, id.action, id.arg);
         return;
       case "approval-modal":
         if (i.isModalSubmit()) await approvalModal(ctx, i, id.approvalId, id.action);

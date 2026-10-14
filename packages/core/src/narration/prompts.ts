@@ -72,6 +72,15 @@ export interface PublicSceneData {
   epilogue: string[];
   /** Someone used the X-card: steer gently away from whatever was happening. */
   steerAway?: boolean;
+  /** A fight in progress or just finished. Every result is already decided. */
+  battle?: {
+    round: number;
+    log: string[];
+    foes: Array<{ name: string; condition: string }>;
+    outcome: "ongoing" | "victory" | "party_down";
+    /** Beaten foes waiting to see what the heroes will do. */
+    atMercy: string[];
+  };
 }
 
 export type PublicSceneView = PublicSceneData & { readonly [PUBLIC_VIEW]: true };
@@ -214,6 +223,27 @@ export function narratorUser(
         `- ${r.characterName}, ${r.label}: rolled ${r.total} (${r.difficulty}) - ${r.success ? "SUCCESS" : "FAILURE"}${r.natural === 20 ? " (a natural 20!)" : r.natural === 1 ? " (a natural 1)" : ""}`,
       );
     }
+  }
+  if (view.battle) {
+    const b = view.battle;
+    turn.push(
+      "",
+      `## The fight, round ${b.round} (already decided by the dice: describe it, don't change it)`,
+      "Keep it light and exciting: bonks, tumbles, scrambles and poofs. Never blood or injuries.",
+      ...b.log.map((l) => `- ${l}`),
+      `Foes now: ${b.foes.map((f) => `${f.name} (${f.condition})`).join(", ") || "none"}.`,
+    );
+    if (b.outcome === "ongoing")
+      turn.push("The fight goes on. End just before everyone acts again. Choices can be short battle ideas.");
+    else if (b.outcome === "party_down")
+      turn.push(
+        "The heroes are overwhelmed and dazed, but nobody is badly hurt. Gently tell how they are rescued or wake somewhere safe a little later. The story goes on.",
+      );
+    else if (b.atMercy.length > 0)
+      turn.push(
+        `The heroes have won. ${b.atMercy.join(", ")} ${b.atMercy.length === 1 ? "is" : "are"} beaten and waiting to see what the heroes will do. End there: don't decide for them.`,
+      );
+    else turn.push("The heroes have won the fight.");
   }
   if (view.crux) {
     turn.push(

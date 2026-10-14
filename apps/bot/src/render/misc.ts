@@ -47,6 +47,7 @@ export function renderHelp() {
         "4. Each turn, pick a choice, or press **Something else…** and say what your hero does. When everyone has chosen, the story continues.",
         "",
         "**Handy commands:** `/character sheet`, `/map`, `/journal`, `/roll 1d20+3`, `/character levelup`",
+        "**In a fight:** everyone picks ⚔️ Attack, ✨ Magic, 🛡️ Defend, 🤝 Distract or 🧪 Potion, then the round plays out in turn order. A hero knocked down is only Dazed and can Rally. Foes who give up can be spared with 🕊️.",
         "**Not this:** press it any time to quietly steer the story away from something. No one sees who pressed it.",
         "",
         "**Running it yourself?** Start `/campaign new` and pick **A person runs it** as the storyteller. Each turn arrives in your private DM screen to send, edit, redo or rewrite. `/dm say` posts your own words; `/loom view` shows what the hidden hand is holding.",

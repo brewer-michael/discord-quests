@@ -189,6 +189,10 @@
         "type": "string",
         "enum": ["faints", "flees", "surrenders", "poofs"]
       },
+      "faction": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9-]*$"
+      },
       "tags": {
         "default": [],
         "type": "array",
