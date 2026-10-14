@@ -1,0 +1,16 @@
+packages:
+  - packages/*
+  - apps/*
+
+catalog:
+  "@biomejs/biome": 2.5.15
+  "@types/node": ^22.20.5
+  tsx: ^4.23.15
+  typescript: ~5.9.3
+  vitest: ^4.1.11
+  fast-check: ^4.10.2
+  yaml: ^2.9.1
+  zod: ^4.6.7
+
+onlyBuiltDependencies:
+  - esbuild
