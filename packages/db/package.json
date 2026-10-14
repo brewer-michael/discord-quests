@@ -1,0 +1,26 @@
+{
+  "name": "@dq/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Postgres schema, migrations and data access for Discord Quests.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./loom": "./src/loom.ts",
+    "./crypto": "./src/crypto.ts",
+    "./testing": "./src/testing.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "generate": "drizzle-kit generate",
+    "migrate": "tsx src/migrate-cli.ts"
+  },
+  "dependencies": {
+    "drizzle-orm": "catalog:",
+    "pg": "catalog:"
+  },
+  "devDependencies": {
+    "@types/pg": "catalog:",
+    "drizzle-kit": "catalog:"
+  }
+}

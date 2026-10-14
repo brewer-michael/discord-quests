@@ -14,7 +14,9 @@
     "./story": "./src/story/index.ts",
     "./loom": "./src/loom/index.ts",
     "./deltas": "./src/deltas/index.ts",
-    "./safety": "./src/safety/index.ts"
+    "./safety": "./src/safety/index.ts",
+    "./llm": "./src/llm/index.ts",
+    "./narration": "./src/narration/index.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"
