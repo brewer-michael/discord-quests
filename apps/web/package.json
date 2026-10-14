@@ -1,0 +1,33 @@
+{
+  "name": "@dq/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The setup page: sign in with Discord, choose story and image providers, set budgets and manage campaigns.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc -p tsconfig.json",
+    "e2e": "playwright test"
+  },
+  "dependencies": {
+    "@dq/core": "workspace:*",
+    "@dq/db": "workspace:*",
+    "@dq/engine": "workspace:*",
+    "@dq/providers": "workspace:*",
+    "drizzle-orm": "catalog:",
+    "next": "16.3.8",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/pg": "catalog:",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "pg": "catalog:",
+    "tsx": "catalog:"
+  }
+}

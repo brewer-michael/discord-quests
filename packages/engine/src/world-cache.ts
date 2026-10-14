@@ -1,11 +1,11 @@
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { hashHex } from "@dq/core/rng";
 import { indexWorld, loadWorld, type WorldIndex } from "@dq/core/world";
 import { readWorldFiles } from "@dq/core/world-fs";
 
-export const DEFAULT_WORLDS_DIR = fileURLToPath(new URL("../../../worlds", import.meta.url));
+export const DEFAULT_WORLDS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "worlds");
 export const DEFAULT_WORLD_ID = "lanternreach";
 
 export interface LoadedWorld {

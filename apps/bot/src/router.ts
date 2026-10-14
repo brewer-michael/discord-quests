@@ -147,7 +147,7 @@ async function setup(ctx: BotContext, i: import("discord.js").ChatInputCommandIn
     [
       "## Setting up Discord Quests",
       base
-        ? `Choose story and image providers, add API keys, and set budgets on the setup page: ${base}/guilds/${i.guildId}`
+        ? `Choose story and image providers, add API keys, and set budgets on the setup page: ${base}/servers/${i.guildId}`
         : "The setup page isn't configured on this bot yet (WEB_BASE_URL).",
       defaults.length > 0
         ? `Until then, this bot's server defaults are used: ${defaults.join(", ")}.`

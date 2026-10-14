@@ -5,6 +5,7 @@ export * from "./adapters/openai-compat";
 export * from "./budget";
 export * from "./env";
 export * from "./gateway";
+export * from "./generic-spec";
 export * from "./images";
 export * from "./json-schema";
 export * from "./presets";

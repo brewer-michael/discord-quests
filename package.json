@@ -15,7 +15,10 @@
     "world:validate": "tsx tools/world-validate.ts",
     "sim": "pnpm --filter @dq/sim start",
     "check": "pnpm lint && pnpm typecheck && pnpm test",
-    "world:schemas": "tsx tools/gen-json-schemas.ts"
+    "world:schemas": "tsx tools/gen-json-schemas.ts",
+    "web:dev": "pnpm --filter @dq/web dev",
+    "web:build": "pnpm --filter @dq/web build",
+    "e2e": "pnpm --filter @dq/web e2e"
   },
   "devDependencies": {
     "@biomejs/biome": "catalog:",

@@ -2,6 +2,7 @@ import { campaigns, events, safetyEvents, turns } from "@dq/db";
 import { createTestDb, TEST_DATABASE_URL } from "@dq/db/testing";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { serverGameDefaults } from "./campaign-service";
 import { createEngine, type Engine } from "./index";
 import { loadLoom } from "./loom-store";
 import { FakeLlm, UnconfiguredLlm } from "./testing";
@@ -28,6 +29,27 @@ async function makeHero(engine: Engine, campaignId: string, userId: string, clas
   expect(draft.missing).toEqual([]);
   return engine.characters.finalize(campaignId, userId);
 }
+
+describe("server defaults for new campaigns", () => {
+  it("takes valid values from the setup page and ignores anything else", () => {
+    expect(
+      serverGameDefaults({
+        gameDefaults: {
+          imagePolicy: "off",
+          epilogueStyle: "explicit",
+          roundTimerSeconds: 43200,
+          loomMode: "off",
+        },
+      }),
+    ).toEqual({ imagePolicy: "off", epilogueStyle: "explicit", roundTimerSeconds: 43200, loomMode: "off" });
+    expect(
+      serverGameDefaults({
+        gameDefaults: { imagePolicy: "always", roundTimerSeconds: 5, contentLevel: "adventurous" },
+      }),
+    ).toEqual({});
+    expect(serverGameDefaults(undefined)).toEqual({});
+  });
+});
 
 describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
   let db: Awaited<ReturnType<typeof createTestDb>>;

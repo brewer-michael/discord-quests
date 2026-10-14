@@ -1,8 +1,9 @@
 import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
 import { z } from "zod";
+import { GenericHttpSpecSchema } from "./generic-spec";
 
 const Pricing = z.strictObject({
   input: z.number().optional(),
@@ -56,11 +57,11 @@ export const Preset = z.strictObject({
     .default([]),
   defaultModels: z.record(z.string(), z.string()).default({}),
   defaultParams: z.record(z.string(), z.record(z.string(), z.unknown())).default({}),
-  genericSpec: z.unknown().optional(),
+  genericSpec: GenericHttpSpecSchema.optional(),
 });
 export type Preset = z.infer<typeof Preset>;
 
-const DIR = fileURLToPath(new URL("../presets", import.meta.url));
+const DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "presets");
 
 function loadAll(): Preset[] {
   const out: Preset[] = [];

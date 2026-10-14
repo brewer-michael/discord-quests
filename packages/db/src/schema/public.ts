@@ -29,6 +29,8 @@ export const guilds = pgTable("guilds", {
   id: text("id").primaryKey(),
   name: text("name").notNull().default(""),
   settings: jsonb("settings").$type<Record<string, unknown>>().notNull().default({}),
+  /** Whether the bot is currently in this server (kept up to date by the bot). */
+  botPresent: boolean("bot_present").notNull().default(false),
   installedAt: createdAt(),
   updatedAt: updatedAt(),
 });
@@ -65,6 +67,8 @@ export const providerConfigs = pgTable(
     capabilityOverrides: jsonb("capability_overrides").$type<Record<string, unknown>>().notNull().default({}),
     pricing: jsonb("pricing").$type<Record<string, unknown>>().notNull().default({}),
     genericSpec: jsonb("generic_spec").$type<Record<string, unknown> | null>(),
+    /** The endpoint runs on the operator's own network (only reachable if ALLOW_PRIVATE_ENDPOINTS is on). */
+    selfHosted: boolean("self_hosted").notNull().default(false),
     enabled: boolean("enabled").notNull().default(true),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -131,6 +135,39 @@ export const auditLog = pgTable("audit_log", {
   detail: jsonb("detail").$type<Record<string, unknown>>().notNull().default({}),
   at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/** A Discord server as the setup page saw it when the session last refreshed. */
+export interface SessionGuild {
+  id: string;
+  name: string;
+  icon: string | null;
+  owner: boolean;
+  /** Discord permission bits, as a decimal string. */
+  permissions: string;
+}
+
+/**
+ * Setup-page sign-ins. The cookie holds a random token; only its SHA-256 is
+ * stored. The Discord access token is encrypted like an API key.
+ */
+export const webSessions = pgTable(
+  "web_sessions",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull(),
+    username: text("username").notNull(),
+    avatar: text("avatar"),
+    tokenCiphertext: bytea("token_ciphertext").notNull(),
+    tokenIv: bytea("token_iv").notNull(),
+    tokenTag: bytea("token_tag").notNull(),
+    tokenKeyVersion: text("token_key_version").notNull(),
+    guilds: jsonb("guilds").$type<SessionGuild[]>().notNull().default([]),
+    guildsFetchedAt: timestamp("guilds_fetched_at", { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("web_sessions_user_idx").on(t.userId)],
+);
 
 // ---------------------------------------------------------------- campaigns
 

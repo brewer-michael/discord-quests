@@ -23,6 +23,24 @@ export interface CampaignSettings {
   /** Seconds players have to act in a live round before it resolves anyway. */
   roundTimerSeconds: number;
   imagePolicy: "new_scenes" | "cruxes_only" | "off";
+  /** "off" switches the hidden hand off for this campaign. */
+  loomMode?: "auto" | "off";
+}
+
+/** The server's defaults for new campaigns, from the setup page. Anything unexpected is ignored. */
+export function serverGameDefaults(
+  guildSettings: Record<string, unknown> | undefined,
+): Partial<CampaignSettings> {
+  const d = (guildSettings?.gameDefaults ?? {}) as Record<string, unknown>;
+  const out: Partial<CampaignSettings> = {};
+  if (d.imagePolicy === "new_scenes" || d.imagePolicy === "cruxes_only" || d.imagePolicy === "off")
+    out.imagePolicy = d.imagePolicy;
+  if (d.epilogueStyle === "subtle" || d.epilogueStyle === "explicit" || d.epilogueStyle === "off")
+    out.epilogueStyle = d.epilogueStyle;
+  if (typeof d.roundTimerSeconds === "number" && d.roundTimerSeconds >= 60 && d.roundTimerSeconds <= 86_400)
+    out.roundTimerSeconds = Math.round(d.roundTimerSeconds);
+  if (d.loomMode === "auto" || d.loomMode === "off") out.loomMode = d.loomMode;
+  return out;
 }
 
 export const DEFAULT_SETTINGS: CampaignSettings = {
@@ -53,8 +71,10 @@ export class CampaignService {
     if (input.mode === "assist" && !input.dmUserId)
       throw new GameError("no dm", "Assist mode needs a human DM.");
     const audience = input.settings?.audience ?? DEFAULT_SETTINGS.audience;
+    const [guild] = await this.deps.db.select().from(guilds).where(eq(guilds.id, input.guildId));
     const settings: CampaignSettings = {
       ...DEFAULT_SETTINGS,
+      ...serverGameDefaults(guild?.settings),
       contentLevel: audience === "family" ? "gentle" : "adventurous",
       ...input.settings,
     };

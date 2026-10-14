@@ -1,3 +1,4 @@
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
@@ -20,7 +21,7 @@ export function connect(url: string, opts: { max?: number } = {}): DbHandle {
   return { db, pool, close: () => pool.end() };
 }
 
-export const MIGRATIONS_DIR = fileURLToPath(new URL("../migrations", import.meta.url));
+export const MIGRATIONS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "migrations");
 
 export async function runMigrations(db: Db): Promise<void> {
   await migrate(db, { migrationsFolder: MIGRATIONS_DIR });

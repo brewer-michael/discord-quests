@@ -96,7 +96,7 @@ export class ProviderStore {
         : (p?.auth ?? { type: "bearer" })) as ResolvedProviderConfig["auth"],
       apiKey,
       extraHeaders: row.extraHeaders,
-      selfHosted: p?.selfHosted ?? false,
+      selfHosted: (p?.selfHosted ?? false) || row.selfHosted,
       capabilities: { ...(p?.capabilities ?? {}), ...(row.capabilityOverrides as object) },
       pricing: {
         ...Object.fromEntries((p?.models ?? []).filter((m) => m.pricing).map((m) => [m.id, m.pricing ?? {}])),

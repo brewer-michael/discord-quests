@@ -14,6 +14,8 @@
 
    That asks for: View Channels, Send Messages, Send Messages in Threads, Create Public and Private Threads,
    Manage Threads, Embed Links, Attach Files, Read Message History and Pin Messages. Nothing else.
+5. For the setup page: under **OAuth2**, copy the **Client Secret** (`DISCORD_CLIENT_SECRET`) and add a redirect:
+   `WEB_BASE_URL/auth/callback` (for example `http://localhost:3000/auth/callback`).
 
 ## 2. Configure
 
@@ -21,7 +23,8 @@ Copy `.env.example` to `.env` and fill in:
 
 | Variable | What it's for |
 |---|---|
-| `DISCORD_TOKEN`, `DISCORD_CLIENT_ID` | From step 1 |
+| `DISCORD_TOKEN`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` | From step 1 |
+| `WEB_BASE_URL` | Public address of the setup page. Use `https://` in production so sign-in cookies are Secure |
 | `DATABASE_URL` | Postgres 15+ (Neon, Supabase, RDS, Railway, or the included docker-compose) |
 | `MASTER_KEYS` | Encrypts API keys saved on the setup page. `v1:` plus 32 random bytes in base64 |
 | `ANTHROPIC_API_KEY` | Optional server default for the story AI (Claude). Servers can bring their own keys |
@@ -40,9 +43,31 @@ pnpm --filter @dq/bot register         # registers slash commands (instantly wit
 pnpm --filter @dq/bot start            # applies migrations, then connects to Discord
 ```
 
-Or with Docker: `docker compose --profile bot up -d`.
+And the setup page, in another terminal:
 
-The bot serves a health check at `http://localhost:8080/healthz`.
+```sh
+pnpm web:build && pnpm --filter @dq/web start   # or `pnpm web:dev` while developing
+```
+
+Or with Docker: `docker compose --profile bot up -d` runs Postgres, the bot and the setup page.
+
+The bot serves a health check at `http://localhost:8080/healthz`; the setup page listens on port 3000.
+
+### The setup page
+
+Anyone with **Manage Server** on a Discord server can sign in and, for that server:
+
+- add **story services** (Claude, OpenAI, OpenRouter, Groq, Together, Fireworks, DeepSeek, Mistral, xAI, Gemini,
+  Ollama, LM Studio, vLLM, or any custom OpenAI-compatible endpoint) and **picture services** (OpenAI, Imagen,
+  Gemini, Stability, Replicate, fal.ai, Automatic1111, an OpenAI-compatible image endpoint, or any HTTP API
+  described with a request template), with a **Test connection** button that makes one tiny real call;
+- choose which service and model does each job, with backups if the first one is down;
+- set a daily budget and picture cap, and the defaults for new campaigns;
+- see usage, pause, end, export or permanently delete campaigns, and (behind a spoiler warning that is logged)
+  look at the hidden hand.
+
+API keys are encrypted with `MASTER_KEYS` before they're stored and are never sent back to the browser. Every
+change is recorded on the server's Activity page.
 
 ## 4. Play
 
