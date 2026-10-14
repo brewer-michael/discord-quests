@@ -544,6 +544,7 @@ export class TurnService {
       recent,
       quests: questRows,
       canon: canonRows,
+      steerAway: Boolean(story.steerAway),
     });
     const narration = await narrate({
       llm: this.deps.llm,
@@ -1215,6 +1216,59 @@ export class TurnService {
     return { entitiesChanged };
   }
 
+  // ------------------------------------------------------------ table tools
+
+  /** Remembers which Discord message shows a round, and when it times out. */
+  async setRoundMessage(roundId: string, messageId: string, deadlineAt: Date | null) {
+    await this.deps.db
+      .update(rounds)
+      .set({ discordMessageId: messageId, deadlineAt })
+      .where(eq(rounds.id, roundId));
+  }
+
+  async getRound(roundId: string) {
+    const [r] = await this.deps.db.select().from(rounds).where(eq(rounds.id, roundId));
+    return r ?? null;
+  }
+
+  /** Open rounds with a deadline, for rescheduling timers after a restart. */
+  async openTimedRounds() {
+    return this.deps.db
+      .select({ round: rounds, campaign: campaigns })
+      .from(rounds)
+      .innerJoin(campaigns, eq(campaigns.id, rounds.campaignId))
+      .where(
+        and(
+          eq(rounds.status, "collecting"),
+          eq(campaigns.status, "active"),
+          sql`${rounds.deadlineAt} is not null`,
+        ),
+      );
+  }
+
+  /** The X-card: anyone can quietly ask the story to move away from something. */
+  async xcard(campaignId: string, _userId: string) {
+    const db = this.deps.db;
+    const [c] = await db.select().from(campaigns).where(eq(campaigns.id, campaignId));
+    if (!c) throw new GameError("no campaign", "That campaign doesn't exist.");
+    const story = asStory(c.story);
+    await db
+      .update(campaigns)
+      .set({
+        story: { ...story, steerAway: true } as unknown as Record<string, unknown>,
+        updatedAt: new Date(),
+      })
+      .where(eq(campaigns.id, campaignId));
+    await db.insert(safetyEvents).values({
+      guildId: c.guildId,
+      campaignId,
+      userId: null,
+      stage: "xcard",
+      verdict: "steer_away",
+      categories: [],
+    });
+  }
+
   // ------------------------------------------------------------ helpers
 
   private async insertScene(tx: Tx, campaignId: string, spec: SceneSpec, seq: number): Promise<string> {
@@ -1298,6 +1352,7 @@ export class TurnService {
     recent: string[];
     quests: Array<typeof quests.$inferSelect>;
     canon: Array<typeof canonEntities.$inferSelect>;
+    steerAway?: boolean;
   }) {
     const { index } = args;
     const data: PublicSceneData = {
@@ -1344,6 +1399,7 @@ export class TurnService {
         }));
       })(),
       epilogue: args.epilogue,
+      steerAway: args.steerAway ?? false,
     };
     return publicSceneView(data);
   }

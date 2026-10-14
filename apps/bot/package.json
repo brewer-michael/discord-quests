@@ -1,0 +1,22 @@
+{
+  "name": "@dq/bot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The Discord bot: slash commands, buttons and forms on top of the engine.",
+  "scripts": {
+    "start": "tsx src/main.ts",
+    "register": "tsx src/register-commands.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@dq/core": "workspace:*",
+    "@dq/db": "workspace:*",
+    "@dq/engine": "workspace:*",
+    "@dq/map-render": "workspace:*",
+    "@dq/providers": "workspace:*",
+    "discord.js": "catalog:",
+    "drizzle-orm": "catalog:",
+    "zod": "catalog:"
+  }
+}

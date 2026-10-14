@@ -16,6 +16,8 @@ export interface StoryState {
   factionDisposition: Record<string, number>;
   discoveredRegions: string[];
   ended: boolean;
+  /** A player used the X-card: the next narration steers gently away. */
+  steerAway?: boolean;
 }
 
 export function initialStoryState(index: WorldIndex): StoryState {

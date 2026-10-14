@@ -49,4 +49,13 @@ pnpm check            # lint + typecheck + tests
 pnpm world:validate   # check the starter world files
 ```
 
+To run the bot on your own server, see [docs/RUNNING.md](docs/RUNNING.md).
+
+To try the story engine without Discord:
+
+```sh
+pnpm sim transcript --policy merciful   # a whole campaign, turn by turn
+pnpm sim -- --runs 500                  # how different play styles fare
+```
+
 See [docs/PLAN.md](docs/PLAN.md) for the full design and build phases.

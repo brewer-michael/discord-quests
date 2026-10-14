@@ -1,5 +1,15 @@
 import { randomBytes } from "node:crypto";
-import { campaignMembers, campaignRegions, campaigns, characters, guilds, quests } from "@dq/db";
+import {
+  campaignMembers,
+  campaignRegions,
+  campaigns,
+  characters,
+  guilds,
+  promises,
+  quests,
+  scenes,
+  turns,
+} from "@dq/db";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { type EngineDeps, GameError } from "./deps";
 import { createLoom } from "./loom-store";
@@ -100,6 +110,14 @@ export class CampaignService {
       .where(eq(campaigns.id, campaignId));
   }
 
+  async updateSettings(campaignId: string, patch: Record<string, unknown>) {
+    const c = await this.require(campaignId);
+    await this.deps.db
+      .update(campaigns)
+      .set({ settings: { ...(c.settings as Record<string, unknown>), ...patch }, updatedAt: new Date() })
+      .where(eq(campaigns.id, campaignId));
+  }
+
   async get(campaignId: string) {
     const [c] = await this.deps.db.select().from(campaigns).where(eq(campaigns.id, campaignId));
     return c ?? null;
@@ -194,6 +212,58 @@ export class CampaignService {
       })),
       quests: questRows,
     };
+  }
+
+  /** What the heroes know: quests, promises and the story so far. Nothing hidden. */
+  async journal(campaignId: string) {
+    const c = await this.require(campaignId);
+    const { index } = this.deps.worlds.get(c.worldId);
+    const [questRows, promiseRows, recent] = await Promise.all([
+      this.deps.db.select().from(quests).where(eq(quests.campaignId, campaignId)),
+      this.deps.db.select().from(promises).where(eq(promises.campaignId, campaignId)),
+      this.deps.db
+        .select()
+        .from(turns)
+        .where(eq(turns.campaignId, campaignId))
+        .orderBy(sql`${turns.seq} desc`)
+        .limit(3),
+    ]);
+    const npcName = (id: string) => index.namedNpcs.get(id)?.name ?? id;
+    return {
+      quests: questRows.map((q) => ({ title: q.title, objective: q.objective, status: q.status })),
+      promises: promiseRows.map((p) => ({ to: npcName(p.npcId), text: p.text, status: p.status })),
+      recent: recent
+        .reverse()
+        .map((t) => String((t.data.narration as { narration?: string } | undefined)?.narration ?? ""))
+        .filter(Boolean),
+    };
+  }
+
+  /** Everything the map renderer needs: what's known, where the party is, and where it's been. */
+  async mapState(campaignId: string) {
+    const c = await this.require(campaignId);
+    const { index } = this.deps.worlds.get(c.worldId);
+    const story = asStory(c.story);
+    const regionRows = await this.deps.db
+      .select()
+      .from(campaignRegions)
+      .where(eq(campaignRegions.campaignId, campaignId));
+    const sceneRows = await this.deps.db
+      .select()
+      .from(scenes)
+      .where(eq(scenes.campaignId, campaignId))
+      .orderBy(scenes.startedTurn);
+    const states: Record<string, "rumored" | "discovered" | "visited"> = {};
+    for (const id of story.discoveredRegions) states[id] = "rumored";
+    for (const r of regionRows) states[r.regionId] = r.state;
+    states[story.regionId] = "visited";
+    const trail: string[] = [];
+    for (const sc of sceneRows) {
+      if (sc.kind === "travel" && sc.endedTurn === null) continue;
+      if (trail.at(-1) !== sc.regionId) trail.push(sc.regionId);
+    }
+    if (trail.length === 0) trail.push(story.regionId);
+    return { world: index.world, states, partyRegionId: story.regionId, trail };
   }
 
   /** Permanently deletes a campaign and its history (privacy purge). */

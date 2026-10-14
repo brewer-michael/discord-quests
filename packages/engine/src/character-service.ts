@@ -457,6 +457,28 @@ export class CharacterService {
     };
   }
 
+  /** What a pending level-up offers this hero. */
+  async levelUpInfo(characterId: string) {
+    const [row] = await this.deps.db.select().from(characters).where(eq(characters.id, characterId));
+    if (!row) throw new GameError("no character", "That hero doesn't exist.");
+    const [c] = await this.deps.db.select().from(campaigns).where(eq(campaigns.id, row.campaignId));
+    if (!c) throw new GameError("no campaign", "That campaign doesn't exist.");
+    const { index } = this.deps.worlds.get(c.worldId);
+    const cls = row.classId ? index.classes.get(row.classId) : undefined;
+    const pending = row.resources.pendingLevels ?? 0;
+    return {
+      characterId: row.id,
+      userId: row.userId,
+      name: row.name,
+      guided: row.guided,
+      level: row.level,
+      pending,
+      preview: pending > 0 && cls ? previewLevelUp(cls.srdClass, row.level) : null,
+      asiOptions: index.world.guided.asiOptions,
+      abilities: row.abilities,
+    };
+  }
+
   /** Spends one pending level. Guided players pick a story option; advanced players pick increments. */
   async levelUp(
     characterId: string,

@@ -1,0 +1,17 @@
+{
+  "name": "@dq/map-render",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Draws the world map with fog of war, roads and the party's position.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@dq/core": "workspace:*",
+    "@napi-rs/canvas": "catalog:"
+  }
+}

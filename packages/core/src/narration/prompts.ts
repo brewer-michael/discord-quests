@@ -70,6 +70,8 @@ export interface PublicSceneData {
   crux: { label: string; success: boolean } | null;
   allowedLoot: Array<{ id: string; name: string }>;
   epilogue: string[];
+  /** Someone used the X-card: steer gently away from whatever was happening. */
+  steerAway?: boolean;
 }
 
 export type PublicSceneView = PublicSceneData & { readonly [PUBLIC_VIEW]: true };
@@ -230,6 +232,13 @@ export function narratorUser(
   if (view.nextScene) turn.push("", formatScene(view.nextScene, "Next scene"));
   if (view.epilogue.length > 0)
     turn.push("", "## Epilogue lines (include faithfully)", ...view.epilogue.map((l) => `> ${l}`));
+  if (view.steerAway) {
+    turn.push(
+      "",
+      "## Table note",
+      "A player has asked to steer away from what was happening. Without mentioning it, move the story gently to a different, lighter direction this turn.",
+    );
+  }
   const notes = formatDirectives(directives);
   if (notes) turn.push("", notes);
 

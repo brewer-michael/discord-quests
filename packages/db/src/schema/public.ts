@@ -345,6 +345,8 @@ export const rounds = pgTable(
     /** Choices offered this round, with hidden intent tags. Buttons carry only an index. */
     choices: jsonb("choices").$type<unknown[]>().notNull().default([]),
     initiative: jsonb("initiative").$type<unknown[]>().notNull().default([]),
+    /** The Discord message showing this round's choices. */
+    discordMessageId: text("discord_message_id"),
     createdAt: createdAt(),
   },
   (t) => [index("rounds_campaign_idx").on(t.campaignId, t.status)],
