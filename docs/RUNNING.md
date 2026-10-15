@@ -132,6 +132,21 @@ bot opens a private **DM screen** thread that only the DM is added to.
 [Docker with the Compose plugin](https://docs.docker.com/engine/install/), and a domain name (for example
 `quests.example.com`) with a DNS record pointing at the server. Open ports 80 and 443.
 
+**Using a subdomain of a domain you already have** (say `quests.yourname.me`, while `yourname.me` stays wherever it
+is today):
+
+- At your DNS host, add an **A** record with the name `quests` and the server's public IPv4 address as its value.
+  Add an **AAAA** record only if the server really has working IPv6: Let's Encrypt tries IPv6 first, and a stale
+  one makes the certificate fail.
+- On **Cloudflare**, set the record to **DNS only** (grey cloud) so Caddy can get its own certificate.
+- Before the first start, check that `dig +short quests.yourname.me` prints the server's address. Too many failed
+  certificate attempts lock you out for an hour.
+- Use the full name everywhere: `DOMAIN=quests.yourname.me`, `WEB_BASE_URL=https://quests.yourname.me` and the
+  redirect `https://quests.yourname.me/auth/callback` in the Developer Portal.
+- If your main site already runs on **the same server** and uses ports 80 and 443, leave out the `https` profile and
+  add the subdomain to that site's reverse proxy instead (see the notes below). On a **home server**, forward
+  ports 80 and 443 on your router, or use a Cloudflare Tunnel without the `https` profile.
+
 1. **Discord application:** follow [step 1](#1-create-the-discord-application) and use
    `https://quests.example.com/auth/callback` as the OAuth2 redirect.
 2. **Get the code and configure it:**

@@ -7,7 +7,11 @@ const Env = z.object({
     .refine((v) => !v.includes("REPLACE_ME"), "MASTER_KEYS still has the placeholder value"),
   DISCORD_CLIENT_ID: z.string().min(5, "DISCORD_CLIENT_ID is required"),
   DISCORD_CLIENT_SECRET: z.string().min(5, "DISCORD_CLIENT_SECRET is required"),
-  WEB_BASE_URL: z.string().url("WEB_BASE_URL must be the public address of this site"),
+  WEB_BASE_URL: z
+    .string()
+    .url("WEB_BASE_URL must be the public address of this site")
+    // "https://quests.example.com/" would otherwise make the sign-in redirect "…//auth/callback".
+    .transform((u) => u.replace(/\/+$/, "")),
   /** Overridable for tests. */
   DISCORD_API_BASE: z.string().url().default("https://discord.com/api/v10"),
   ANTHROPIC_API_KEY: z.string().optional(),

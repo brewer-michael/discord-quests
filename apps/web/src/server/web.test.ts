@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { deleteCampaign, grantSpoilerConsent, hasSpoilerConsent, SPOILER_WINDOW_MS } from "./campaigns";
 import { authorizeUrl, canManage, inviteUrl } from "./discord";
+import { secureCookies, webEnv } from "./env";
 import {
   buildRow,
   checkBaseUrl,
@@ -51,6 +52,27 @@ describe("Discord helpers", () => {
     const i = new URL(inviteUrl("123", "999"));
     expect(i.searchParams.get("guild_id")).toBe("999");
     expect(i.searchParams.get("scope")).toBe("bot applications.commands");
+  });
+});
+
+describe("setup page configuration", () => {
+  const envFor = (WEB_BASE_URL: string) =>
+    webEnv({
+      NODE_ENV: "test",
+      DATABASE_URL: "postgres://dq:dq@localhost:5432/dq",
+      MASTER_KEYS: `v1:${randomBytes(32).toString("base64")}`,
+      DISCORD_CLIENT_ID: "123456789",
+      DISCORD_CLIENT_SECRET: "not-a-secret",
+      WEB_BASE_URL,
+    });
+
+  it("ignores a trailing slash on the site address, so the sign-in redirect still matches", () => {
+    const env = envFor("https://quests.example.com/");
+    expect(env.WEB_BASE_URL).toBe("https://quests.example.com");
+    expect(`${env.WEB_BASE_URL}/auth/callback`).toBe("https://quests.example.com/auth/callback");
+    expect(secureCookies(env)).toBe(true);
+    expect(envFor("http://localhost:3000").WEB_BASE_URL).toBe("http://localhost:3000");
+    expect(secureCookies(envFor("http://localhost:3000"))).toBe(false);
   });
 });
 
