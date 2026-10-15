@@ -90,6 +90,24 @@ describe("server defaults for new campaigns", () => {
     ).toEqual({});
     expect(serverGameDefaults(undefined)).toEqual({});
   });
+
+  it("lets the turn timer and pings follow the pace unless the server chose them", () => {
+    const pick = (gameDefaults: Record<string, unknown>) => {
+      const d = serverGameDefaults({ gameDefaults });
+      return [d.pace, d.roundTimerSeconds, d.pingPlayers];
+    };
+    expect(pick({ pace: "post" })).toEqual(["post", 86_400, true]);
+    expect(pick({ pace: "live" })).toEqual(["live", 180, false]);
+    expect(pick({ pace: "post", roundTimerSeconds: 0, pingPlayers: false })).toEqual(["post", 0, false]);
+    expect(pick({ pace: "post", roundTimerSeconds: 259_200 })).toEqual(["post", 259_200, true]);
+    // Saved by the older setup page, which kept "3 minutes" when the pace changed to play by post.
+    expect(pick({ pace: "post", roundTimerSeconds: 180, pingPlayers: false })).toEqual([
+      "post",
+      86_400,
+      false,
+    ]);
+    expect(pick({ pace: "live", roundTimerSeconds: 86_400 })).toEqual(["live", 180, false]);
+  });
 });
 
 describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {

@@ -1,4 +1,4 @@
-import { PACES, TIMER_CHOICES } from "@dq/engine/pace";
+import { describeTimer, PACES, TIMER_CHOICES, timerFitsPace } from "@dq/engine/pace";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
 import { requireGuild } from "@/server/access";
 import { services } from "@/server/db";
@@ -97,26 +97,39 @@ export default async function Settings({ params }: { params: Promise<{ guildId: 
             <select
               id="roundTimerSeconds"
               name="roundTimerSeconds"
-              defaultValue={String(s.game.roundTimerSeconds)}
+              defaultValue={s.game.roundTimerSeconds === undefined ? "" : String(s.game.roundTimerSeconds)}
             >
-              {TIMER_CHOICES.map((t) => (
-                <option key={t.seconds} value={String(t.seconds)}>
-                  {t.label}
-                </option>
+              <option value="">Usual for the pace</option>
+              {(["live", "post"] as const).map((pace) => (
+                <optgroup key={pace} label={PACES[pace].label}>
+                  {TIMER_CHOICES.filter((t) => t.seconds > 0 && timerFitsPace(pace, t.seconds)).map((t) => (
+                    <option key={t.seconds} value={String(t.seconds)}>
+                      {t.label}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
+              <option value="0">{TIMER_CHOICES.find((t) => t.seconds === 0)?.label}</option>
             </select>
-            <span className="hint">Anyone who hasn't chosen by then watches and waits that turn.</span>
-          </div>
-          <label className="check-field">
-            <input type="checkbox" name="pingPlayers" defaultChecked={s.game.pingPlayers} />
-            <span>
-              Ping players when it's their turn
-              <br />
-              <span className="hint">
-                And remind anyone who hasn't chosen before the turn moves on. Best for play by post.
-              </span>
+            <span className="hint">
+              Usually {describeTimer(PACES.live.roundTimerSeconds)} at game night and{" "}
+              {describeTimer(PACES.post.roundTimerSeconds)} by post. Anyone who hasn't chosen by then watches
+              and waits that turn.
             </span>
-          </label>
+          </div>
+          <div className="field">
+            <label htmlFor="pingPlayers">Ping players when it's their turn</label>
+            <select
+              id="pingPlayers"
+              name="pingPlayers"
+              defaultValue={s.game.pingPlayers === undefined ? "" : s.game.pingPlayers ? "on" : "off"}
+            >
+              <option value="">Only for play by post</option>
+              <option value="on">Always</option>
+              <option value="off">Never</option>
+            </select>
+            <span className="hint">Pings also remind anyone who hasn't chosen before the turn moves on.</span>
+          </div>
           <div className="field">
             <label htmlFor="epilogueStyle">At the end of the story</label>
             <select id="epilogueStyle" name="epilogueStyle" defaultValue={s.game.epilogueStyle}>

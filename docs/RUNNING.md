@@ -104,7 +104,9 @@ Each campaign has a pace, chosen with `/campaign new pace:…` and changed any t
 | Reminders | none | before the turn closes (a quarter of the way out, between 1 and 12 hours); daily if there's no limit |
 | Nobody chose at all | the timer stops and the story waits | the turn gets another round of the timer, with a ping |
 
-`/campaign pace timer:… pings:…` fine-tunes either one. `/campaign pause` stops the clock entirely (no deadline,
+`/campaign pace timer:… pings:…` fine-tunes either one; `timer:No limit (wait for everyone)` switches the countdown
+off so each turn waits until every player has chosen. On the setup page, leaving **Time to choose each turn** on
+"Usual for the pace" gives new campaigns 3 minutes at game night and a day by post. `/campaign pause` stops the clock entirely (no deadline,
 no reminders, nothing moves on); `/campaign resume` restarts the open turn's clock and pings the players.
 Deadlines and reminders live in the database, so they survive restarts and deploys. Server-wide defaults for new
 campaigns are on the setup page's Settings.

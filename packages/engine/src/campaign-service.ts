@@ -16,7 +16,7 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { chapterRecaps } from "./chronicle";
 import { type EngineDeps, GameError } from "./deps";
 import { createLoom } from "./loom-store";
-import { PACES, type Pace, type PaceSettings, paceOf, validTimer } from "./pace";
+import { PACES, type Pace, type PaceSettings, paceOf, timerFitsPace, validTimer } from "./pace";
 import { asStory, initialStoryState } from "./story-state";
 import { DEFAULT_WORLD_ID } from "./world-cache";
 
@@ -45,9 +45,15 @@ export function serverGameDefaults(
     out.imagePolicy = d.imagePolicy;
   if (d.epilogueStyle === "subtle" || d.epilogueStyle === "explicit" || d.epilogueStyle === "off")
     out.epilogueStyle = d.epilogueStyle;
-  if (validTimer(d.roundTimerSeconds)) out.roundTimerSeconds = d.roundTimerSeconds;
-  if (d.pace === "live" || d.pace === "post") out.pace = d.pace;
+  const pace = d.pace === "live" || d.pace === "post" ? d.pace : undefined;
+  if (pace) out.pace = pace;
+  // The turn timer and pings follow the pace unless the server set them, as /campaign pace does. A timer that
+  // doesn't suit the pace (older setup pages saved "play by post, 3 minutes") follows the pace too.
+  if (validTimer(d.roundTimerSeconds) && (!pace || timerFitsPace(pace, d.roundTimerSeconds)))
+    out.roundTimerSeconds = d.roundTimerSeconds;
+  else if (pace) out.roundTimerSeconds = PACES[pace].roundTimerSeconds;
   if (typeof d.pingPlayers === "boolean") out.pingPlayers = d.pingPlayers;
+  else if (pace) out.pingPlayers = PACES[pace].pingPlayers;
   if (d.loomMode === "auto" || d.loomMode === "off") out.loomMode = d.loomMode;
   return out;
 }

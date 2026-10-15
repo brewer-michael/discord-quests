@@ -54,6 +54,11 @@ export function validTimer(seconds: unknown): seconds is number {
   );
 }
 
+/** Minutes suit game night, hours and days suit play by post. Waiting for everyone (0) suits both. */
+export function timerFitsPace(pace: Pace, seconds: number): boolean {
+  return seconds === 0 || (pace === "live" ? seconds <= 3600 : seconds >= 3600);
+}
+
 /** Reads a campaign's pace, filling gaps for campaigns made before pace existed. */
 export function paceOf(settings: Record<string, unknown> | undefined): PaceSettings {
   const s = settings ?? {};

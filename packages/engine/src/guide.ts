@@ -67,6 +67,7 @@ export const GUIDE: GuideSection[] = [
     steps: [
       "**Game night**: everyone's online together. Rounds move on as soon as everyone has chosen, or after a few minutes. No pings.",
       "**Play by post**: turns stretch over days. When a turn opens, the bot mentions the players who need to act, reminds them before it closes, and waits up to a day (or longer, or until everyone has chosen: your choice).",
+      "**No countdown at all:** the host or DM runs `/campaign pace timer:No limit (wait for everyone)` in the campaign's thread, and each turn waits until every player has chosen. Pick a time from the same list to bring the countdown back.",
       "`/campaign pause` stops the clock completely, for holidays or busy weeks. `/campaign resume` starts it again and lets everyone know.",
       "Anyone who doesn't choose in time just watches and waits that turn. The host or DM can press **Continue the story** to move on early.",
     ],

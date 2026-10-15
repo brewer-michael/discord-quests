@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { auditLog, campaigns, guilds, secrets, webSessions } from "@dq/db";
 import { createTestDb, TEST_DATABASE_URL } from "@dq/db/testing";
+import { serverGameDefaults } from "@dq/engine";
 import { BudgetGuard, ProviderStore } from "@dq/providers";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -21,7 +22,7 @@ import {
 } from "./providers";
 import { guildRoutes, parseRouteForm, saveTaskRoutes } from "./routes";
 import { createSession, findSession, hashToken, sessionAccessToken } from "./session";
-import { saveServerSettings, serverSettings } from "./settings";
+import { DEFAULT_GAME, saveServerSettings, serverSettings } from "./settings";
 
 const form = (o: Record<string, string>) => {
   const fd = new FormData();
@@ -398,6 +399,52 @@ describe.skipIf(!TEST_DATABASE_URL)("setup page data", () => {
         fd: form({ roundTimerSeconds: "5", imagePolicy: "off", epilogueStyle: "off", loomMode: "off" }),
       }),
     ).toMatchObject({ ok: false });
+  });
+
+  it("picking play by post alone gives a day per turn and pings", async () => {
+    const save = (o: Record<string, string>) =>
+      saveServerSettings(db.db, {
+        guild,
+        userId: "u1",
+        fd: form({ imagePolicy: "off", epilogueStyle: "off", loomMode: "auto", ...o }),
+      });
+    const stored = async () => {
+      const [g] = await db.db.select().from(guilds).where(eq(guilds.id, guild.id));
+      return g?.settings as Record<string, unknown>;
+    };
+
+    expect(await save({ pace: "post", roundTimerSeconds: "", pingPlayers: "" })).toEqual({ ok: true });
+    const s = await serverSettings(db.db, guild.id);
+    expect(s.game.roundTimerSeconds).toBeUndefined();
+    expect(s.game.pingPlayers).toBeUndefined();
+    expect(serverGameDefaults(await stored())).toMatchObject({
+      pace: "post",
+      roundTimerSeconds: 86_400,
+      pingPlayers: true,
+    });
+
+    expect(await save({ pace: "post", roundTimerSeconds: "180", pingPlayers: "" })).toMatchObject({
+      ok: false,
+      error: expect.stringMatching(/12 hours/),
+    });
+    expect(await save({ pace: "live", roundTimerSeconds: "0", pingPlayers: "off" })).toEqual({ ok: true });
+    expect((await serverSettings(db.db, guild.id)).game).toMatchObject({
+      roundTimerSeconds: 0,
+      pingPlayers: false,
+    });
+
+    // The older page saved "play by post, 3 minutes"; the form now shows the usual time for the pace instead.
+    await db.db
+      .update(guilds)
+      .set({
+        settings: {
+          ...(await stored()),
+          gameDefaults: { ...DEFAULT_GAME, pace: "post", roundTimerSeconds: 180, pingPlayers: false },
+        },
+      })
+      .where(eq(guilds.id, guild.id));
+    expect((await serverSettings(db.db, guild.id)).game).toMatchObject({ pace: "post", pingPlayers: false });
+    expect((await serverSettings(db.db, guild.id)).game.roundTimerSeconds).toBeUndefined();
   });
 
   it("stores sessions by hash with the Discord token encrypted, and expires them", async () => {
