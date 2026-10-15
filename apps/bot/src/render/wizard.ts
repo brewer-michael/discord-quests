@@ -14,7 +14,7 @@ import {
   TextInputStyle,
 } from "discord.js";
 import { encodeId } from "../ids";
-import { COLORS, clip, divider, esc, text, V2_EPHEMERAL } from "./common";
+import { COLORS, clip, divider, esc, prefill, text, V2_EPHEMERAL } from "./common";
 
 export const WIZARD_PAGES = ["Basics", "Abilities", "Skills & keepsake", "Name & review"] as const;
 
@@ -300,24 +300,28 @@ export function nameModal(campaignId: string, draft: DraftView) {
         .setLabel("Hero name")
         .setDescription("Pick a fantasy name, not your real one.")
         .setTextInputComponent(
-          new TextInputBuilder()
-            .setCustomId("name")
-            .setStyle(TextInputStyle.Short)
-            .setMinLength(2)
-            .setMaxLength(32)
-            .setRequired(true)
-            .setValue(draft.name || ""),
+          prefill(
+            new TextInputBuilder()
+              .setCustomId("name")
+              .setStyle(TextInputStyle.Short)
+              .setMinLength(2)
+              .setMaxLength(32)
+              .setRequired(true),
+            draft.name,
+          ),
         ),
       new LabelBuilder()
         .setLabel("What do they look like?")
         .setDescription("Optional. A sentence or two.")
         .setTextInputComponent(
-          new TextInputBuilder()
-            .setCustomId("look")
-            .setStyle(TextInputStyle.Paragraph)
-            .setMaxLength(200)
-            .setRequired(false)
-            .setValue(draft.look || ""),
+          prefill(
+            new TextInputBuilder()
+              .setCustomId("look")
+              .setStyle(TextInputStyle.Paragraph)
+              .setMaxLength(200)
+              .setRequired(false),
+            draft.look,
+          ),
         ),
     );
 }

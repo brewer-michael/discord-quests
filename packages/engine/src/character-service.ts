@@ -29,6 +29,7 @@ import {
   recommendedFormative,
   recommendedSkills,
   recommendedUpbringing,
+  sameIncrements,
 } from "./character-rules";
 import { type EngineDeps, GameError } from "./deps";
 import type { CharacterSheetView } from "./views";
@@ -314,7 +315,7 @@ export class CharacterService {
             id: o.id,
             label: o.label,
             description: o.description,
-            selected: JSON.stringify(o.increments) === JSON.stringify(state.bonus ?? null),
+            selected: sameIncrements(o.increments, state.bonus),
           }))
         : [],
       skillOptions: skillSpec.from.map((s) => ({ id: s, name: SKILL_NAMES[s], selected: skillSel.has(s) })),

@@ -14,7 +14,7 @@ import { renderGuide, renderWelcome } from "./render/guide";
 import { describePace, renderHub } from "./render/hub";
 import { renderAbout, renderHelp, renderJournal, renderPrivacy } from "./render/misc";
 import { freezeComponents, renderTurn, waitingLine } from "./render/turn";
-import { renderWizard } from "./render/wizard";
+import { nameModal, renderWizard } from "./render/wizard";
 import { roomProblems } from "./rooms";
 import { RoundScheduler } from "./scheduler";
 
@@ -286,6 +286,21 @@ describe("renderers stay within Discord's limits", () => {
       expect(decodeId(modal.custom_id)).toEqual({ kind: "approval-modal", approvalId: UUID, action });
       expect(modal.title.length).toBeLessThanOrEqual(45);
     }
+    // Discord won't open a dialog whose pre-filled text is empty or too short, so those fields start blank.
+    const inputs = (m: { components: unknown[] }) =>
+      Object.fromEntries(
+        (m.components as Array<{ component: { custom_id: string; value?: string } }>).map((l) => [
+          l.component.custom_id,
+          l.component.value,
+        ]),
+      );
+    expect(inputs(draftModal(draft, UUID, "write").toJSON()).narration).toBeUndefined();
+    expect(
+      draft.narration.startsWith(inputs(draftModal(draft, UUID, "edit").toJSON()).narration ?? "-"),
+    ).toBe(true);
+    expect(inputs(draftModal({ ...draft, narration: "Short.", choices: [] }, UUID, "edit").toJSON())).toEqual(
+      { narration: undefined, choices: undefined },
+    );
   });
 
   it("battles, even with a crowd", () => {
@@ -428,6 +443,49 @@ describe.skipIf(!TEST_DATABASE_URL)("a whole campaign renders cleanly", () => {
   }, 30_000);
   afterAll(async () => {
     await db?.drop();
+  });
+
+  it("the wizard remembers every growing-up choice, and the name dialog opens before there's a name", async () => {
+    const engine = createEngine({ db: db.db, worlds, llm: new FakeLlm() });
+    const c = await engine.campaigns.create({
+      guildId: "g",
+      channelId: "c2",
+      name: "Wizard Test",
+      mode: "ai_dm",
+      createdBy: "u1",
+    });
+    let draft = await engine.characters.startDraft(c.id, "u1");
+    const fields = () =>
+      Object.fromEntries(
+        (
+          nameModal(c.id, draft).toJSON().components as Array<{
+            component: { custom_id: string; value?: string };
+          }>
+        ).map((l) => [l.component.custom_id, l.component.value]),
+      );
+    expect(fields()).toEqual({ name: undefined, look: undefined });
+
+    for (const op of [
+      { op: "class", classId: "lanternkeeper" },
+      { op: "background", backgroundId: "farmhand" },
+      { op: "species", speciesId: "pipkin" },
+      { op: "upbringing", upbringingId: world.guided.upbringings[0]?.id ?? "" },
+    ] as const)
+      draft = await engine.characters.updateDraft(c.id, "u1", op);
+    expect(draft.formativeOptions.length).toBeGreaterThan(3);
+    for (const option of draft.formativeOptions) {
+      draft = await engine.characters.updateDraft(c.id, "u1", { op: "formative", optionId: option.id });
+      // The choice comes back from Postgres with its keys in a different order; it must still show as chosen.
+      expect(draft.formativeOptions.filter((o) => o.selected).map((o) => o.id)).toEqual([option.id]);
+      const page = JSON.stringify(renderWizard(world, c.id, draft, 1).components.map((x) => x.toJSON()));
+      const shown = [...page.matchAll(/\{"value":"([^"]+)","label":"[^"]*","default":true/g)].map(
+        (m) => m[1],
+      );
+      expect(shown).toContain(option.id);
+    }
+
+    draft = await engine.characters.updateDraft(c.id, "u1", { op: "name", name: "Pip Ashby", look: "" });
+    expect(fields()).toEqual({ name: "Pip Ashby", look: undefined });
   });
 
   it("every turn of a full playthrough passes Discord's limits", async () => {

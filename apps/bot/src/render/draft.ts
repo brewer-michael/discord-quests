@@ -11,7 +11,7 @@ import {
   TextInputStyle,
 } from "discord.js";
 import { type ApprovalAction, encodeId } from "../ids";
-import { COLORS, clip, divider, esc, text, V2 } from "./common";
+import { COLORS, clip, divider, esc, prefill, text, V2 } from "./common";
 
 /** Discord allows 4000 characters of text per message; leave room for the buttons. */
 const TEXT_BUDGET = 3850;
@@ -111,23 +111,33 @@ export function draftModal(d: DmDraft | null, approvalId: string, action: Approv
           ),
       );
   }
-  return modal.setTitle(action === "edit" ? "Edit this turn" : "Write this turn yourself").addLabelComponents(
-    new LabelBuilder().setLabel("Narration").setTextInputComponent(
-      new TextInputBuilder()
-        .setCustomId("narration")
-        .setStyle(TextInputStyle.Paragraph)
-        .setMinLength(10)
-        .setMaxLength(NARRATION_LIMITS.narration)
-        .setRequired(true)
-        .setValue(action === "edit" && d ? d.narration.slice(0, NARRATION_LIMITS.narration) : ""),
-    ),
-    new LabelBuilder().setLabel("Choices (one per line, up to 4)").setTextInputComponent(
-      new TextInputBuilder()
-        .setCustomId("choices")
-        .setStyle(TextInputStyle.Paragraph)
-        .setMaxLength(400)
-        .setRequired(false)
-        .setValue(d ? d.choices.join("\n").slice(0, 400) : ""),
-    ),
-  );
+  return modal
+    .setTitle(action === "edit" ? "Edit this turn" : "Write this turn yourself")
+    .addLabelComponents(
+      new LabelBuilder()
+        .setLabel("Narration")
+        .setTextInputComponent(
+          prefill(
+            new TextInputBuilder()
+              .setCustomId("narration")
+              .setStyle(TextInputStyle.Paragraph)
+              .setMinLength(10)
+              .setMaxLength(NARRATION_LIMITS.narration)
+              .setRequired(true),
+            action === "edit" && d ? d.narration.slice(0, NARRATION_LIMITS.narration) : "",
+          ),
+        ),
+      new LabelBuilder()
+        .setLabel("Choices (one per line, up to 4)")
+        .setTextInputComponent(
+          prefill(
+            new TextInputBuilder()
+              .setCustomId("choices")
+              .setStyle(TextInputStyle.Paragraph)
+              .setMaxLength(400)
+              .setRequired(false),
+            d ? d.choices.join("\n").slice(0, 400) : "",
+          ),
+        ),
+    );
 }

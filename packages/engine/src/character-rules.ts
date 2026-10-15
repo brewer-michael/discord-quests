@@ -57,6 +57,12 @@ export function formativeOptions(world: World, background: BackgroundDef): Forma
   return out;
 }
 
+/** Same bonus, whatever order the keys are in (Postgres jsonb doesn't keep key order). */
+export function sameIncrements(a: AbilityIncrements | undefined, b: AbilityIncrements | undefined): boolean {
+  if (!a || !b) return false;
+  return ABILITIES.every((k) => (a[k] ?? 0) === (b[k] ?? 0));
+}
+
 export function recommendedUpbringing(world: World, classId: string) {
   return (
     world.guided.upbringings.find((u) => u.classAffinity.includes(classId)) ?? world.guided.upbringings[0]

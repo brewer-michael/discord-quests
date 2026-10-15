@@ -4,6 +4,7 @@ import {
   SeparatorBuilder,
   SeparatorSpacingSize,
   TextDisplayBuilder,
+  type TextInputBuilder,
 } from "discord.js";
 
 export const COLORS = {
@@ -40,6 +41,14 @@ export const divider = (big = false) =>
 /** Escapes Discord markdown in names players typed, so "**Bob**" stays literal. */
 export function esc(s: string): string {
   return s.replace(/([\\*_`~|>#[\]()-])/g, "\\$1");
+}
+
+/**
+ * Pre-fills a text input in a dialog. Discord refuses to open a dialog whose pre-filled text is empty or shorter
+ * than the field's minimum, so in that case the field starts blank.
+ */
+export function prefill(input: TextInputBuilder, value: string | null | undefined): TextInputBuilder {
+  return value && value.length >= Math.max(1, input.data.min_length ?? 0) ? input.setValue(value) : input;
 }
 
 export function clip(s: string, n: number): string {
