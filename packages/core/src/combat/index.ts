@@ -31,7 +31,7 @@ export interface Foe {
   ac: number;
   initiative: number;
   status: FoeStatus;
-  /** How it left the fight, in story words ("fainted", "popped into smoke"). */
+  /** How it left the fight, in story words that suit every intensity ("was knocked senseless", "fled"). */
   exit?: string;
   conditions: Condition[];
   /** Rounds left on conditions from spells. */
@@ -317,7 +317,7 @@ export function heroCombatant(args: {
   if (attacks.length === 0)
     attacks.push({
       id: "bonk",
-      name: "a good bonk",
+      name: "an unarmed blow",
       bonus: args.proficiencyBonus + mod("str"),
       damage: String(Math.max(1, 1 + mod("str"))),
       ranged: false,
@@ -456,13 +456,13 @@ export function resolveCombatRound(
     }
     if (style === "flees") {
       f.status = "fled";
-      f.exit = "ran away";
+      f.exit = "fled";
     } else if (style === "poofs") {
       f.status = "fled";
-      f.exit = "popped into smoke";
+      f.exit = "came apart into smoke";
     } else {
       f.status = "at_mercy";
-      f.exit = style === "faints" && f.hp <= 0 ? "fainted" : "gave up";
+      f.exit = style === "faints" && f.hp <= 0 ? "was knocked senseless" : "yielded";
     }
     events.push({ actorId: f.id, actor: f.name, kind: "foe_leaves", text: `${f.name} ${f.exit}.` });
   };
@@ -647,7 +647,7 @@ export function resolveCombatRound(
           text += ` It works! ${foe.name} is thrown off balance.`;
           if (creatures.get(foe.creatureId)?.morale === "skittish") {
             foe.status = "fled";
-            foe.exit = "ran away in a fright";
+            foe.exit = "fled in fear";
           }
         } else text += " It doesn't quite work.";
         events.push({

@@ -189,7 +189,7 @@ export function fallbackNarration(
     parts.push(...view.battle.log);
     if (view.battle.outcome === "party_down")
       parts.push(
-        "The heroes are overwhelmed and everything goes dizzy. When they wake, they are safe, and the story goes on.",
+        "The heroes are overwhelmed and knocked senseless. When they come to, they are battered but whole, and the story goes on.",
       );
     else if (view.battle.atMercy.length > 0)
       parts.push(

@@ -120,6 +120,79 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
     await db?.drop();
   });
 
+  it("story settings: who may change them, Epic's guardian, and checked words", async () => {
+    const engine = createEngine({ db: db.db, worlds, llm: new FakeLlm() });
+    const family = await engine.campaigns.create({
+      guildId: "g-story",
+      channelId: "ch-story",
+      name: "Story Test",
+      mode: "ai_dm",
+      createdBy: "host",
+    });
+    // New campaigns start at Classic with the classic storybook voice.
+    const fresh = await engine.campaigns.storyFor(family.id);
+    expect([fresh.profile.intensity, fresh.profile.voice, fresh.story.intensity]).toEqual([
+      "classic",
+      "classic",
+      "classic",
+    ]);
+
+    // Only the host, the DM or a guardian may change them, and on a family campaign only a guardian picks Epic.
+    await expect(engine.campaigns.setStory(family.id, "stranger", { humor: "rare" })).rejects.toMatchObject({
+      message: "not host",
+    });
+    await expect(engine.campaigns.setStory(family.id, "host", { intensity: "epic" })).rejects.toMatchObject({
+      message: "needs guardian",
+    });
+    await engine.campaigns.join(family.id, "grownup", "guardian");
+    const epic = await engine.campaigns.setStory(family.id, "grownup", { intensity: "epic" });
+    expect([epic.profile.intensity, epic.story.intensity, epic.capped]).toEqual(["epic", "epic", false]);
+    // Once the guardian leaves, the story is told at Classic until one returns.
+    await engine.campaigns.leave(family.id, "grownup");
+    const capped = await engine.campaigns.storyFor(family.id);
+    expect([capped.profile.intensity, capped.story.intensity, capped.capped]).toEqual([
+      "epic",
+      "classic",
+      true,
+    ]);
+    // The host can still change other things, and lower the intensity.
+    const lighter = await engine.campaigns.setStory(family.id, "host", {
+      intensity: "light",
+      humor: "plenty",
+    });
+    expect([lighter.story.intensity, lighter.profile.humor]).toEqual(["light", "plenty"]);
+
+    // What the table types is checked: the premise like player text (at the new intensity), topics only for
+    // personal details, since leaving out "blood" has to name it.
+    await expect(
+      engine.campaigns.setStory(family.id, "host", { premise: "A dragon killed the king." }),
+    ).rejects.toMatchObject({ message: "unsafe story text" });
+    const classic = await engine.campaigns.setStory(family.id, "host", {
+      intensity: "classic",
+      premise: "A dragon killed the king, and his daughter wants the mountain back.",
+      lines: ["blood", "spiders"],
+      veils: ["drowning"],
+    });
+    expect(classic.story.premise).toContain("dragon");
+    expect(classic.story.lines).toEqual(["blood", "spiders"]);
+    await expect(
+      engine.campaigns.setStory(family.id, "host", { lines: ["write to me at kid@example.com"] }),
+    ).rejects.toMatchObject({ message: "unsafe story text" });
+
+    // Teen campaigns can choose Epic without a guardian.
+    const teen = await engine.campaigns.create({
+      guildId: "g-story",
+      channelId: "ch-story-2",
+      name: "Teen Story",
+      mode: "ai_dm",
+      createdBy: "host",
+      settings: { audience: "teen" },
+    });
+    expect((await engine.campaigns.setStory(teen.id, "host", { intensity: "epic" })).story.intensity).toBe(
+      "epic",
+    );
+  });
+
   it("builds heroes through the guided wizard", async () => {
     const engine = createEngine({ db: db.db, worlds, llm: new FakeLlm() });
     const c = await engine.campaigns.create({

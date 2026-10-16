@@ -253,7 +253,7 @@ describe("combat properties", () => {
                 down.set(e.targetId!, false);
               if (e.kind === "attack") expect(foeStatus.get(e.targetId!)).toBe("fighting");
               if (e.kind === "foe_leaves")
-                foeStatus.set(e.actorId, /gave up|fainted/.test(e.text) ? "at_mercy" : "gone");
+                foeStatus.set(e.actorId, /yielded|knocked senseless/.test(e.text) ? "at_mercy" : "gone");
               if (e.kind === "spell" && /falls fast asleep/.test(e.text))
                 foeStatus.set(e.targetId!, "at_mercy");
               // Only a foe who is at the heroes' mercy right then can be spared.

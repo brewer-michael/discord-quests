@@ -206,9 +206,9 @@ export function aftermathChoices(combat: CombatState) {
       },
     },
     {
-      label: "Shoo them off and get back to the quest",
+      label: "Drive them off and press on",
       intent: {
-        approach: "shoo them off",
+        approach: "drive them off",
         skill: "none",
         difficulty: "easy" as const,
         deed: "none",
