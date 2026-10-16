@@ -1,3 +1,4 @@
+import { HUMORS, INTENSITIES, VOICES } from "@dq/core/narration";
 import { type DbOrTx, guilds } from "@dq/db";
 import { timerFitsPace, validTimer } from "@dq/engine/pace";
 import { eq } from "drizzle-orm";
@@ -16,6 +17,11 @@ export const GameDefaults = z.object({
   loomMode: z.enum(["auto", "off"]),
   pace: z.enum(["live", "post"]),
   pingPlayers: z.boolean().optional(),
+  /** Story settings new campaigns start with; the host shapes each campaign's own when it's created. */
+  intensity: z.enum(INTENSITIES),
+  voice: z.enum(VOICES),
+  humor: z.enum(HUMORS),
+  art: z.enum(["book", "painterly", "watercolor"]),
 });
 export type GameDefaults = z.infer<typeof GameDefaults>;
 
@@ -24,6 +30,10 @@ export const DEFAULT_GAME: GameDefaults = {
   epilogueStyle: "subtle",
   loomMode: "auto",
   pace: "live",
+  intensity: "classic",
+  voice: "classic",
+  humor: "some",
+  art: "book",
 };
 
 const optionalNumber = (max: number, int = false) =>
@@ -45,6 +55,10 @@ export const SettingsForm = z
     ),
     loomMode: GameDefaults.shape.loomMode,
     pace: GameDefaults.shape.pace,
+    intensity: GameDefaults.shape.intensity.default(DEFAULT_GAME.intensity),
+    voice: GameDefaults.shape.voice.default(DEFAULT_GAME.voice),
+    humor: GameDefaults.shape.humor.default(DEFAULT_GAME.humor),
+    art: GameDefaults.shape.art.default(DEFAULT_GAME.art),
     pingPlayers: z.preprocess(
       (v) => (v === "on" ? true : v === "off" ? false : undefined),
       z.boolean().optional(),
@@ -111,6 +125,10 @@ export async function saveServerSettings(
         epilogueStyle: v.epilogueStyle,
         loomMode: v.loomMode,
         pace: v.pace,
+        intensity: v.intensity,
+        voice: v.voice,
+        humor: v.humor,
+        art: v.art,
         ...(v.roundTimerSeconds !== undefined ? { roundTimerSeconds: v.roundTimerSeconds } : {}),
         ...(v.pingPlayers !== undefined ? { pingPlayers: v.pingPlayers } : {}),
       },

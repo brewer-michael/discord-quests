@@ -22,6 +22,7 @@ import { renderGallery } from "./render/gallery";
 import { renderGuide, renderWelcome } from "./render/guide";
 import { describePace, renderHub } from "./render/hub";
 import { renderAbout, renderHelp, renderJournal, renderPrivacy } from "./render/misc";
+import { renderStoryCard, renderStoryDone, storyModal } from "./render/story";
 import { freezeComponents, renderScenePicture, renderTurn, waitingLine } from "./render/turn";
 import { nameModal, renderWizard } from "./render/wizard";
 import { roomProblems } from "./rooms";
@@ -52,6 +53,42 @@ function checkLimits(payload: { components: Array<{ toJSON(): unknown }> }) {
   walk(json);
   return json;
 }
+
+describe("story settings card", () => {
+  it("stays within Discord's limits, even with everything filled in", () => {
+    const profile = {
+      intensity: "epic" as const,
+      voice: "cinematic" as const,
+      humor: "rare" as const,
+      art: "custom" as const,
+      artCustom: "a".repeat(200),
+      premise: "p".repeat(500),
+      lines: Array.from({ length: 10 }, (_, i) => `topic number ${i} ${"x".repeat(40)}`),
+      veils: Array.from({ length: 10 }, (_, i) => `veil number ${i} ${"y".repeat(40)}`),
+    };
+    for (const audience of ["family", "teen"] as const) {
+      const info = {
+        campaignId: UUID,
+        campaignName: "n".repeat(60),
+        profile,
+        told: audience === "family" ? ("classic" as const) : ("epic" as const),
+        audience,
+        problem: "On a family campaign, Epic is chosen by a guardian.",
+      };
+      const json = JSON.stringify(checkLimits(renderStoryCard(info)));
+      expect(json).toContain("Shape your adventure");
+      if (audience === "family") expect(json).toContain("needs a guardian");
+      checkLimits(renderStoryDone(info));
+    }
+    const modal = storyModal(UUID, profile).toJSON();
+    expect(modal.custom_id.length).toBeLessThanOrEqual(100);
+    expect(modal.title.length).toBeLessThanOrEqual(45);
+    for (const l of modal.components as Array<{ label: string; description?: string }>) {
+      expect(l.label.length).toBeLessThanOrEqual(45);
+      expect((l.description ?? "").length).toBeLessThanOrEqual(100);
+    }
+  });
+});
 
 describe("picture search words", () => {
   it("keep plain words, short enough to ride in a button", () => {
@@ -94,6 +131,9 @@ describe("custom ids", () => {
       },
       { kind: "gallery", campaignId: UUID, index: 2, words: ["misty", "bridge"] },
       { kind: "gallery-share", campaignId: UUID, sceneId: UUID },
+      { kind: "story", campaignId: UUID, action: "intensity" },
+      { kind: "story", campaignId: UUID, action: "wishes" },
+      { kind: "story-modal", campaignId: UUID },
     ];
     for (const id of ids) {
       const raw = encodeId(id);

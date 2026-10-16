@@ -14,6 +14,8 @@ export interface HubInfo {
   audience: "family" | "teen";
   heroes: Array<{ name: string; userId: string; ready: boolean }>;
   pace?: PaceSettings;
+  /** "Classic, like The Hobbit · Classic storybook voice · some humor" */
+  story?: string;
 }
 
 /** "Play by post · 1 day per turn · pings on" */
@@ -37,6 +39,7 @@ export function renderHub(info: HubInfo) {
       [
         `**Storyteller:** ${info.mode === "ai_dm" ? "Old Wick (the bot) runs the story" : `<@${info.dmUserId}> runs the story, with the bot's help`}`,
         `**Status:** ${info.status === "setup" ? "Gathering heroes" : info.status === "active" ? "Adventure in progress" : info.status}`,
+        ...(info.story ? [`**Story:** ${info.story} (change with \`/campaign story\`)`] : []),
         ...(info.pace ? [`**Pace:** ${describePace(info.pace)} (change with \`/campaign pace\`)`] : []),
         `**Heroes:** ${
           info.heroes.length === 0

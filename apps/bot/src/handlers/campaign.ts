@@ -1,3 +1,4 @@
+import { describeProfile } from "@dq/core/narration";
 import { GameError, PACES, type Pace, paceOf } from "@dq/engine";
 import {
   type ButtonInteraction,
@@ -13,6 +14,7 @@ import { renderScenePicture, sceneAttachment } from "../render/turn";
 import { canSeeRoom, checkRoom, fetchRoom } from "../rooms";
 import { galleryCommand } from "./gallery";
 import { campaignHere, refreshHub, say } from "./shared";
+import { storyCard, storyCommand } from "./story";
 
 export async function campaignNew(ctx: BotContext, i: ChatInputCommandInteraction) {
   const guild = i.guild;
@@ -134,6 +136,9 @@ export async function campaignNew(ctx: BotContext, i: ChatInputCommandInteractio
         audience,
         heroes: [],
         pace: paceOf(c.settings as Record<string, unknown>),
+        story: await ctx.engine.campaigns
+          .storyFor(c.id)
+          .then((s) => describeProfile(s.profile, s.story.intensity)),
       }) as never,
     );
     await hub.pin().catch(() => {});
@@ -150,6 +155,8 @@ export async function campaignNew(ctx: BotContext, i: ChatInputCommandInteractio
         .filter(Boolean)
         .join("\n"),
     });
+    // Before anyone joins, the host shapes how the story will be told.
+    await i.followUp((await storyCard(ctx, c.id)) as never);
   } catch (e) {
     // Don't leave a half-made campaign behind.
     await ctx.engine.campaigns.purge(c.id, i.user.id).catch(() => {});
@@ -231,6 +238,7 @@ export async function campaignCommand(ctx: BotContext, i: ChatInputCommandIntera
           `**${s.campaign.name}** · ${s.worldName}`,
           `Status: ${s.campaign.status} · Now in: ${s.regionName}${s.chapter ? ` · ${s.chapter}` : ""}`,
           `Heroes: ${s.party.map((p) => `${p.name || "(unnamed)"} (level ${p.level}${p.ready ? "" : ", still being made"})`).join(", ") || "none yet"}`,
+          `Story: ${s.story}`,
           `Pace: ${describePace(s.pace)}${s.deadline ? ` · this turn moves on <t:${Math.floor(s.deadline.getTime() / 1000)}:R>` : ""}`,
           s.quests.length ? `Quests: ${s.quests.map((q) => q.title).join(", ")}` : "",
         ]
@@ -243,7 +251,7 @@ export async function campaignCommand(ctx: BotContext, i: ChatInputCommandIntera
       await ctx.engine.campaigns.join(c.id, i.user.id, "guardian");
       await say(
         i,
-        "You're watching over this table. You can `/campaign pause` and `/campaign resume` it, and `/campaign safety` shows what the safety checks stopped (never the words themselves). You can still make a hero and play too.",
+        "You're watching over this table. You can `/campaign pause` and `/campaign resume` it, `/campaign safety` shows what the safety checks stopped (never the words themselves), and `/campaign story` sets how dark the story may get (on a family campaign, only a guardian can choose Epic). You can still make a hero and play too.",
       );
       return;
     case "safety": {
@@ -295,6 +303,8 @@ export async function campaignCommand(ctx: BotContext, i: ChatInputCommandIntera
       return paintPastScenes(ctx, i, c);
     case "gallery":
       return galleryCommand(ctx, i, c);
+    case "story":
+      return storyCommand(ctx, i, c);
     case "delete": {
       if (!i.options.getBoolean("confirm", true)) {
         await say(i, "Nothing deleted.");

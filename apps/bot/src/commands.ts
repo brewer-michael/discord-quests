@@ -1,3 +1,4 @@
+import { HUMOR_INFO, HUMORS, INTENSITIES, INTENSITY_INFO, VOICE_INFO, VOICES } from "@dq/core/narration";
 import { TIMER_CHOICES } from "@dq/engine";
 import { ChannelType, InteractionContextType, PermissionFlagsBits, SlashCommandBuilder } from "discord.js";
 
@@ -25,8 +26,8 @@ export const COMMANDS = [
             .setName("audience")
             .setDescription("Who is playing?")
             .addChoices(
-              { name: "Family (ages 8+, gentle)", value: "family" },
-              { name: "Teens (13+, more peril)", value: "teen" },
+              { name: "Family (ages 8+)", value: "family" },
+              { name: "Teens (13+)", value: "teen" },
             ),
         )
         .addStringOption((o) =>
@@ -83,6 +84,34 @@ export const COMMANDS = [
       s
         .setName("pictures")
         .setDescription("Paint pictures of the places the story has already been (host or DM)"),
+    )
+    .addSubcommand((s) =>
+      s
+        .setName("story")
+        .setDescription("See or change how the story is told: how dark, the voice, humor and pictures")
+        .addStringOption((o) =>
+          o
+            .setName("intensity")
+            .setDescription("How dark it can get (never gory, never anything sexual)")
+            .addChoices(
+              ...INTENSITIES.map((i) => ({
+                name: `${INTENSITY_INFO[i].label}: like ${INTENSITY_INFO[i].like}`,
+                value: i,
+              })),
+            ),
+        )
+        .addStringOption((o) =>
+          o
+            .setName("voice")
+            .setDescription("The storyteller's voice")
+            .addChoices(...VOICES.map((v) => ({ name: VOICE_INFO[v].label, value: v }))),
+        )
+        .addStringOption((o) =>
+          o
+            .setName("humor")
+            .setDescription("How much humor")
+            .addChoices(...HUMORS.map((h) => ({ name: HUMOR_INFO[h].label, value: h }))),
+        ),
     )
     .addSubcommand((s) =>
       s

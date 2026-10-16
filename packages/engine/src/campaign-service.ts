@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { parseProfile, type StoryProfile } from "@dq/core/narration";
+import { describeProfile, parseProfile, type StoryProfile } from "@dq/core/narration";
 import { checkPlayerText, findPersonalInfo, type ImageBrief } from "@dq/core/safety";
 import type { WorldIndex } from "@dq/core/world";
 import {
@@ -447,6 +447,7 @@ export class CampaignService {
       })),
       quests: questRows,
       pace: paceOf(c.settings as Record<string, unknown>),
+      story: await campaignStory(this.deps.db, c).then((s) => describeProfile(s.profile, s.story.intensity)),
       deadline:
         (
           await this.deps.db

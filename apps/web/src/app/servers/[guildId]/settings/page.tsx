@@ -1,3 +1,12 @@
+import {
+  ART_INFO,
+  HUMOR_INFO,
+  HUMORS,
+  INTENSITIES,
+  INTENSITY_INFO,
+  VOICE_INFO,
+  VOICES,
+} from "@dq/core/narration";
 import { describeTimer, PACES, TIMER_CHOICES, timerFitsPace } from "@dq/engine/pace";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
 import { requireGuild } from "@/server/access";
@@ -69,7 +78,55 @@ export default async function Settings({ params }: { params: Promise<{ guildId: 
 
       <section className="card form">
         <h2>Defaults for new campaigns</h2>
+        <p className="hint">
+          The host shapes each campaign's story when it's created (and with <code>/campaign story</code>);
+          these are where it starts. Every setting stays free of gore, anything sexual, and dark magic shown
+          in detail.
+        </p>
         <div className="fields-2">
+          <div className="field">
+            <label htmlFor="intensity">How dark stories can get</label>
+            <select id="intensity" name="intensity" defaultValue={s.game.intensity}>
+              {INTENSITIES.map((i) => (
+                <option key={i} value={i}>
+                  {INTENSITY_INFO[i].label}: like {INTENSITY_INFO[i].like}
+                </option>
+              ))}
+            </select>
+            <span className="hint">
+              {INTENSITY_INFO[s.game.intensity].blurb} On family campaigns, Epic needs a guardian.
+            </span>
+          </div>
+          <div className="field">
+            <label htmlFor="voice">Storyteller voice</label>
+            <select id="voice" name="voice" defaultValue={s.game.voice}>
+              {VOICES.map((v) => (
+                <option key={v} value={v}>
+                  {VOICE_INFO[v].label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="humor">Humor</label>
+            <select id="humor" name="humor" defaultValue={s.game.humor}>
+              {HUMORS.map((h) => (
+                <option key={h} value={h}>
+                  {HUMOR_INFO[h].label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="art">Picture style</label>
+            <select id="art" name="art" defaultValue={s.game.art}>
+              {(["book", "painterly", "watercolor"] as const).map((a) => (
+                <option key={a} value={a}>
+                  {ART_INFO[a].label}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="field">
             <label htmlFor="imagePolicy">Scene art</label>
             <select id="imagePolicy" name="imagePolicy" defaultValue={s.game.imagePolicy}>

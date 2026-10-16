@@ -61,6 +61,7 @@ export async function refreshHub(ctx: BotContext, campaignId: string) {
         audience: (settings.audience as "family" | "teen") ?? "family",
         heroes: status.party,
         pace: status.pace,
+        story: status.story,
       }) as never,
     )
     .catch(() => {});

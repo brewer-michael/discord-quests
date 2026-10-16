@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { auditLog, campaigns, guilds, secrets, webSessions } from "@dq/db";
 import { createTestDb, TEST_DATABASE_URL } from "@dq/db/testing";
-import { serverGameDefaults } from "@dq/engine";
+import { serverGameDefaults, serverStoryDefaults } from "@dq/engine";
 import { BudgetGuard, ProviderStore } from "@dq/providers";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -375,6 +375,10 @@ describe.skipIf(!TEST_DATABASE_URL)("setup page data", () => {
         loomMode: "auto",
         pace: "post",
         pingPlayers: "on",
+        intensity: "epic",
+        voice: "cinematic",
+        humor: "rare",
+        art: "painterly",
       }),
     });
     expect(res).toEqual({ ok: true });
@@ -387,8 +391,20 @@ describe.skipIf(!TEST_DATABASE_URL)("setup page data", () => {
       loomMode: "auto",
       pace: "post",
       pingPlayers: true,
+      intensity: "epic",
+      voice: "cinematic",
+      humor: "rare",
+      art: "painterly",
     });
     expect(s.rooms).toEqual({});
+    // New campaigns start from the server's story defaults.
+    const [g] = await db.db.select().from(guilds).where(eq(guilds.id, guild.id));
+    expect(serverStoryDefaults(g?.settings as Record<string, unknown>)).toMatchObject({
+      intensity: "epic",
+      voice: "cinematic",
+      humor: "rare",
+      art: "painterly",
+    });
     expect(await new ProviderStore(db.db, env).guildSettings(guild.id)).toMatchObject({
       dailyBudgetUsd: 2.5,
     });

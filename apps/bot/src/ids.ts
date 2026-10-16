@@ -25,7 +25,13 @@ export type CustomId =
   | { kind: "battle-pick"; roundId: string; action: BattleAction; arg?: string }
   /** A page of the picture gallery. The search words ride along (see pictureSearchWords). */
   | { kind: "gallery"; campaignId: string; index: number; words: string[] }
-  | { kind: "gallery-share"; campaignId: string; sceneId: string };
+  | { kind: "gallery-share"; campaignId: string; sceneId: string }
+  /** The story settings card: a select (intensity, voice, humor, art) or a button (wishes, done). */
+  | { kind: "story"; campaignId: string; action: StoryAction }
+  | { kind: "story-modal"; campaignId: string };
+
+export type StoryAction = "intensity" | "voice" | "humor" | "art" | "wishes" | "done";
+const STORY_ACTIONS: readonly string[] = ["intensity", "voice", "humor", "art", "wishes", "done"];
 
 /** The battle buttons. Picks carry a spell or item id when a second choice is needed. */
 export type BattleAction = "attack" | "magic" | "defend" | "help" | "potion" | "spare";
@@ -58,6 +64,8 @@ const CODES: Record<CustomId["kind"], string> = {
   "battle-pick": "bp",
   gallery: "gl",
   "gallery-share": "gls",
+  story: "sty",
+  "story-modal": "stm",
 };
 const KINDS = Object.fromEntries(Object.entries(CODES).map(([k, v]) => [v, k])) as Record<
   string,
@@ -98,6 +106,9 @@ export function encodeId(id: CustomId): string {
       break;
     case "gallery-share":
       parts.push(id.campaignId, id.sceneId);
+      break;
+    case "story":
+      parts.push(id.campaignId, id.action);
       break;
     default:
       parts.push(id.campaignId);
@@ -159,6 +170,10 @@ export function decodeId(raw: string): CustomId | null {
     }
     case "gallery-share":
       return UUID.test(parts[3] ?? "") ? { kind, campaignId: a, sceneId: parts[3] as string } : null;
+    case "story": {
+      const action = parts[3] ?? "";
+      return STORY_ACTIONS.includes(action) ? { kind, campaignId: a, action: action as StoryAction } : null;
+    }
     default:
       return { kind, campaignId: a } as CustomId;
   }

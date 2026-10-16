@@ -27,6 +27,7 @@ import {
 } from "./handlers/play";
 import { setupCommand } from "./handlers/setup";
 import { friendly, say } from "./handlers/shared";
+import { storyInteraction, storyModalSubmit } from "./handlers/story";
 import { decodeId } from "./ids";
 import { renderGuide } from "./render/guide";
 import { renderAbout, renderHelp, renderPrivacy } from "./render/misc";
@@ -122,6 +123,12 @@ export async function route(ctx: BotContext, i: Interaction): Promise<void> {
         return;
       case "gallery":
         if (i.isButton()) await galleryButton(ctx, i, id);
+        return;
+      case "story":
+        if (i.isButton() || i.isStringSelectMenu()) await storyInteraction(ctx, i, id);
+        return;
+      case "story-modal":
+        if (i.isModalSubmit()) await storyModalSubmit(ctx, i, id.campaignId);
         return;
       case "gallery-share":
         if (i.isButton()) await galleryShare(ctx, i, id.campaignId, id.sceneId);
