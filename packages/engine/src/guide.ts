@@ -56,7 +56,8 @@ export const GUIDE: GuideSection[] = [
     title: "5. Start an adventure",
     steps: [
       "Type `/campaign new name:Lights Out` anywhere on the server. The campaign opens in the table room.",
-      "Everyone presses **Join** and **Make my hero** in the campaign's thread, then the host presses **Begin the adventure**.",
+      "A **Shape your adventure** card follows: how dark it may get (**Light**; **Classic**, like The Hobbit; **Epic**, like The Lord of the Rings), voice, humor, pictures and an optional premise. Never gory or sexual at any setting. `/campaign story` changes it.",
+      "Everyone presses **Join** and **Make my hero** in the campaign's thread (and can say what their hero looks like with `/character describe`), then the host presses **Begin the adventure**.",
       "To run it yourself with the bot's help, choose **A person runs it** as the storyteller and pick yourself as the DM.",
     ],
   },
@@ -79,6 +80,7 @@ export const GUIDE: GuideSection[] = [
     steps: [
       "Discord accounts are for people 13 and older. Players aged 8 to 12 should play with a parent or guardian, on the grown-up's account or at the same table.",
       "A grown-up can run `/campaign guardian` in the campaign to watch over it: they can pause the game any time and see what the safety checks stopped (never the words themselves).",
+      "On a family campaign, only a guardian can choose **Epic**. Without one, the story plays at **Classic**.",
       "Anyone can press **Not this** to quietly steer the story away from something. Nobody sees who pressed it.",
     ],
   },

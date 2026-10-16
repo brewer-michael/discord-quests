@@ -47,6 +47,7 @@ export function renderHelp() {
         "4. Each turn, pick a choice, or press **Something else…** and say what your hero does. When everyone has chosen, the story continues.",
         "",
         "**Handy commands:** `/character sheet`, `/map`, `/journal`, `/roll 1d20+3`, `/character levelup`",
+        "**Your story:** `/campaign story` shows or changes how dark the story may get, the storyteller's voice, humor and picture style. `/character describe` says what your hero looks like, for the story and its pictures.",
         "**Pictures:** with a picture service set up, each new place gets its own scene art, and going back somewhere shows its picture again. `/campaign gallery` looks through them all (add `search:` to find a place or moment). The host or DM can run `/campaign pictures` to paint the places the story had already been.",
         "**Game night or play by post?** `/campaign pace` switches any time: quick rounds with everyone online, or turns over days with pings and reminders. `/campaign pause` stops the clock.",
         "**Setting the bot up?** `/help topic:setup`",

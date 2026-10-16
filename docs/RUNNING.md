@@ -93,6 +93,34 @@ things stand. Until rooms are chosen, `/campaign new` opens a thread in whatever
 4. Each turn, players press a choice (or **Something else…** to describe their own). The story continues when
    everyone has chosen, when the turn's time runs out, or when the host presses **Continue the story**.
 
+### Story settings
+
+Right after `/campaign new`, the host gets a private **Shape your adventure** card (and `/campaign story` brings it
+back any time, for the host, the DM or a guardian):
+
+| Setting | Choices |
+|---|---|
+| How dark it can get | **Light**: a fireside tale; mild peril, foes run off or are caught, nobody dies. **Classic**: like The Hobbit; real danger and menace, fierce battles, foes and side characters can fall, loss and grief, never gory. **Epic**: like The Lord of the Rings; war, truly menacing villains, sacrifice and slow dread. |
+| Storyteller voice | Fireside, Classic storybook, or Cinematic |
+| Humor | Plenty, some, or rare |
+| Picture style | Classic book illustration, painterly fantasy, storybook watercolor, or your own words |
+| Premise & topics | An optional premise that colors names, mood, villains and motifs (the map and main story stay), topics to leave out entirely, and topics to keep offscreen |
+
+**Hard limits at every setting:** nothing grotesque (no gore, wounds in detail, body horror or torture), nothing
+sexual, and dark magic only as a threat shown through its effects, never its rituals or methods. No profanity,
+self-harm, drugs or drunkenness, and heroes are never killed (at 0 hit points they're Dazed). These are given to
+every AI job, checked word by word, reviewed by the story AI each turn at Classic and Epic, and kept out of every
+picture.
+
+On a family campaign only a guardian (`/campaign guardian`) can choose Epic, and without one it plays at Classic.
+Teen campaigns can choose Epic freely. Campaigns made before story settings existed keep their old, gentler feel
+(Light) until someone changes them. Server-wide defaults for new campaigns are on the setup page's **Settings &
+budget**.
+
+Players describe their heroes in the hero wizard or later with `/character describe`. The narrator uses those
+descriptions, and each hero gets a short appearance card that's reused in every picture so they look the same
+from scene to scene.
+
 ### Game night or play by post
 
 Each campaign has a pace, chosen with `/campaign new pace:…` and changed any time with `/campaign pace`:

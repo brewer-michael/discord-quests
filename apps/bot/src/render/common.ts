@@ -52,6 +52,7 @@ export function prefill(input: TextInputBuilder, value: string | null | undefine
 }
 
 export function clip(s: string, n: number): string {
+  if (n <= 0) return "";
   return s.length <= n ? s : `${s.slice(0, n - 1)}…`;
 }
 

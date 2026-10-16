@@ -21,8 +21,9 @@ export function renderGuide(ids: string[], base: string | undefined, ephemeral =
   c.addTextDisplayComponents(text("## Setting up Discord Quests"));
   let left = 3500;
   for (const s of GUIDE.filter((x) => ids.includes(x.id))) {
-    const body = clip(sectionText(s), Math.max(0, left));
-    if (body.length < 40) break;
+    // Once the room is used up, stop: the full guide is a button away.
+    if (left < 40) break;
+    const body = clip(sectionText(s), left);
     left -= body.length;
     c.addTextDisplayComponents(text(body));
   }
