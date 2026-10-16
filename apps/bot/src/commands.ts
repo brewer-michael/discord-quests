@@ -111,6 +111,14 @@ export const COMMANDS = [
             .setName("humor")
             .setDescription("How much humor")
             .addChoices(...HUMORS.map((h) => ({ name: HUMOR_INFO[h].label, value: h }))),
+        )
+        .addStringOption((o) =>
+          o
+            .setName("premise")
+            .setDescription(
+              "What this table's story should feel like: names, mood, villains. Up to 500 characters.",
+            )
+            .setMaxLength(500),
         ),
     )
     .addSubcommand((s) =>

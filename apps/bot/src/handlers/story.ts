@@ -54,10 +54,16 @@ export async function storyCommand(ctx: BotContext, i: ChatInputCommandInteracti
   if (intensity) patch.intensity = intensity as StoryProfile["intensity"];
   if (voice) patch.voice = voice as StoryProfile["voice"];
   if (humor) patch.humor = humor as StoryProfile["humor"];
+  const premise = i.options.getString("premise");
+  if (premise !== null) patch.premise = premise;
   if (Object.keys(patch).length > 0) {
-    const s = await ctx.engine.campaigns.setStory(c.id, i.user.id, patch);
-    await refreshHub(ctx, c.id);
-    await say(i, `Story settings: ${describeProfile(s.profile, s.story.intensity)}`);
+    const problem = await change(ctx, c.id, i.user.id, patch);
+    if (problem && !(await ctx.engine.campaigns.canSupervise(c.id, i.user.id))) {
+      await say(i, problem);
+      return;
+    }
+    // Show the whole card afterwards, so the rest (pictures, topics) is a click away.
+    await i.reply(renderStoryCard(await cardInfo(ctx, c.id, problem)) as never);
     return;
   }
   if (!(await ctx.engine.campaigns.canSupervise(c.id, i.user.id))) {

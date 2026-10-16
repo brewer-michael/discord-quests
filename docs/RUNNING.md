@@ -96,7 +96,8 @@ things stand. Until rooms are chosen, `/campaign new` opens a thread in whatever
 ### Story settings
 
 Right after `/campaign new`, the host gets a private **Shape your adventure** card (and `/campaign story` brings it
-back any time, for the host, the DM or a guardian):
+back any time, for the host, the DM or a guardian). The premise and topics are behind its **Premise & topics…**
+button; a premise can also be pasted straight into `/campaign story premise:…`.
 
 | Setting | Choices |
 |---|---|
