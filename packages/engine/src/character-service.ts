@@ -32,6 +32,7 @@ import {
   sameIncrements,
 } from "./character-rules";
 import { type EngineDeps, GameError } from "./deps";
+import { campaignStory } from "./story-profile";
 import type { CharacterSheetView } from "./views";
 
 export type DraftOp =
@@ -220,7 +221,8 @@ export class CharacterService {
         if (name.length < 2 || name.length > 32)
           throw new GameError("bad name", "Hero names need 2 to 32 letters.");
         if (look.length > 200) throw new GameError("bad look", "Keep the description under 200 characters.");
-        const verdict = checkPlayerText(`${name}. ${look}`, world);
+        const told = await campaignStory(this.deps.db, c);
+        const verdict = checkPlayerText(`${name}. ${look}`, world, told.story.intensity);
         if (!verdict.allow) throw new GameError("unsafe name", verdict.message ?? "Try a different name.");
         patch.name = name;
         patch.look = look;

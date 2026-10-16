@@ -7,7 +7,6 @@ const index = starterIndex();
 function ctx(over: Partial<DeltaContext> = {}): DeltaContext {
   return {
     index,
-    contentLevel: "gentle",
     partyRegionId: "hearthmoor",
     characters: new Map([
       ["h1", { level: 1, hp: 10, hpMax: 12, gold: 10, inventory: new Map([["lamp-oil", 1]]) }],

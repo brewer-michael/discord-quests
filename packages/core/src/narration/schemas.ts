@@ -84,7 +84,7 @@ export type SafetyOutput = z.infer<typeof SafetyOutput>;
 export const JudgeOutput = z.object({
   revealsHiddenMechanic: z.boolean(),
   explainsCauseOfLuck: z.boolean(),
-  unsafeForChildren: z.boolean(),
+  crossesLimits: z.boolean(),
   note: z.string(),
 });
 export type JudgeOutput = z.infer<typeof JudgeOutput>;

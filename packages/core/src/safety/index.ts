@@ -1,3 +1,4 @@
+import type { Intensity } from "../narration/profile";
 import type { Rng } from "../rng/index";
 import type { World } from "../world/types";
 
@@ -86,6 +87,16 @@ export const BASELINE_BANNED = [
   "nude",
 ] as const;
 
+/** Words refused at this intensity: strong language always, the world's banned words always, and its Light-only list at Light. */
+export function bannedTermsFor(world: Pick<World, "content">, intensity: Intensity): string[] {
+  return [...BASELINE_BANNED, ...world.content.bannedTerms, ...world.content.levels[intensity].bannedTerms];
+}
+
+/** The strictest list, for things that must suit every intensity (authored text, picture prompts). */
+export function strictBannedTerms(world: Pick<World, "content">): string[] {
+  return bannedTermsFor(world, "light");
+}
+
 const PII_PATTERNS: Array<{ name: string; re: RegExp }> = [
   { name: "email", re: /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i },
   { name: "phone", re: /(\+?\d[\d\s().-]{8,}\d)/ },
@@ -131,13 +142,18 @@ export interface PlayerTextVerdict {
   metaProbe: boolean;
 }
 
-export function checkPlayerText(text: string, world: Pick<World, "content">): PlayerTextVerdict {
+/** Checks what a player typed. At Classic and Epic, "I slay the troll" is a normal adventure action. */
+export function checkPlayerText(
+  text: string,
+  world: Pick<World, "content">,
+  intensity: Intensity = "light",
+): PlayerTextVerdict {
   const findings: SafetyFinding[] = [];
   const trimmed = text.trim();
   if (trimmed.length === 0) findings.push({ category: "empty", match: "" });
   if (trimmed.length > MAX_PLAYER_TEXT)
     findings.push({ category: "too_long", match: String(trimmed.length) });
-  for (const term of findBannedTerms(trimmed, [...BASELINE_BANNED, ...world.content.bannedTerms])) {
+  for (const term of findBannedTerms(trimmed, bannedTermsFor(world, intensity))) {
     findings.push({ category: "banned_word", match: term });
   }
   for (const kind of findPersonalInfo(trimmed)) findings.push({ category: "personal_info", match: kind });
@@ -189,14 +205,11 @@ export interface NarrationVerdict {
 export function checkNarration(
   text: string,
   world: Pick<World, "content">,
-  opts: { contentLevel: "gentle" | "adventurous"; extraLeakPatterns?: readonly RegExp[] },
+  opts: { intensity: Intensity; extraLeakPatterns?: readonly RegExp[] },
 ): NarrationVerdict {
   const findings: SafetyFinding[] = [];
-  const banned =
-    opts.contentLevel === "gentle"
-      ? [...BASELINE_BANNED, ...world.content.bannedTerms]
-      : [...BASELINE_BANNED];
-  for (const term of findBannedTerms(text, banned)) findings.push({ category: "banned_word", match: term });
+  for (const term of findBannedTerms(text, bannedTermsFor(world, opts.intensity)))
+    findings.push({ category: "banned_word", match: term });
   for (const leak of findLeaks(text, opts.extraLeakPatterns))
     findings.push({ category: "hidden_leak", match: leak });
   for (const kind of findPersonalInfo(text)) findings.push({ category: "personal_info", match: kind });
@@ -225,7 +238,7 @@ export function buildImagePrompt(
   brief: ImageBrief,
   world: Pick<World, "meta" | "content">,
 ): { prompt: string; negativePrompt: string } {
-  const banned = [...BASELINE_BANNED, ...world.content.bannedTerms];
+  const banned = strictBannedTerms(world);
   const clean = (s: string, max: number) => {
     let out = s
       .replace(/[^\p{L}\p{N} ,.'-]/gu, " ")

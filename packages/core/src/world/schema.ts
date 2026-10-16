@@ -59,14 +59,18 @@ export type WorldMeta = z.infer<typeof WorldMeta>;
 const ContentLevel = z.strictObject({
   description: Text,
   rules: z.array(Text).min(1),
+  /** Narrator guidance at this intensity: avoid X, say Y instead. */
+  substitutions: z.array(z.strictObject({ avoid: Short, prefer: Short })).default([]),
+  /** Words narration and players avoid at this intensity only. Authored world text avoids them everywhere. */
+  bannedTerms: z.array(z.string().min(2)).default([]),
 });
 
 export const ContentRules = z.strictObject({
-  levels: z.strictObject({ gentle: ContentLevel, adventurous: ContentLevel }),
-  /** Words that never appear in authored text or (at gentle level) narration. */
+  /** Rules that hold at every intensity: nothing grotesque, nothing sexual, no detailed dark magic, and so on. */
+  hardLimits: z.array(Text).min(1),
+  levels: z.strictObject({ light: ContentLevel, classic: ContentLevel, epic: ContentLevel }),
+  /** Words that never appear in narration, player text or authored text, at any intensity. */
   bannedTerms: z.array(z.string().min(2)),
-  /** Narrator guidance: avoid X, say Y instead. */
-  substitutions: z.array(z.strictObject({ avoid: Short, prefer: Short })),
 });
 export type ContentRules = z.infer<typeof ContentRules>;
 

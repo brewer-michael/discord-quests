@@ -408,7 +408,8 @@ function authoredStrings(world: World): Array<{ file: string; text: string }> {
 
 export function lintBannedTerms(world: World): WorldIssue[] {
   const issues: WorldIssue[] = [];
-  const patterns = world.content.bannedTerms.map((t) => ({
+  // Authored text has to work at every intensity, so it avoids the Light-only words too.
+  const patterns = [...world.content.bannedTerms, ...world.content.levels.light.bannedTerms].map((t) => ({
     term: t,
     re: new RegExp(`\\b${t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i"),
   }));

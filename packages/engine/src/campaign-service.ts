@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
-import type { ImageBrief } from "@dq/core/safety";
+import { parseProfile, type StoryProfile } from "@dq/core/narration";
+import { checkPlayerText, findPersonalInfo, type ImageBrief } from "@dq/core/safety";
 import type { WorldIndex } from "@dq/core/world";
 import {
   campaignMembers,
@@ -19,12 +20,16 @@ import { chapterRecaps } from "./chronicle";
 import { type EngineDeps, GameError } from "./deps";
 import { createLoom } from "./loom-store";
 import { PACES, type Pace, type PaceSettings, paceOf, timerFitsPace, validTimer } from "./pace";
+import { audienceOf, type CampaignStory, campaignStory, profileOf } from "./story-profile";
 import { asStory, initialStoryState } from "./story-state";
 import { DEFAULT_WORLD_ID } from "./world-cache";
 
 export interface CampaignSettings {
-  contentLevel: "gentle" | "adventurous";
+  /** Campaigns made before story settings existed. Read so they keep their feel until changed. */
+  contentLevel?: "gentle" | "adventurous";
   audience: "family" | "teen";
+  /** How dark the story gets, how it's told, its pictures, and what the table wants in it or left out. */
+  story?: StoryProfile;
   epilogueStyle: "subtle" | "explicit" | "off";
   /** Seconds players have to act before the round resolves anyway. 0 waits for everyone. */
   roundTimerSeconds: number;
@@ -60,8 +65,13 @@ export function serverGameDefaults(
   return out;
 }
 
+/** The server's default story settings for new campaigns (intensity, voice, humor, art), from the setup page. */
+export function serverStoryDefaults(guildSettings: Record<string, unknown> | undefined): StoryProfile {
+  const d = (guildSettings?.gameDefaults ?? {}) as Record<string, unknown>;
+  return parseProfile({ intensity: d.intensity, voice: d.voice, humor: d.humor, art: d.art });
+}
+
 export const DEFAULT_SETTINGS: CampaignSettings = {
-  contentLevel: "gentle",
   audience: "family",
   epilogueStyle: "subtle",
   roundTimerSeconds: 180,
@@ -101,8 +111,9 @@ export class CampaignService {
     const settings: CampaignSettings = {
       ...DEFAULT_SETTINGS,
       ...serverGameDefaults(guild?.settings),
-      contentLevel: audience === "family" ? "gentle" : "adventurous",
       ...input.settings,
+      audience,
+      story: parseProfile({ ...serverStoryDefaults(guild?.settings), ...(input.settings?.story ?? {}) }),
     };
     const story = initialStoryState(index);
     return this.deps.db.transaction(async (tx) => {
@@ -154,6 +165,49 @@ export class CampaignService {
       .update(campaigns)
       .set({ threadId, dmThreadId: dmThreadId ?? null, updatedAt: new Date() })
       .where(eq(campaigns.id, campaignId));
+  }
+
+  /** The campaign's story settings, and the intensity it's told at right now. */
+  async storyFor(campaignId: string): Promise<CampaignStory> {
+    return campaignStory(this.deps.db, await this.require(campaignId));
+  }
+
+  /**
+   * Changes the story settings. The host, the DM or a guardian may; on a family campaign only a guardian can
+   * choose Epic. What the table typed (premise, picture style, topics) is checked like anything players type.
+   */
+  async setStory(campaignId: string, userId: string, patch: Partial<StoryProfile>): Promise<CampaignStory> {
+    const c = await this.require(campaignId);
+    const [member] = await this.deps.db
+      .select()
+      .from(campaignMembers)
+      .where(and(eq(campaignMembers.campaignId, campaignId), eq(campaignMembers.userId, userId)));
+    const guardian = member?.role === "guardian";
+    if (!guardian && !(await this.isHostOrDm(campaignId, userId)))
+      throw new GameError("not host", "Only the host, the DM or a guardian can change the story settings.");
+    const current = profileOf(c);
+    const next = parseProfile({ ...current, ...patch }, undefined, current);
+    if (next.intensity === "epic" && current.intensity !== "epic" && audienceOf(c) === "family" && !guardian)
+      throw new GameError(
+        "needs guardian",
+        "On a family campaign, Epic is chosen by a guardian: a grown-up joins with `/campaign guardian`, then picks it.",
+      );
+    const { index } = this.deps.worlds.get(c.worldId);
+    const told = next.intensity === "epic" ? "classic" : next.intensity;
+    for (const [label, value] of [
+      ["premise", next.premise],
+      ["picture style", next.art === "custom" ? next.artCustom : ""],
+    ] as const) {
+      if (!value) continue;
+      const verdict = checkPlayerText(value, index.world, told);
+      if (!verdict.allow) throw new GameError("unsafe story text", `The ${label}: ${verdict.message}`);
+    }
+    // Topics to leave out naturally name the very things they leave out, so only personal details are refused.
+    for (const topic of [...next.lines, ...next.veils])
+      if (findPersonalInfo(topic).length > 0)
+        throw new GameError("unsafe story text", "Let's keep real-life details out of the story settings.");
+    await this.updateSettings(campaignId, { story: next });
+    return campaignStory(this.deps.db, { id: c.id, settings: { ...(c.settings as object), story: next } });
   }
 
   async updateSettings(campaignId: string, patch: Record<string, unknown>) {

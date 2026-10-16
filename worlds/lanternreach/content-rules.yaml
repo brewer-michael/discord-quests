@@ -1,35 +1,90 @@
+# What the story may and may not contain. Every campaign is for players aged 8 and up; its intensity
+# (Light, Classic or Epic, chosen with the campaign) decides how dark it gets. The hard limits hold at every
+# intensity and no setting unlocks them.
+hardLimits:
+  - "Nothing grotesque: no gore, no wounds or injuries described in detail, no mutilation or body horror, no
+    lingering on fallen bodies or on suffering, and no torture."
+  - "Nothing sexual or suggestive, and no nudity. Romance, if it appears at all, is no more than a fond glance or
+    a held hand."
+  - "Dark magic may exist only as a threat, shown through its effects: a creeping chill, withered fields, the fear
+    it spreads. Never describe how it is done: no rituals, sacrifices, incantations or summonings. Heroes never
+    learn or use it, and it is never made appealing."
+  - No profanity or slurs, no self-harm, no drugs or drunkenness, and no real-world religions or politics.
+  - No cruelty to children or animals shown on the page.
+  - "Player characters are never killed. A hero at 0 hit points is Dazed: knocked out of the fight until a friend
+    helps or they rally."
+  - Never mock a player. Never ask for or repeat a player's real name, age, school, address or other personal
+    details.
 levels:
-  gentle:
-    description: For ages 8 and up. Cartoon conflict, mild peril, warm humor.
+  light:
+    description: A fireside tale. Mild peril and scuffles; foes run off, give up or are caught, and nobody dies.
     rules:
-      - No one is ever slain or harmed for real. Defeated foes faint, flee, surrender, or pop into smoke.
-      - Heroes who drop to 0 hit points are Dazed, never in mortal danger.
-      - No wounds or injuries described in detail. Hits are bonks, thumps, tumbles and scrapes.
-      - No romance, no alcohol, no betting games, no real-world religions or politics.
-      - Scary things stay storybook-scary. Shadows, howls and creaky doors, never cruelty.
-      - Characters may be sad or afraid, and that is always met with comfort and hope.
-      - Never mock a player. Laugh with them, never at them.
-      - Never ask for or repeat a player's real name, age, school, address or other personal details.
-  adventurous:
-    description: For teens 13 and up. Real danger and darker moments, still no gore.
+      - Nobody dies or is badly hurt. Defeated foes faint, flee, surrender, or (for shadow creatures) come apart
+        into smoke.
+      - Hits are knocks, tumbles and scrapes.
+      - Frightening things stay spooky rather than menacing. Shadows, howls and creaky doors, never cruelty.
+      - Sad or frightened moments are soon met with comfort and hope.
+      - No alcohol and no betting games.
+    substitutions:
+      - avoid: killed
+        prefer: defeated, sent running, or captured
+      - avoid: died
+        prefer: was carried off, or fell into a deep, enchanted sleep
+      - avoid: a fallen body
+        prefer: a heap of shadow that blows away like ash
+      - avoid: ale or wine
+        prefer: spiced tea, warm milk with honey, or berry cordial
+      - avoid: poison
+        prefer: something that makes you feel queasy
+    bannedTerms:
+      - kill
+      - kills
+      - killed
+      - killing
+      - die
+      - dies
+      - died
+      - dying
+      - dead
+      - death
+      - deadly
+      - beer
+      - wine
+      - ale
+      - gamble
+      - gambling
+  classic:
+    description: Like The Hobbit. Real danger and menace, fierce battles, loss and grief, all told without gore.
     rules:
-      - Villains can be menacing and defeats can feel serious, but nothing graphic.
-      - Heroes are still Dazed at 0 hit points rather than slain.
-      - No romance, no alcohol, no real-world religions or politics.
-      - Hope always remains possible.
-      - Never ask for or repeat a player's real personal details.
+      - Danger is real. Villains are menacing, beasts are dangerous, and the heroes must earn their way out of
+        peril.
+      - Battles can be fierce, with swords, arrows and spells. Foes can be defeated, driven off, captured, or fall
+        in battle. Say so briefly and move on; never dwell on it.
+      - A side character may be lost. Let it matter and be mourned, told with restraint.
+      - Fear, grief and hardship can be felt. Hope is never fully lost.
+      - Inns and feasts may have ale and wine in the background, never drunkenness.
+    substitutions:
+      - avoid: describing a wound
+        prefer: what it means for the fight, such as a hero staggering or a foe falling back
+      - avoid: describing a fallen body
+        prefer: the moment itself and what it means to those still standing
+  epic:
+    description: Like The Lord of the Rings. War, truly menacing villains, sacrifice and slow dread.
+    rules:
+      - Everything allowed at Classic, with heavier stakes. War and sieges can shape the story.
+      - Villains can be truly menacing. Show their cruelty through what it has done to the land and its people,
+        never by depicting it.
+      - Sacrifice and loss can shape the story, and a beloved side character may fall.
+      - Dread can build slowly and the darkness can seem to be winning, but hope endures.
+      - Inns and feasts may have ale and wine in the background, never drunkenness.
+    substitutions:
+      - avoid: describing a wound
+        prefer: what it means for the fight, such as a hero staggering or a foe falling back
+      - avoid: describing a fallen body
+        prefer: the moment itself and what it means to those still standing
+      - avoid: showing a villain's cruelty
+        prefer: its aftermath, such as a burned village, frightened survivors, or a silenced song
 bannedTerms:
-  - kill
-  - kills
-  - killed
-  - killing
-  - die
-  - dies
-  - died
-  - dying
-  - dead
-  - death
-  - deadly
   - blood
   - bloody
   - bleed
@@ -40,28 +95,19 @@ bannedTerms:
   - corpse
   - suicide
   - torture
-  - beer
-  - wine
-  - ale
   - drunk
-  - gamble
-  - gambling
   - hell
   - damn
   - slaughter
   - behead
   - guts
   - sexy
-substitutions:
-  - avoid: killed
-    prefer: defeated, sent running, or popped into smoke
-  - avoid: died
-    prefer: faded away, was carried off, or fell into a deep, deep sleep
-  - avoid: blood or wounds
-    prefer: bumps, bruises and scrapes
-  - avoid: a dead body
-    prefer: a heap of shadow that blows away like ash
-  - avoid: ale or wine
-    prefer: warm cocoa, apple juice, or berry tea
-  - avoid: poison
-    prefer: something that makes you feel queasy
+  - sexual
+  - seduce
+  - seductive
+  - lust
+  - pentagram
+  - satanic
+  - human sacrifice
+  - ritual sacrifice
+  - blood ritual

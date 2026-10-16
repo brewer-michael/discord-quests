@@ -3,6 +3,7 @@
  * of the story so far. Built only from what the table saw.
  */
 import type { LlmGateway } from "@dq/core/llm";
+import { audienceLine, contentRulesText, type NarrationStory } from "@dq/core/narration";
 import { checkNarration } from "@dq/core/safety";
 import type { WorldIndex } from "@dq/core/world";
 import { chapterSummaries, type Db, turns } from "@dq/db";
@@ -12,11 +13,15 @@ import type { Logger } from "./deps";
 
 export const ChapterRecap = z.object({ recap: z.string().min(20).max(900) });
 
-const RECAP_SYSTEM = [
-  "You write the recap of one chapter of a children's (8+) fantasy adventure, for the players' journal.",
-  "Write 3 to 5 short sentences in the past tense. Name the heroes and the choices they made, and end on where the story stands now.",
-  "No numbers, dice or game rules. Never mention luck, fate, destiny, threads, hidden forces or anything working behind the scenes.",
-].join(" ");
+function recapSystem(world: WorldIndex["world"], story: NarrationStory): string {
+  return [
+    `You write the recap of one chapter of ${audienceLine(story.intensity)}, for the players' journal.`,
+    "Write 3 to 5 sentences in the past tense, in the same voice as the story. Name the heroes and the choices they made, and end on where the story stands now.",
+    "No numbers, dice or game rules. Never mention luck, fate, destiny, threads, hidden forces or anything working behind the scenes.",
+    "",
+    ...contentRulesText(world, story.intensity),
+  ].join("\n");
+}
 
 /** A plain recap from the world's own text, for when no story AI is available. */
 export function fallbackRecap(index: WorldIndex, chapterNumber: number): string {
@@ -37,7 +42,8 @@ export async function writeChapterRecap(args: {
   campaignId: string;
   guildId: string;
   chapterNumber: number;
-  contentLevel: "gentle" | "adventurous";
+  /** How the story is told: intensity, voice and the table's wishes. */
+  telling: NarrationStory;
 }): Promise<string> {
   const { db, index } = args;
   const [prev] = await db
@@ -70,7 +76,7 @@ export async function writeChapterRecap(args: {
     const res = await args.llm.structured(
       {
         task: "summarizer",
-        system: [{ text: RECAP_SYSTEM, cache: "1h" }],
+        system: [{ text: recapSystem(index.world, args.telling), cache: "1h" }],
         user: [
           {
             text: `Chapter ${args.chapterNumber}: ${chapter?.title ?? ""}\n\nWhat happened, turn by turn:\n${story.map((s) => `- ${s}`).join("\n")}`,
@@ -84,7 +90,7 @@ export async function writeChapterRecap(args: {
       { guildId: args.guildId, campaignId: args.campaignId },
     );
     if (res.ok) {
-      const verdict = checkNarration(res.value.recap, index.world, { contentLevel: args.contentLevel });
+      const verdict = checkNarration(res.value.recap, index.world, { intensity: args.telling.intensity });
       if (verdict.ok) recap = res.value.recap.trim();
       else args.log.warn("chapter recap rejected", { findings: verdict.findings.map((f) => f.category) });
     }

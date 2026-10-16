@@ -9,6 +9,7 @@ export * from "./logger";
 export * from "./loom-store";
 export * from "./narrator";
 export * from "./pace";
+export * from "./story-profile";
 export * from "./story-state";
 export * from "./turn-service";
 export * from "./views";

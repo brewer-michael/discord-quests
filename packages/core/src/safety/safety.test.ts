@@ -64,12 +64,30 @@ describe("narration", () => {
     expect(findLeaks("Snibbet lunges for the Ember and slips at the forge's edge.")).toEqual([]);
   });
 
-  it("checks gentle narration for banned words", () => {
-    const v = checkNarration("The shadow wolf was killed.", world, { contentLevel: "gentle" });
-    expect(v.ok).toBe(false);
-    expect(checkNarration("The shadow wolf pops into smoke.", world, { contentLevel: "gentle" }).ok).toBe(
-      true,
-    );
+  it("softens words only at Light, and holds the hard limits at every intensity", () => {
+    expect(checkNarration("The shadow wolf was killed.", world, { intensity: "light" }).ok).toBe(false);
+    expect(checkNarration("The shadow wolf pops into smoke.", world, { intensity: "light" }).ok).toBe(true);
+    expect(checkNarration("The shadow wolf was killed.", world, { intensity: "classic" }).ok).toBe(true);
+    expect(
+      checkNarration("The troll fell, and the dwarves raised their swords in grief and triumph.", world, {
+        intensity: "epic",
+      }).ok,
+    ).toBe(true);
+    for (const intensity of ["light", "classic", "epic"] as const)
+      for (const text of [
+        "Blood pooled on the stones.",
+        "The cultists began the blood ritual.",
+        "A human sacrifice was made at the altar.",
+        "The corpse lay in the road.",
+        "A sexy elf winked at them.",
+        "What the hell was that?",
+      ])
+        expect(checkNarration(text, world, { intensity }).ok, `${intensity}: ${text}`).toBe(false);
+
+    // Players at Classic can slay a troll; at Light the softer words are asked for.
+    expect(checkPlayerText("I try to kill the troll", world, "light").allow).toBe(false);
+    expect(checkPlayerText("I try to kill the troll", world, "classic").allow).toBe(true);
+    expect(checkPlayerText("I try to kill the troll", world).allow).toBe(false);
   });
 
   it("deflects in character", () => {

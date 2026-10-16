@@ -522,7 +522,7 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
       guildId: "g-plan",
       chapter: 2,
       story: asStory(c.story),
-      contentLevel: "gentle",
+      telling: { intensity: "light", voice: "fireside", humor: "plenty", premise: "", lines: [], veils: [] },
     });
     expect(plan?.beats["ch2-the-fork-in-the-road"]).toBeUndefined();
     expect(plan?.beats["ch2-shadow-wolves"]).toEqual({

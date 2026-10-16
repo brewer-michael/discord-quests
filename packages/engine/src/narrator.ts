@@ -45,9 +45,10 @@ export async function narrate(opts: {
   choicesFor: SceneSpecView;
 }): Promise<NarrationResult> {
   const { llm, world, view, directives, scope, log } = opts;
-  const system = narratorSystem(world, view.contentLevel);
+  const system = narratorSystem(world, view.story);
   const user = narratorUser(view, directives);
-  const loomTouched = directives.some((d) => PROSE_DIRECTIVES.has(d.kind));
+  // The reviewer reads turns where the hidden hand acts, and every turn once the story can get darker.
+  const review = view.story.intensity !== "light" || directives.some((d) => PROSE_DIRECTIVES.has(d.kind));
 
   let problems: string[] = [];
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -79,11 +80,11 @@ export async function narrate(opts: {
     }
     const cleaned = tidy(res.value, opts.choicesFor, view.mode);
     problems = checkOutput(cleaned, world, view);
-    if (problems.length === 0 && loomTouched) {
+    if (problems.length === 0 && review) {
       const judged = await llm.structured(
         {
           task: "judge",
-          system: judgeSystem(),
+          system: judgeSystem(world, view.story),
           user: [{ text: cleaned.narration }],
           schema: JudgeOutput,
           schemaName: "review",
@@ -98,8 +99,8 @@ export async function narrate(opts: {
           problems.push(
             "It explains that the good outcome was caused by an earlier kindness. Show what happens; don't explain why.",
           );
-        if (judged.value.unsafeForChildren)
-          problems.push(`Not suitable for young children: ${judged.value.note}`);
+        if (judged.value.crossesLimits)
+          problems.push(`It goes beyond what this story allows: ${judged.value.note}`);
       }
     }
     if (problems.length === 0) return { output: cleaned, fallback: false, problems: [] };
@@ -161,7 +162,7 @@ function checkOutput(out: NarratorOutput, world: World, view: PublicSceneView): 
   const text = [out.narration, ...out.npcLines.map((l) => l.line), ...out.choices.map((c) => c.label)].join(
     "\n",
   );
-  const verdict = checkNarration(text, world, { contentLevel: view.contentLevel });
+  const verdict = checkNarration(text, world, { intensity: view.story.intensity });
   for (const f of verdict.findings) {
     if (f.category === "banned_word")
       problems.push(`It uses the word "${f.match}", which isn't allowed here.`);

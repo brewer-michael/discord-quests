@@ -169,7 +169,7 @@ const DEFAULTS: Record<string, Handler> = {
   judge: (): JudgeOutput => ({
     revealsHiddenMechanic: false,
     explainsCauseOfLuck: false,
-    unsafeForChildren: false,
+    crossesLimits: false,
     note: "",
   }),
 };

@@ -32,10 +32,10 @@ describe("safety corpus (local layer, no AI)", () => {
   });
 
   it.each(lines("narration-leaks.txt"))("catches narration that gives the hidden hand away: %s", (text) => {
-    expect(checkNarration(text, world, { contentLevel: "gentle" }).ok).toBe(false);
+    expect(checkNarration(text, world, { intensity: "light" }).ok).toBe(false);
   });
 
   it.each(lines("narration-clean.txt"))("leaves ordinary storytelling alone: %s", (text) => {
-    expect(checkNarration(text, world, { contentLevel: "gentle" }).findings).toEqual([]);
+    expect(checkNarration(text, world, { intensity: "light" }).findings).toEqual([]);
   });
 });

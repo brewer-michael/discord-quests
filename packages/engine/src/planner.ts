@@ -8,6 +8,7 @@
  * never the hidden hand. Plans live in the spoiler schema.
  */
 import type { LlmGateway } from "@dq/core/llm";
+import { audienceLine, contentRulesText, type NarrationStory, tableWishesText } from "@dq/core/narration";
 import { checkNarration } from "@dq/core/safety";
 import type { WorldIndex } from "@dq/core/world";
 import { characters, type Db, npcs, promises, quests, storyPlans } from "@dq/db";
@@ -41,11 +42,17 @@ export interface ChapterPlan {
   source: "planner" | "fallback";
 }
 
-const SYSTEM = [
-  "You are the story planner for a children's (8+) fantasy adventure. The next chapter's scenes are fixed; your job is to make them feel like they grew out of what these particular heroes did.",
-  "For each scene, write a short note for the storyteller: which earlier choices, promises or friendships should echo here, and how. You may feature up to three characters from the list given (use their ids).",
-  "Rules: never add or remove scenes, never decide how anything turns out, never hurt or remove a character, and never mention luck, fate, destiny, threads, hidden forces or anything working behind the scenes. Keep it kind, hopeful and age-appropriate.",
-].join(" ");
+function plannerSystem(world: WorldIndex["world"], story: NarrationStory): string {
+  const wishes = tableWishesText(story);
+  return [
+    `You are the story planner for ${audienceLine(story.intensity)}. The next chapter's scenes are fixed; your job is to make them feel like they grew out of what these particular heroes did.`,
+    "For each scene, write a short note for the storyteller: which earlier choices, promises or friendships should echo here, and how. You may feature up to three characters from the list given (use their ids).",
+    "Rules: never add or remove scenes, never decide how anything turns out, never remove a character, and never mention luck, fate, destiny, threads, hidden forces or anything working behind the scenes.",
+    "",
+    ...contentRulesText(world, story.intensity),
+    ...(wishes.length > 0 ? ["", ...wishes] : []),
+  ].join("\n");
+}
 
 /** Without a story AI, kept and pending promises still come back when the heroes meet that person again. */
 export function fallbackPlan(
@@ -82,7 +89,8 @@ export async function planChapter(args: {
   guildId: string;
   chapter: number;
   story: StoryState;
-  contentLevel: "gentle" | "adventurous";
+  /** How the story is told: intensity, voice and the table's wishes. */
+  telling: NarrationStory;
 }): Promise<ChapterPlan | null> {
   const { db, index } = args;
   const refs = index.beatOrder.filter((b) => b.chapter.number === args.chapter && !b.beat.branch);
@@ -149,7 +157,7 @@ export async function planChapter(args: {
   const res = await args.llm.structured(
     {
       task: "director",
-      system: [{ text: SYSTEM, cache: "1h" }],
+      system: [{ text: plannerSystem(index.world, args.telling), cache: "1h" }],
       user: [{ text: user }],
       schema: PlannerOutput,
       schemaName: "chapter_plan",
@@ -163,7 +171,7 @@ export async function planChapter(args: {
     const away = new Set(
       npcRows.filter((n) => ["fled", "captured", "defeated", "away"].includes(n.status)).map((n) => n.id),
     );
-    const safe = (t: string) => checkNarration(t, index.world, { contentLevel: args.contentLevel }).ok;
+    const safe = (t: string) => checkNarration(t, index.world, { intensity: args.telling.intensity }).ok;
     const beats: ChapterPlan["beats"] = { ...plan.beats };
     let rejected = 0;
     for (const b of res.value.beats) {

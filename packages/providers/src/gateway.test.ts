@@ -184,7 +184,7 @@ describe.skipIf(!TEST_DATABASE_URL)("provider gateway", () => {
     const images = new ImageService(db.db, store, new BudgetGuard(db.db, {}), { fetch });
     const world = {
       meta: { artStyle: "storybook watercolor" },
-      content: { bannedTerms: ["blood"] },
+      content: { bannedTerms: ["blood"], levels: { light: { bannedTerms: [] } } },
     } as never;
     const brief = { setting: "a marsh hall", subjects: ["heroes"], mood: "hopeful", timeOfDay: "dusk" };
     const first = await images.sceneImage({ guildId: "g-img" }, brief, world);

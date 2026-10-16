@@ -77,7 +77,6 @@ export interface CharacterView {
 
 export interface DeltaContext {
   index: WorldIndex;
-  contentLevel: "gentle" | "adventurous";
   partyRegionId: string;
   characters: ReadonlyMap<string, CharacterView>;
   /** Hit point changes the rules engine computed this turn (authoritative). */
