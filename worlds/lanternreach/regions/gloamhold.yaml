@@ -54,6 +54,5 @@ encounters:
 lootTable: gloam-leavings
 secrets:
 - The kitchen helpers of Gloamhold are not Gloam at all. They are lost villagers, and they are very cold.
-artPrompt: a gloomy grey stone fortress in endless twilight with dark windows and a cold blue mist, storybook style,
-  not too scary
-mood: cold, gloomy, a little sad
+artPrompt: a grim grey stone fortress in endless twilight with dark windows and a cold blue mist
+mood: cold, oppressive, sorrowful

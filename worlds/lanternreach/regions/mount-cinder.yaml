@@ -41,6 +41,6 @@ encounters:
     weight: 2
 secrets:
 - The First Forge will only take the Ember from a hand that freely lets it go.
-artPrompt: a tall gentle volcano glowing orange at the top, a thousand stone steps winding up to a great stone forge,
+artPrompt: a tall volcano glowing orange at the top, a thousand stone steps winding up to a great stone forge,
   sunrise
 mood: warm, solemn, triumphant

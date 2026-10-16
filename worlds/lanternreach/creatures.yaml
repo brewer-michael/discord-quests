@@ -1,6 +1,7 @@
 - id: gloom-mite
   name: Gloom Mite
-  description: A shadow the size of a cat, all eyes and giggles. Hates light. Pops into smoke when bonked.
+  description: A cat-sized scrap of living shadow with too many bright, hungry eyes. It hates light, and comes apart
+    into smoke when struck.
   kind: shadow
   size: tiny
   cr: "1/8"
@@ -61,7 +62,7 @@
 
 - id: gloam-knight
   name: Gloam Knight
-  description: Empty armor full of shadow, marching in perfect step. Very serious. Not very clever.
+  description: Empty armor full of shadow, marching in perfect step. Relentless, but not clever.
   kind: shadow
   size: medium
   cr: "2"
@@ -126,7 +127,7 @@
 
 - id: ledger-bruiser
   name: Ledger Bruiser
-  description: A large, grumbly person hired by the Gilded Ledger. Paid by the hour, so in no hurry.
+  description: A hulking enforcer hired by the Gilded Ledger. Paid by the hour, and in no hurry to earn it.
   kind: person
   size: medium
   cr: "1/4"
@@ -143,7 +144,8 @@
 
 - id: marsh-snapper
   name: Marsh Snapper
-  description: A grumpy turtle as big as a wheelbarrow. It mostly wants you off its log.
+  description: An ancient snapping turtle as big as a wheelbarrow, ill-tempered and hard as stone. It wants you off
+    its log.
   kind: beast
   size: medium
   cr: "1/2"
@@ -158,8 +160,8 @@
   tags: [marsh]
 
 - id: grumpy-boar
-  name: Grumpy Boar
-  description: A bristly boar with a bad temper and a very good nose.
+  name: Wild Boar
+  description: A bristling wild boar with curved tusks, a foul temper and a very good nose.
   kind: beast
   size: medium
   cr: "1/4"
@@ -195,7 +197,8 @@
 
 - id: bramble-sprite
   name: Bramble Sprite
-  description: A tiny mischief-maker made of twigs and thorns, who throws prickly darts and giggles.
+  description: A thorn-limbed sprite of twigs and brambles that pelts travelers with stinging darts and cackles from
+    the hedges.
   kind: spirit
   size: tiny
   cr: "1/4"
@@ -229,7 +232,7 @@
 
 - id: glimmer-fox
   name: Glimmer Fox
-  description: One of the Bargain Fox's helpers, a fox made of sparkles and smirks.
+  description: One of the Bargain Fox's helpers, a fox made of glittering light, with a smirk that promises a deal.
   kind: spirit
   size: small
   cr: "1/4"
@@ -246,7 +249,8 @@
 
 - id: bog-lump
   name: Bog Lump
-  description: A grumbly heap of mud and reeds that just wants a nap. Very, very heavy.
+  description: A great heap of mud and reeds that heaves itself out of the bog when disturbed. Slow, stubborn, and
+    very, very heavy.
   kind: spirit
   size: large
   cr: "2"

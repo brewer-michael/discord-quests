@@ -110,8 +110,8 @@ archetypes:
     label: Friendly wisp
     description: A floating light of the fen who loves jokes.
     namePool: [Flicker, Glim, Sparkwhistle]
-    quirks: [Giggles, Changes color when happy]
-    voice: Tiny, tinkly and silly.
+    quirks: [Laughs like wind chimes, Changes color when happy]
+    voice: Small, bright and quick, full of riddles.
   - id: kitchen-helper
     label: Kitchen helper
     description: A lost villager who has been stuck working in Gloamhold's cold kitchens.

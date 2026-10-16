@@ -14,8 +14,8 @@ startRegion: hearthmoor
 startingLevel: 1
 maxLevel: 10
 artStyle: >-
-  gentle storybook watercolor illustration, warm lantern light against cool blue twilight, soft edges,
-  friendly expressive characters, cozy and adventurous mood, child-friendly, no text, no words
+  warm lantern light against cool blue twilight, a land of old roads, deep forests, misty marshes and
+  lantern-lit villages, no text, no words
 themes:
   - Doing the right thing is worth the long way round.
   - Small kindnesses have long memories.
@@ -24,6 +24,6 @@ themes:
 storyteller:
   name: Old Wick
   voice: >-
-    A cheerful old lamplighter telling the tale by the fire. Warm, playful and kind. Short sentences,
-    vivid sounds and smells, a little gentle humor. Speaks to the players as "my bright ones" now and then.
-    Never scolds; lets choices speak for themselves.
+    An old lamplighter who has walked every road in Lanternreach, telling the tale by the fire. He has seen
+    both its kindness and its darkness and tells both honestly, with an eye for small, vivid details. Never
+    scolds; lets choices speak for themselves.

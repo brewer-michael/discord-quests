@@ -58,8 +58,8 @@
 
 - id: mist-circles
   when: { sceneKinds: [travel, exploration], terrain: [fen, marsh] }
-  setup: The mist turns the heroes around in circles until a giggling little light bobs out to see what all the grumbling is about.
+  setup: The mist turns the heroes around in circles until a small, curious light bobs out of the mist to see who is lost.
   serves: [hidden_way, knowledge_given]
-  introduces: { kind: npc, archetype: wisp, name: the giggling wisp, tags: [] }
+  introduces: { kind: npc, archetype: wisp, name: the mist wisp, tags: [] }
   payoff: "{{npc}} bobs out of nowhere at {{target}} and lights a path nobody else can see."
   severity: mild

@@ -48,6 +48,6 @@ lootTable: hearthmoor-odds
 secrets:
 - Hattie Wick keeps a spare wick from the very first lantern, hidden in her tea tin.
 - Old tunnels run under the Lamp-House from when it was a mill. Snibbet knows them well.
-artPrompt: a cozy thatched village at dusk gathered around a tall iron lantern-post in a cobbled square, geese,
+artPrompt: a thatched village at dusk gathered around a tall iron lantern-post in a cobbled square, geese,
   warm glowing windows
-mood: cozy, then worried
+mood: peaceful, then uneasy
