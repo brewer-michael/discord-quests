@@ -1,9 +1,12 @@
 /**
- * Deterministic, seedable randomness.
+ * Randomness, two kinds.
  *
- * Every random draw in the game comes from an Rng derived from a campaign's
- * master seed plus a stream name and turn number, so any turn can be replayed
- * exactly. Streams are independent: tuning the loom never changes dice rolls.
+ * The dice players see come from trueRng(): the platform's cryptographic
+ * generator, so every roll is a real roll. Everything behind the scenes (the
+ * loom, story choices, flavor) comes from an Rng derived from a campaign's
+ * master seed plus a stream name and turn number, so it can be replayed
+ * exactly. Streams are independent: tuning the loom never changes the story's
+ * other draws. Tests can derive the "rules" stream too, to replay dice.
  */
 
 export type RngStream = "rules" | "loom" | "story" | "flavor";
@@ -58,37 +61,19 @@ export function hashHex(input: string): string {
     .join("");
 }
 
-class Sfc32Rng implements Rng {
-  private a: number;
-  private b: number;
-  private c: number;
-  private d: number;
-  private count = 0;
+/** The helpers every Rng shares, built on one uniform draw. */
+abstract class BaseRng implements Rng {
+  protected count = 0;
 
-  constructor(seed: [number, number, number, number]) {
-    [this.a, this.b, this.c, this.d] = seed;
-    // Warm up so that similar seeds diverge quickly.
-    for (let i = 0; i < 12; i++) this.raw();
-    this.count = 0;
-  }
-
-  private raw(): number {
-    this.a >>>= 0;
-    this.b >>>= 0;
-    this.c >>>= 0;
-    this.d >>>= 0;
-    let t = (this.a + this.b) | 0;
-    this.a = this.b ^ (this.b >>> 9);
-    this.b = (this.c + (this.c << 3)) | 0;
-    this.c = (this.c << 21) | (this.c >>> 11);
-    this.d = (this.d + 1) | 0;
-    t = (t + this.d) | 0;
-    this.c = (this.c + t) | 0;
-    return (t >>> 0) / 4294967296;
-  }
+  /** A uniform float in [0, 1). */
+  protected abstract raw(): number;
 
   get draws(): number {
     return this.count;
+  }
+
+  protected resetDraws(): void {
+    this.count = 0;
   }
 
   next(): number {
@@ -97,9 +82,7 @@ class Sfc32Rng implements Rng {
   }
 
   int(min: number, max: number): number {
-    if (!Number.isInteger(min) || !Number.isInteger(max) || max < min) {
-      throw new RangeError(`int(${min}, ${max}): bounds must be integers with min <= max`);
-    }
+    checkBounds(min, max);
     return min + Math.floor(this.next() * (max - min + 1));
   }
 
@@ -140,9 +123,81 @@ class Sfc32Rng implements Rng {
   }
 }
 
+class Sfc32Rng extends BaseRng {
+  private a: number;
+  private b: number;
+  private c: number;
+  private d: number;
+
+  constructor(seed: [number, number, number, number]) {
+    super();
+    [this.a, this.b, this.c, this.d] = seed;
+    // Warm up so that similar seeds diverge quickly.
+    for (let i = 0; i < 12; i++) this.raw();
+    this.resetDraws();
+  }
+
+  protected raw(): number {
+    this.a >>>= 0;
+    this.b >>>= 0;
+    this.c >>>= 0;
+    this.d >>>= 0;
+    let t = (this.a + this.b) | 0;
+    this.a = this.b ^ (this.b >>> 9);
+    this.b = (this.c + (this.c << 3)) | 0;
+    this.c = (this.c << 21) | (this.c >>> 11);
+    this.d = (this.d + 1) | 0;
+    t = (t + this.d) | 0;
+    this.c = (this.c + t) | 0;
+    return (t >>> 0) / 4294967296;
+  }
+}
+
+/** Real randomness from the platform's cryptographic generator, drawn a batch at a time. */
+class CryptoRng extends BaseRng {
+  private readonly buf = new Uint32Array(64);
+  private at = this.buf.length;
+
+  private word(): number {
+    if (this.at >= this.buf.length) {
+      globalThis.crypto.getRandomValues(this.buf);
+      this.at = 0;
+    }
+    return this.buf[this.at++] as number;
+  }
+
+  protected raw(): number {
+    // 53 random bits: as fine-grained as a double gets.
+    return ((this.word() >>> 5) * 67108864 + (this.word() >>> 6)) / 9007199254740992;
+  }
+
+  /** Exactly uniform: draws that would favor some faces are thrown away and drawn again. */
+  override int(min: number, max: number): number {
+    checkBounds(min, max);
+    const span = max - min + 1;
+    if (span > 4294967296) return super.int(min, max);
+    const limit = 4294967296 - (4294967296 % span);
+    let w = this.word();
+    while (w >= limit) w = this.word();
+    this.count++;
+    return min + (w % span);
+  }
+}
+
+function checkBounds(min: number, max: number) {
+  if (!Number.isInteger(min) || !Number.isInteger(max) || max < min) {
+    throw new RangeError(`int(${min}, ${max}): bounds must be integers with min <= max`);
+  }
+}
+
 /** An Rng seeded from an arbitrary string key. */
 export function createRng(key: string): Rng {
   return new Sfc32Rng(hash128(key));
+}
+
+/** Real dice: an Rng that nothing can predict or replay. */
+export function trueRng(): Rng {
+  return new CryptoRng();
 }
 
 /**

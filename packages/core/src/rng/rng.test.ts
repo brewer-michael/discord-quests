@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createRng, deriveRng, faceValue, hashHex, sequenceRng } from "./index";
+import { rollAttack } from "../rules/combat";
+import { createRng, deriveRng, faceValue, hashHex, sequenceRng, trueRng } from "./index";
 
 describe("rng", () => {
   it("is deterministic for the same key", () => {
@@ -58,5 +59,44 @@ describe("rng", () => {
   it("hashHex is stable", () => {
     expect(hashHex("hello")).toBe(hashHex("hello"));
     expect(hashHex("hello")).toHaveLength(32);
+  });
+});
+
+describe("real dice", () => {
+  const chiSquare = (counts: number[], n: number) => {
+    const expected = n / counts.length;
+    return counts.reduce((sum, c) => sum + (c - expected) ** 2 / expected, 0);
+  };
+
+  it("roll fair d20s and stay in bounds", () => {
+    const rng = trueRng();
+    const counts = new Array(20).fill(0);
+    const n = 100_000;
+    for (let i = 0; i < n; i++) {
+      const v = rng.int(1, 20);
+      expect(Number.isInteger(v) && v >= 1 && v <= 20).toBe(true);
+      counts[v - 1]++;
+    }
+    // Real randomness, so a looser bar than the seeded test: 19 degrees of freedom at p=0.000001 is ~64.
+    expect(chiSquare(counts, n)).toBeLessThan(64);
+    expect(rng.draws).toBe(n);
+  });
+
+  it("never repeat between fresh sets of dice", () => {
+    const a = Array.from({ length: 32 }, () => trueRng().int(1, 20));
+    const b = Array.from({ length: 32 }, () => trueRng().int(1, 20));
+    expect(a).not.toEqual(b);
+    const floats = new Set(Array.from({ length: 1000 }, () => trueRng().next()));
+    expect(floats.size).toBe(1000);
+    for (const f of floats) expect(f >= 0 && f < 1).toBe(true);
+  });
+
+  it("hit as often as the rules say: +7 against armor 13 lands 75% of the time, 94% with advantage", () => {
+    const rng = trueRng();
+    const n = 20_000;
+    const rate = (mode: "normal" | "advantage") =>
+      Array.from({ length: n }, () => rollAttack(7, 13, mode, rng).hit).filter(Boolean).length / n;
+    expect(Math.abs(rate("normal") - 0.75)).toBeLessThan(0.02);
+    expect(Math.abs(rate("advantage") - 0.9375)).toBeLessThan(0.015);
   });
 });

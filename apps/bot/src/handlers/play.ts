@@ -1,4 +1,4 @@
-import { createRng } from "@dq/core/rng";
+import { trueRng } from "@dq/core/rng";
 import { formatDiceResult, parseDice, rollDice } from "@dq/core/rules";
 import { GameError, type SubmitResult } from "@dq/engine";
 import { renderMap } from "@dq/map-render";
@@ -150,7 +150,7 @@ export async function resolveButton(ctx: BotContext, i: ButtonInteraction, round
 export async function rollCommand(i: ChatInputCommandInteraction) {
   const notation = i.options.getString("dice", true);
   try {
-    const result = rollDice(parseDice(notation), createRng(`${i.id}:${notation}`));
+    const result = rollDice(parseDice(notation), trueRng());
     await i.reply({
       content: `🎲 **${esc(i.member && "displayName" in i.member ? String(i.member.displayName) : i.user.username)}** rolls ${formatDiceResult(result)}`,
       allowedMentions: { parse: [] },

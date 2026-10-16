@@ -37,6 +37,10 @@ export interface RollView {
   difficulty: string;
   success: boolean;
   mode: "normal" | "advantage" | "disadvantage";
+  /** Hit points it took, when it was an attack that landed. */
+  damage?: number;
+  /** A foe's attack on a hero, rather than a hero's roll. */
+  foe?: boolean;
 }
 
 export interface CharacterSheetView {

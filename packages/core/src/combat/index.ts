@@ -138,6 +138,8 @@ export interface CombatRoll {
   against: string;
   success: boolean;
   mode: RollMode;
+  /** Hit points it took, when it landed. */
+  damage?: number;
 }
 
 export interface CombatEvent {
@@ -216,14 +218,15 @@ export function rollFoes(
 }
 
 export function buildEncounter(args: {
-  foes: ReadonlyArray<{ creature: CreatureDef; count: number }>;
+  /** hpScale below 1 is a weaker one of its kind, so a small or new party can take it on. */
+  foes: ReadonlyArray<{ creature: CreatureDef; count: number; hpScale?: number }>;
   heroes: ReadonlyArray<{ id: string; initiativeBonus: number }>;
   rng: Rng;
 }): CombatState {
   const foes: Foe[] = [];
-  for (const { creature, count } of args.foes) {
+  for (const { creature, count, hpScale = 1 } of args.foes) {
     for (let i = 0; i < count; i++) {
-      const hpMax = Math.max(1, rollDice(creature.hp, args.rng).total);
+      const hpMax = Math.max(1, Math.round(rollDice(creature.hp, args.rng).total * hpScale));
       foes.push({
         id: `foe-${foes.length + 1}`,
         creatureId: creature.id,
@@ -394,8 +397,19 @@ function toRoll(
   total: number,
   against: string,
   success: boolean,
+  damage = 0,
 ): CombatRoll {
-  return { label, natural: d20.natural, rolls: d20.rolls, modifier, total, against, success, mode: d20.mode };
+  return {
+    label,
+    natural: d20.natural,
+    rolls: d20.rolls,
+    modifier,
+    total,
+    against,
+    success,
+    mode: d20.mode,
+    ...(damage > 0 ? { damage } : {}),
+  };
 }
 
 // ------------------------------------------------------------------ the round
@@ -547,7 +561,7 @@ export function resolveCombatRound(
           targetId: foe.id,
           target: foe.name,
           text,
-          roll: toRoll(atk.name, roll, atk.bonus + bless, roll.total, `armor ${foe.ac}`, roll.hit),
+          roll: toRoll(atk.name, roll, atk.bonus + bless, roll.total, `armor ${foe.ac}`, roll.hit, dmg),
         });
         if (dmg > 0) hurtFoe(foe, dmg);
         return;
@@ -705,7 +719,7 @@ export function resolveCombatRound(
           targetId: foe.id,
           target: foe.name,
           text,
-          roll: toRoll(spell.name, roll, bonus, roll.total, `armor ${foe.ac}`, roll.hit),
+          roll: toRoll(spell.name, roll, bonus, roll.total, `armor ${foe.ac}`, roll.hit, dmg),
         });
         if (dmg > 0) hurtFoe(foe, dmg);
         return;
@@ -723,7 +737,6 @@ export function resolveCombatRound(
         const total = d20.natural + saveMod;
         const dc = h.spellDc ?? 10;
         const saved = total >= dc;
-        const roll = toRoll(`${foe.name} resists`, d20, saveMod, total, `${dc}`, !saved);
         let text = `${h.name} casts ${spell.name} on ${foe.name}`;
         let dmg = 0;
         if (e.kind === "save-damage") {
@@ -741,6 +754,7 @@ export function resolveCombatRound(
           foe.conditionRounds[e.condition] = Math.min(e.rounds, 3);
           text += ` and ${foe.name} is ${e.condition === "restrained" ? "tangled up" : e.condition}.`;
         }
+        const roll = toRoll(`${foe.name} resists`, d20, saveMod, total, `${dc}`, !saved, dmg);
         events.push({ ...base, targetId: foe.id, target: foe.name, text, roll });
         if (dmg > 0) hurtFoe(foe, dmg);
         return;
@@ -827,8 +841,9 @@ export function resolveCombatRound(
     const ac = target.ac + (state.warded[target.id] ?? 0) + (shielded.has(target.id) ? 5 : 0);
     const roll = rollAttack(attack.bonus, ac, mode, rng);
     let text = `${f.name} tries ${attack.name} on ${target.name}`;
+    let dmg = 0;
     if (roll.hit) {
-      const dmg = rollDamage(attack.damage, roll.critical, rng).total;
+      dmg = rollDamage(attack.damage, roll.critical, rng).total;
       const out = applyDamageToHero(
         { hp: target.hp, hpMax: target.hpMax, tempHp: target.tempHp, conditions: target.conditions },
         dmg,
@@ -856,7 +871,7 @@ export function resolveCombatRound(
       targetId: target.id,
       target: target.name,
       text,
-      roll: toRoll(`${f.name}: ${attack.name}`, roll, attack.bonus, roll.total, `armor ${ac}`, roll.hit),
+      roll: toRoll(attack.name, roll, attack.bonus, roll.total, `armor ${ac}`, roll.hit, dmg),
     });
   };
 

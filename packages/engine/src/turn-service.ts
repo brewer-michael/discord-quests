@@ -93,7 +93,7 @@ import {
   syncEntities,
   withEncounter,
 } from "./combat";
-import { type EngineDeps, GameError, silentLogger } from "./deps";
+import { type EngineDeps, GameError, realDice, silentLogger } from "./deps";
 import { nextSceneSpec, type SceneEntityState, type SceneSpec } from "./director";
 import { clearPendingLoom, loadLoom, loadPendingLoom, saveLoom, savePendingLoom } from "./loom-store";
 import { narrate } from "./narrator";
@@ -142,6 +142,10 @@ export function campaignSettings(c: CampaignRow) {
 export class TurnService {
   constructor(private readonly deps: EngineDeps) {}
 
+  private dice(campaignSeed: string, turnSeq: number, purpose: string) {
+    return (this.deps.dice ?? realDice)(campaignSeed, turnSeq, purpose);
+  }
+
   private get log() {
     return this.deps.log ?? silentLogger;
   }
@@ -171,7 +175,7 @@ export class TurnService {
       planned,
       party,
       heroesFor(index, party, await this.inventoryFor(party)),
-      deriveRng(loom.masterSeed, "rules", seq, "encounter"),
+      this.dice(loom.masterSeed, seq, "encounter"),
     );
     const told = await campaignStory(this.deps.db, c);
 
@@ -616,7 +620,7 @@ export class TurnService {
           plannedNext,
           party,
           heroesFor(index, party, inventory),
-          deriveRng(loom.masterSeed, "rules", seq, "encounter"),
+          this.dice(loom.masterSeed, seq, "encounter"),
         )
       : null;
     const mode: NarrationMode = !closing ? "continue" : nextSpec ? "close_and_open" : "finale";
@@ -804,7 +808,7 @@ export class TurnService {
               dc: DIFFICULTY_DC[ra.difficulty],
               mode: checkRollMode(p.conditions.filter(isCondition)),
             },
-            deriveRng(seed, "rules", seq, `trick:${h.id}`),
+            this.dice(seed, seq, `trick:${h.id}`),
           );
           const v = rollView(h.name, ra.skill ? SKILL_NAMES[ra.skill] : "Clever idea", check);
           chosen[h.id] = {
@@ -837,7 +841,7 @@ export class TurnService {
       heroes,
       chosen,
       index.creatures,
-      deriveRng(seed, "rules", seq, "combat"),
+      this.dice(seed, seq, "combat"),
     );
     const mercy: DeedCandidate[] = result.events
       .filter((e) => e.kind === "spare" && e.targetId)
@@ -1651,7 +1655,7 @@ export class TurnService {
                 disadvantage: mode === "disadvantage",
               }),
             },
-            deriveRng(seed, "rules", seq, `crux:${lead.id}`),
+            this.dice(seed, seq, `crux:${lead.id}`),
           );
           crux = { label: cruxSpec.check.label, check, p: successProbability(mod, dc, check.mode) };
           rollViews.push(rollView(lead.name, cruxSpec.check.label, check));
@@ -1668,7 +1672,7 @@ export class TurnService {
       const mode = checkRollMode(conds(p), { advantage: helped.has(p.id), disadvantage });
       const check = resolveCheck(
         { modifier: modifierFor(p, a.skill, a.ability), dc: DIFFICULTY_DC[a.difficulty], mode },
-        deriveRng(seed, "rules", seq, p.id),
+        this.dice(seed, seq, p.id),
       );
       const label = a.skill ? SKILL_NAMES[a.skill] : a.ability ? `${a.ability.toUpperCase()} check` : "Check";
       rollViews.push(rollView(p.name, label, check));
@@ -2149,6 +2153,7 @@ export class TurnService {
         difficulty: r.difficulty,
         success: r.success,
         natural: r.natural,
+        ...(r.damage ? { damage: r.damage } : {}),
       })),
       crux: args.crux,
       allowedLoot: (() => {

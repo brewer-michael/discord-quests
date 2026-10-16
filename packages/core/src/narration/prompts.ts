@@ -85,6 +85,7 @@ export interface PublicSceneData {
     difficulty: string;
     success: boolean;
     natural: number;
+    damage?: number;
   }>;
   crux: { label: string; success: boolean } | null;
   allowedLoot: Array<{ id: string; name: string }>;
@@ -289,7 +290,7 @@ export function narratorUser(
     turn.push("", "## Dice results (already decided; respect them)");
     for (const r of view.rolls) {
       turn.push(
-        `- ${r.characterName}, ${r.label}: rolled ${r.total} (${r.difficulty}) - ${r.success ? "SUCCESS" : "FAILURE"}${r.natural === 20 ? " (a natural 20!)" : r.natural === 1 ? " (a natural 1)" : ""}`,
+        `- ${r.characterName}, ${r.label}: rolled ${r.total} (${r.difficulty}) - ${r.success ? "SUCCESS" : "FAILURE"}${r.damage ? `, ${r.damage} damage` : ""}${r.natural === 20 ? " (a natural 20!)" : r.natural === 1 ? " (a natural 1)" : ""}`,
       );
     }
   }

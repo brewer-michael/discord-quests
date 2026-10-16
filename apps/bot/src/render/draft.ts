@@ -44,7 +44,7 @@ export function renderDraft(d: DmDraft) {
     d.rolls
       .map(
         (r) =>
-          `🎲 ${esc(r.characterName)}: ${r.label} ${r.total} vs ${r.difficulty} ${r.success ? "✅" : "❌"}`,
+          `${r.foe ? "👾" : "🎲"} ${esc(r.characterName)}: ${r.label} ${r.total} vs ${r.difficulty} ${r.success ? "✅" : "❌"}${r.damage ? ` ${r.damage} damage` : ""}`,
       )
       .join("\n"),
     500,

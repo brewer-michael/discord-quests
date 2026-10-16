@@ -13,6 +13,7 @@ import {
   isDownHero,
   rollFoes,
 } from "@dq/core/combat";
+import { balanceEncounter, type Difficulty } from "@dq/core/combat/balance";
 import type { Condition } from "@dq/core/rules";
 import { deriveStats, isCondition } from "@dq/core/rules";
 import { SRD_CLASSES, sneakAttackDice } from "@dq/core/srd";
@@ -84,7 +85,10 @@ export function heroesFor(
 /**
  * Adds a fight to a scene when it needs one: every combat beat, and now and
  * then an ambush on the road (the destination region's encounter chance).
- * Foes join the scene's cast, so the story and the loom can see them.
+ * The world says which creatures; the balance decides how many and how tough
+ * for this party's levels and size (an ambush is a low fight, a story fight a
+ * moderate one, a boss a high one). Foes join the scene's cast, so the story
+ * and the loom can see them.
  */
 export function withEncounter(
   index: WorldIndex,
@@ -105,11 +109,17 @@ export function withEncounter(
     if (rng.chance(region.encounters.chance))
       table = rollFoes(region.encounters.table, party.length, rng, "pick-one");
   }
-  const foes = table.flatMap((t) => {
+  const wanted = table.flatMap((t) => {
     const creature = index.creatures.get(t.creature);
     return creature ? [{ creature, count: t.count }] : [];
   });
-  if (foes.length === 0) return spec;
+  if (wanted.length === 0 || heroes.length === 0) return spec;
+  const difficulty: Difficulty = wanted.some((w) => w.creature.tags.includes("boss"))
+    ? "high"
+    : spec.kind === "travel"
+      ? "low"
+      : "moderate";
+  const { foes } = balanceEncounter({ foes: wanted, heroes, difficulty, creatures: index.creatures });
   const combat = buildEncounter({ foes, heroes, rng });
   const entities: SceneEntityState[] = [
     ...spec.entities,
@@ -219,9 +229,10 @@ export function aftermathChoices(combat: CombatState) {
   ];
 }
 
+/** Every roll of the round, the heroes' and the foes' attacks on them, in the order they happened. */
 export function rollViewsFrom(events: readonly CombatEvent[], heroIds: ReadonlySet<string>): RollView[] {
   return events
-    .filter((e) => e.roll && heroIds.has(e.actorId))
+    .filter((e) => e.roll && (heroIds.has(e.actorId) || e.kind === "foe_attack"))
     .map((e) => {
       const r = e.roll as NonNullable<CombatEvent["roll"]>;
       return {
@@ -234,15 +245,18 @@ export function rollViewsFrom(events: readonly CombatEvent[], heroIds: ReadonlyS
         difficulty: r.against,
         success: r.success,
         mode: r.mode,
+        ...(r.damage ? { damage: r.damage } : {}),
+        ...(heroIds.has(e.actorId) ? {} : { foe: true }),
       };
     });
 }
 
-/** What the screen shows about a fight. Foe health is in words, never numbers. */
+/** What the screen shows about a fight. Foe health is a bar and a word, never numbers. */
 export interface CombatView {
   phase: CombatState["phase"];
   round: number;
-  foes: Array<{ id: string; name: string; condition: string; status: string }>;
+  /** health: the share of its hit points a foe has left, 0 to 1. */
+  foes: Array<{ id: string; name: string; condition: string; status: string; health: number }>;
   heroes: Array<{ id: string; name: string; hp: number; hpMax: number; down: boolean }>;
   order: string[];
   log: string[];
@@ -260,7 +274,13 @@ export function combatView(
   return {
     phase: combat.phase,
     round: combat.round,
-    foes: combat.foes.map((f) => ({ id: f.id, name: f.name, condition: foeCondition(f), status: f.status })),
+    foes: combat.foes.map((f) => ({
+      id: f.id,
+      name: f.name,
+      condition: foeCondition(f),
+      status: f.status,
+      health: f.hpMax > 0 ? Math.round((f.hp / f.hpMax) * 100) / 100 : 0,
+    })),
     heroes: party.map((p) => ({
       id: p.id,
       name: p.name,

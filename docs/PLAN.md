@@ -113,7 +113,7 @@ Each stage is checkpointed on the draft `turns` row, so a crash resumes without 
   - On a crux **success**, players really did it themselves and no threads are spent.
   - **Minor graces:** ≤ 1 per chapter, only on meaningful failures, using low-weight threads not reserved for a crux.
 - **Pacing caps.** At most one convergence per crux, at most one minor grace and one detour per chapter, at most one snare effect per scene, and at most two providence events in any 10 turns.
-- **Determinism.** `evaluateLoom(input, rng)` is a pure function. Each draw uses `derive(masterSeed, stream, turnSeq, subKey)`. The `loom.evaluations` table records why something fired or didn't. `sim replay` re-runs a campaign against its recorded AI outputs.
+- **Determinism.** `evaluateLoom(input, rng)` is a pure function. Each draw uses `derive(masterSeed, stream, turnSeq, subKey)`. The dice players see (attacks, checks, encounters, `/roll`) are not seeded: they come from the platform's cryptographic generator and are saved with the turn they belong to. Tests and the simulator can pass seeded dice to replay a game. The `loom.evaluations` table records why something fired or didn't. `sim replay` re-runs a campaign against its recorded AI outputs.
 - **Leak prevention, layered:**
   1. The narrator sees only directives. The director sees only constraints, never weights.
   2. A branded `PublicSceneView` type, which the loom repo can't produce.

@@ -17,7 +17,8 @@
     "./safety": "./src/safety/index.ts",
     "./llm": "./src/llm/index.ts",
     "./narration": "./src/narration/index.ts",
-    "./combat": "./src/combat/index.ts"
+    "./combat": "./src/combat/index.ts",
+    "./combat/balance": "./src/combat/balance.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"

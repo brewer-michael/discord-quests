@@ -12,11 +12,22 @@ import {
 import { encodeId } from "../ids";
 import { clip, divider, esc, SCENE_COLOR, text, V2 } from "./common";
 
+/** One roll: "🎲 Cuthbert: Longbow: 15 +7 = 22 vs armor 13 ✅ 9 damage", with a foe's attacks marked 👾. */
 const DICE = (r: TurnView["rolls"][number]) => {
   const modeNote =
     r.mode === "advantage" ? " (advantage)" : r.mode === "disadvantage" ? " (disadvantage)" : "";
   const mod = r.modifier >= 0 ? `+${r.modifier}` : `${r.modifier}`;
-  return `🎲 **${esc(r.characterName)}**: ${r.label}${modeNote}: ${r.rolls.join("/")} ${mod} = **${r.total}** vs ${r.difficulty} ${r.success ? "✅" : "❌"}`;
+  const attack = r.difficulty.startsWith("armor");
+  const result = r.damage
+    ? `✅ **${r.damage} damage**`
+    : r.success
+      ? attack
+        ? "✅ hit"
+        : "✅"
+      : attack
+        ? "❌ miss"
+        : "❌";
+  return `${r.foe ? "👾" : "🎲"} **${esc(r.characterName)}**: ${r.label}${modeNote}: ${r.rolls.join("/")} ${mod} = **${r.total}** vs ${r.difficulty} ${result}`;
 };
 
 export interface TurnRenderOptions {
@@ -136,9 +147,10 @@ export function renderTurn(view: TurnView, opts: TurnRenderOptions = {}) {
   return { components: [c], flags: V2, allowedMentions: { parse: [] as never[] } };
 }
 
-/** A little health bar for heroes: ▰▰▰▱▱. */
+/** A little health bar: ▰▰▰▱▱. Anyone with any hit points left keeps at least one ▰. */
 function bar(hp: number, max: number): string {
-  const filled = max > 0 ? Math.round((Math.max(0, hp) / max) * 5) : 0;
+  const share = max > 0 ? Math.max(0, hp) / max : 0;
+  const filled = share > 0 ? Math.min(5, Math.max(1, Math.round(share * 5))) : 0;
   return "▰".repeat(filled) + "▱".repeat(5 - filled);
 }
 
@@ -150,7 +162,7 @@ function battlePanel(cb: NonNullable<TurnView["combat"]>): string {
   const foes = cb.foes
     .map((f) =>
       f.status === "fighting"
-        ? `👾 **${esc(f.name)}**: ${f.condition}`
+        ? `👾 **${esc(f.name)}** ${bar(f.health, 1)} ${f.condition}`
         : f.status === "at_mercy"
           ? `🏳️ **${esc(f.name)}**: ${f.condition}`
           : `-# ~~${esc(f.name)}~~ ${f.condition}`,

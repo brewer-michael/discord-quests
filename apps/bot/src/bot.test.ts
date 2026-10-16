@@ -393,6 +393,7 @@ describe("renderers stay within Discord's limits", () => {
           name: `Extremely Long-Named Gloam Skulker ${"ABCDEFGH"[i]}`,
           condition: i === 7 ? "gave up" : "nearly done",
           status: i === 7 ? "at_mercy" : i === 6 ? "fled" : "fighting",
+          health: i === 0 ? 0.6 : 0.2,
         })),
         heroes: Array.from({ length: 6 }, (_, i) => ({
           id: `h${i}`,
@@ -405,9 +406,41 @@ describe("renderers stay within Discord's limits", () => {
         log: [],
       },
     };
-    const json = JSON.stringify(checkLimits(renderTurn(battle, { waitingOn: ["Pip", "Mira"] })));
+    const rolls: TurnView["rolls"] = [
+      {
+        characterName: "Cuthbert",
+        label: "Longbow",
+        natural: 15,
+        rolls: [15, 3],
+        modifier: 7,
+        total: 22,
+        difficulty: "armor 13",
+        success: true,
+        mode: "advantage",
+        damage: 9,
+      },
+      {
+        characterName: "Shadow Wolf",
+        label: "Shadow Bite",
+        natural: 4,
+        rolls: [4],
+        modifier: 4,
+        total: 8,
+        difficulty: "armor 13",
+        success: false,
+        mode: "normal",
+        foe: true,
+      },
+    ];
+    const json = JSON.stringify(
+      checkLimits(renderTurn({ ...battle, rolls }, { waitingOn: ["Pip", "Mira"] })),
+    );
     expect(json).toContain("Spare");
     expect(json).toContain("Battle · round 4");
+    // Every roll shows what it did, the foes' attacks too, and foes show how hurt they are.
+    expect(json).toContain("Longbow (advantage): 15/3 +7 = **22** vs armor 13 ✅ **9 damage**");
+    expect(json).toContain("👾 **Shadow Wolf**: Shadow Bite: 4 +4 = **8** vs armor 13 ❌ miss");
+    expect(json).toContain("Gloam Skulker A** ▰▰▰▱▱ nearly done");
     expect(json).not.toContain("What do you do?");
     const over = JSON.stringify(
       checkLimits(
