@@ -140,6 +140,19 @@ export async function characterCommand(ctx: BotContext, i: ChatInputCommandInter
     await i.reply(renderSheet(await ctx.engine.characters.sheet(hero.id)) as never);
     return;
   }
+  if (sub === "describe") {
+    // Rewriting the picture card can take the story AI a few seconds.
+    await i.deferReply({ flags: ["Ephemeral"] });
+    const { appearance } = await ctx.engine.characters.describe(
+      c.id,
+      i.user.id,
+      i.options.getString("look", true),
+    );
+    await i.editReply(
+      `**${esc(hero.name)}** has a new description. In pictures from now on, they'll look like: *${esc(appearance)}*`,
+    );
+    return;
+  }
   if (sub === "levelup") {
     const info = await ctx.engine.characters.levelUpInfo(hero.id);
     if (!info.preview) {

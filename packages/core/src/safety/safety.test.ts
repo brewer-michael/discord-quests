@@ -112,4 +112,49 @@ describe("image prompts", () => {
     expect(prompt.toLowerCase()).not.toContain("bloody");
     expect(negativePrompt).toContain("gore");
   });
+
+  it("use the campaign's style and heroes, and keep children, cartoons and left-out topics out", () => {
+    const brief = {
+      setting: "The gates of a mountain hall",
+      subjects: ["a sleeping dragon"],
+      mood: "tense",
+      timeOfDay: "night",
+    };
+    const { prompt, negativePrompt } = buildImagePrompt(brief, world, {
+      style: "classic fantasy book illustration, pen and ink <b>",
+      heroes: [
+        "a short, stocky dwarf with a long braided beard, in chain mail",
+        "a tall woodland person called Wren, with a longbow and a bloody cloak",
+      ],
+      avoid: ["spiders", "deep water!"],
+    });
+    expect(prompt.startsWith("classic fantasy book illustration, pen and ink")).toBe(true);
+    expect(prompt).toContain(world.meta.artStyle);
+    expect(prompt).toContain(
+      "The adventurers: a short, stocky dwarf with a long braided beard, in chain mail; a tall woodland person",
+    );
+    expect(prompt).not.toContain("Wren");
+    expect(prompt).not.toContain("<b>");
+    expect(prompt.toLowerCase()).not.toContain("bloody");
+    for (const never of [
+      "nudity",
+      "occult symbols",
+      "children, childlike figures",
+      "cartoon",
+      "spiders",
+      "deep water",
+    ])
+      expect(negativePrompt).toContain(never);
+    expect(negativePrompt).not.toContain("!");
+
+    // A storybook style may look like a cartoon, and a hero written as a child may be drawn as one.
+    const storybook = buildImagePrompt(brief, world, {
+      style: "storybook watercolor",
+      cartoonish: true,
+      childrenOk: true,
+    });
+    expect(storybook.negativePrompt).not.toContain("cartoon");
+    expect(storybook.negativePrompt).not.toContain("children");
+    expect(storybook.negativePrompt).toContain("gore");
+  });
 });

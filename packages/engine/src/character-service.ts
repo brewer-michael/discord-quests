@@ -16,6 +16,7 @@ import { checkPlayerText } from "@dq/core/safety";
 import { SRD_CLASSES } from "@dq/core/srd";
 import { campaigns, characters, inventoryItems } from "@dq/db";
 import { and, eq } from "drizzle-orm";
+import { writeAppearance } from "./appearance";
 import {
   buildFinalCharacter,
   buildFor,
@@ -398,6 +399,35 @@ export class CharacterService {
         ),
       );
     return row ?? null;
+  }
+
+  /**
+   * Changes how a hero looks (checked like anything players type) and rewrites their picture card from it.
+   * Returns the new card, so the player can see how they'll be drawn.
+   */
+  async describe(
+    campaignId: string,
+    userId: string,
+    look: string,
+  ): Promise<{ look: string; appearance: string }> {
+    const c = await this.campaign(campaignId);
+    const hero = await this.characterFor(campaignId, userId);
+    if (!hero) throw new GameError("no hero", "You don't have a hero here yet. Use `/character create`.");
+    const text = look.trim().replace(/\s+/g, " ");
+    if (text.length > 200) throw new GameError("bad look", "Keep the description under 200 characters.");
+    const { index } = this.deps.worlds.get(c.worldId);
+    const told = await campaignStory(this.deps.db, c);
+    const verdict = checkPlayerText(text || "-", index.world, told.story.intensity);
+    if (text && !verdict.allow)
+      throw new GameError("unsafe look", verdict.message ?? "Try describing them differently.");
+    const appearance = await writeAppearance({
+      llm: this.deps.llm,
+      index,
+      hero: { ...hero, look: text },
+      scope: { guildId: c.guildId, campaignId: c.id },
+    });
+    await this.deps.db.update(characters).set({ look: text, appearance }).where(eq(characters.id, hero.id));
+    return { look: text, appearance };
   }
 
   async sheet(characterId: string): Promise<CharacterSheetView> {

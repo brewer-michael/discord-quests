@@ -16,6 +16,7 @@ import {
   turns,
 } from "@dq/db";
 import { and, desc, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
+import { partyAppearances, pictureLook } from "./appearance";
 import { chapterRecaps } from "./chronicle";
 import { type EngineDeps, GameError } from "./deps";
 import { createLoom } from "./loom-store";
@@ -165,6 +166,25 @@ export class CampaignService {
       .update(campaigns)
       .set({ threadId, dmThreadId: dmThreadId ?? null, updatedAt: new Date() })
       .where(eq(campaigns.id, campaignId));
+  }
+
+  /** How this campaign's pictures should look: its art style, its heroes' cards (written if missing), its topics. */
+  async pictureLook(campaignId: string) {
+    const c = await this.require(campaignId);
+    const { index } = this.deps.worlds.get(c.worldId);
+    const heroes = await this.deps.db
+      .select()
+      .from(characters)
+      .where(and(eq(characters.campaignId, c.id), eq(characters.status, "active")))
+      .orderBy(characters.createdAt);
+    const cards = await partyAppearances({
+      db: this.deps.db,
+      llm: this.deps.llm,
+      index,
+      heroes,
+      scope: { guildId: c.guildId, campaignId: c.id },
+    });
+    return pictureLook(profileOf(c), cards);
   }
 
   /** The campaign's story settings, and the intensity it's told at right now. */

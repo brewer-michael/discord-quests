@@ -199,6 +199,7 @@ async function addSceneImage(ctx: BotContext, message: Message, view: TurnView) 
             { guildId: campaign.guildId, campaignId: campaign.id },
             view.imageBrief,
             index.world,
+            { look: await ctx.engine.campaigns.pictureLook(campaign.id) },
           );
     if (!image) return;
     const att = sceneAttachment(image.bytes, image.mime);

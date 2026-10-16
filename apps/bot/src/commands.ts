@@ -126,6 +126,18 @@ export const COMMANDS = [
     .addSubcommand((s) => s.setName("sheet").setDescription("See your hero's sheet"))
     .addSubcommand((s) =>
       s.setName("levelup").setDescription("Grow stronger after a big moment in the story"),
+    )
+    .addSubcommand((s) =>
+      s
+        .setName("describe")
+        .setDescription("Say what your hero looks like, for the story and its pictures")
+        .addStringOption((o) =>
+          o
+            .setName("look")
+            .setDescription("A sentence or two: their build, hair, clothes, anything people notice")
+            .setMaxLength(200)
+            .setRequired(true),
+        ),
     ),
   new SlashCommandBuilder()
     .setName("act")

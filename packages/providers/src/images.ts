@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { buildImagePrompt, type ImageBrief } from "@dq/core/safety";
+import { buildImagePrompt, type ImageBrief, type PictureLook } from "@dq/core/safety";
 import type { World } from "@dq/core/world";
 import { type Db, imageAssets } from "@dq/db";
 import { and, eq } from "drizzle-orm";
@@ -58,9 +58,9 @@ export class ImageService {
     scope: { guildId: string; campaignId?: string },
     brief: ImageBrief,
     world: Pick<World, "meta" | "content">,
-    opts: { cacheScope?: "scene" | "region"; cacheHint?: string } = {},
+    opts: { cacheScope?: "scene" | "region"; cacheHint?: string; look?: PictureLook } = {},
   ): Promise<SceneImage | null> {
-    const { prompt, negativePrompt } = buildImagePrompt(brief, world);
+    const { prompt, negativePrompt } = buildImagePrompt(brief, world, opts.look);
     const routes = await this.store.routes("image", scope);
     const settings = await this.store.guildSettings(scope.guildId);
     for (const route of routes) {

@@ -193,6 +193,46 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
     );
   });
 
+  it("hero picture cards: from the player's words when given, from the world otherwise, saved and reused", async () => {
+    let card =
+      "a stout little grown-up called Pip Thistle with freckles, a big grin and a dented round shield";
+    const llm = new FakeLlm({
+      summarizer: (call) => (call.schemaName === "appearance" ? { appearance: card } : new Error("not here")),
+    });
+    const engine = createEngine({ db: db.db, worlds, llm });
+    const c = await engine.campaigns.create({
+      guildId: "g-look",
+      channelId: "ch-look",
+      name: "Look Test",
+      mode: "ai_dm",
+      createdBy: "u1",
+    });
+    await makeHero(engine, c.id, "u1", "shieldheart", "Pip Thistle");
+    const look = await engine.campaigns.pictureLook(c.id);
+    // The player's own words, without the hero's name; written once and saved.
+    expect(look.heroes).toEqual([
+      "a stout little grown-up with freckles, a big grin and a dented round shield",
+    ]);
+    expect(look.style).toContain("book illustration");
+    expect([look.cartoonish, look.childrenOk, look.avoid]).toEqual([false, false, []]);
+    card = "something else entirely";
+    expect((await engine.campaigns.pictureLook(c.id)).heroes[0]).toContain("freckles");
+
+    // /character describe rewrites the card; an unsafe card falls back to the world's own words.
+    card = "a tall, grey-cloaked woman with a blood-red scarf";
+    const described = await engine.characters.describe(c.id, "u1", "Tall now, with a grey cloak.");
+    expect(described.look).toBe("Tall now, with a grey cloak.");
+    expect(described.appearance).toContain("grown-up of the little folk");
+    expect(described.appearance).toContain("chain mail");
+    expect((await engine.campaigns.pictureLook(c.id)).heroes[0]).toBe(described.appearance);
+    await expect(engine.characters.describe(c.id, "u1", "Covered in blood.")).rejects.toMatchObject({
+      message: "unsafe look",
+    });
+    await expect(engine.characters.describe(c.id, "nobody", "Tall.")).rejects.toMatchObject({
+      message: "no hero",
+    });
+  });
+
   it("builds heroes through the guided wizard", async () => {
     const engine = createEngine({ db: db.db, worlds, llm: new FakeLlm() });
     const c = await engine.campaigns.create({

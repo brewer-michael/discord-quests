@@ -225,6 +225,8 @@ export const characters = pgTable(
     status: text("status").$type<"draft" | "active" | "retired">().notNull().default("draft"),
     name: text("name").notNull().default(""),
     look: text("look").notNull().default(""),
+    /** How the hero is drawn in every picture: written once from their people, gear and look, then reused. */
+    appearance: text("appearance"),
     classId: text("class_id"),
     pathId: text("path_id"),
     backgroundId: text("background_id"),

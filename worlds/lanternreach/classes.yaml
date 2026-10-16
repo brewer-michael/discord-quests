@@ -11,7 +11,7 @@
     shield: true
     gear: [hearth-lantern, rope, trail-cakes, bedroll]
   suggestedSkills: [athletics, perception]
-  portraitPrompt: a young hero in chain mail with a round wooden shield painted with a lantern
+  portraitPrompt: in chain mail and a sturdy cloak, carrying a sword and a round wooden shield painted with a lantern
 
 - id: scout
   srdClass: rogue
@@ -26,7 +26,7 @@
     shield: false
     gear: [hearth-lantern, rope, trail-cakes, lockpicks]
   suggestedSkills: [stealth, acrobatics, perception, investigation]
-  portraitPrompt: a nimble young scout in a hooded green cloak crouched on a rooftop at dusk
+  portraitPrompt: in a hooded green cloak and soft leather armor, with a short blade and a coil of rope
 
 - id: lorewright
   srdClass: wizard
@@ -42,7 +42,7 @@
     gear: [hearth-lantern, spell-notebook, trail-cakes, chalk]
   suggestedSkills: [arcana, history]
   suggestedSpells: [fire-bolt, light, mage-hand, magic-missile, shield, sleep]
-  portraitPrompt: a curious young wizard with ink-stained fingers and a glowing notebook
+  portraitPrompt: in a travel-worn robe with ink-stained fingers, carrying a staff and a glowing notebook
 
 - id: lanternkeeper
   srdClass: cleric
@@ -58,7 +58,7 @@
     gear: [hearth-lantern, lantern-charm, healer-kit, trail-cakes]
   suggestedSkills: [medicine, insight]
   suggestedSpells: [sacred-flame, guidance, light, cure-wounds, healing-word, bless]
-  portraitPrompt: a kind young healer holding up a bright brass lantern in a dark forest
+  portraitPrompt: in plain armor and a hooded mantle, carrying a mace and a bright brass lantern
 
 - id: wayfarer
   srdClass: ranger
@@ -74,7 +74,7 @@
     gear: [hearth-lantern, rope, trail-cakes, bedroll]
   suggestedSkills: [survival, nature, perception]
   suggestedSpells: [hunters-mark, goodberry, cure-wounds]
-  portraitPrompt: a young ranger with a longbow and a fox-fur hood standing on a misty hill
+  portraitPrompt: in weathered leathers and a fox-fur hood, with a longbow and a quiver of arrows
 
 - id: songspinner
   srdClass: bard
@@ -90,4 +90,4 @@
     gear: [hearth-lantern, travel-lute, trail-cakes, journal]
   suggestedSkills: [performance, persuasion, insight]
   suggestedSpells: [vicious-mockery, minor-illusion, healing-word, sleep, faerie-fire]
-  portraitPrompt: a cheerful young bard with a patched lute and a feathered cap
+  portraitPrompt: in a patched traveling coat and a feathered cap, with a well-worn lute slung over one shoulder

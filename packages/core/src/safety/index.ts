@@ -227,16 +227,38 @@ export interface ImageBrief {
   timeOfDay: string;
 }
 
-const IMAGE_NEGATIVE =
-  "text, words, letters, watermark, signature, blood, gore, wounds, weapons pointed at the viewer, frightening faces, horror, realistic photograph, adult content";
+/** What no picture may show, at any intensity and in any style. */
+export const IMAGE_NEGATIVE = [
+  "text, words, letters, watermark, signature",
+  "blood, gore, wounds, injuries, corpses, horror, frightening faces",
+  "nudity, sexual content, revealing clothing",
+  "occult symbols, pentagrams, satanic imagery",
+  "weapons pointed at the viewer, realistic photograph",
+].join(", ");
+
+/** How a campaign's pictures should look, from its story settings and its heroes. */
+export interface PictureLook {
+  /** The art style. Typed by the host when it's a custom one, so it's cleaned like everything else. */
+  style: string;
+  /** Each hero's appearance card. */
+  heroes: string[];
+  /** Topics the table asked to leave out. */
+  avoid: string[];
+  /** A storybook style may look like a cartoon; others keep cartoon and chibi looks out. */
+  cartoonish?: boolean;
+  /** A hero written as a child; otherwise children and childlike figures are kept out of pictures. */
+  childrenOk?: boolean;
+}
 
 /**
  * Builds an image prompt only from structured, allowlisted fields. Raw player
- * text never reaches the image provider.
+ * text never reaches the image provider: hero cards and briefs are written by
+ * the story AI and cleaned here, like the host's art style.
  */
 export function buildImagePrompt(
   brief: ImageBrief,
   world: Pick<World, "meta" | "content">,
+  look?: Partial<PictureLook>,
 ): { prompt: string; negativePrompt: string } {
   const banned = strictBannedTerms(world);
   const clean = (s: string, max: number) => {
@@ -253,12 +275,33 @@ export function buildImagePrompt(
     .slice(0, 4)
     .map((s) => clean(s, 80))
     .filter(Boolean);
+  const heroes = (look?.heroes ?? [])
+    .slice(0, 4)
+    .map((h) => clean(h, 200))
+    .filter(Boolean);
   const parts = [
     clean(brief.setting, 160),
     subjects.length > 0 ? subjects.join(", ") : "",
+    heroes.length > 0 ? `The adventurers: ${heroes.join("; ")}` : "",
     clean(brief.mood, 60),
     clean(brief.timeOfDay, 30),
   ].filter(Boolean);
-  const prompt = `${world.meta.artStyle}. ${parts.join(". ")}.`.replace(/\.\./g, ".").slice(0, 900);
-  return { prompt, negativePrompt: IMAGE_NEGATIVE };
+  const style = clean(look?.style ?? "", 300);
+  const prompt = `${style ? `${style}. ` : ""}${world.meta.artStyle}. ${parts.join(". ")}.`
+    .replace(/\.\./g, ".")
+    .slice(0, 1500);
+  const negative = [
+    IMAGE_NEGATIVE,
+    ...(look?.childrenOk ? [] : ["children, childlike figures, kids"]),
+    ...(look?.cartoonish ? [] : ["cartoon, chibi"]),
+    ...(look?.avoid ?? [])
+      .map((t) =>
+        t
+          .replace(/[^\p{L}\p{N} '-]/gu, " ")
+          .trim()
+          .slice(0, 60),
+      )
+      .filter(Boolean),
+  ].join(", ");
+  return { prompt, negativePrompt: negative };
 }

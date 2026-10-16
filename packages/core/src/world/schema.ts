@@ -90,6 +90,7 @@ export const ClassDef = z.strictObject({
   }),
   suggestedSkills: z.array(SkillId),
   suggestedSpells: z.array(Id).default([]),
+  /** How a hero of this class looks in pictures: clothing and gear only, never age or pose. */
   portraitPrompt: Text,
 });
 export type ClassDef = z.infer<typeof ClassDef>;
@@ -143,6 +144,8 @@ export const SpeciesDef = z.strictObject({
   size: z.enum(["small", "medium"]),
   speed: z.number().int().min(20).max(40),
   traits: z.array(z.strictObject({ id: Id, name: Short, description: Text, effect: TraitEffect })),
+  /** What these people look like in pictures, as grown-ups (heroes are adults unless a player says otherwise). */
+  looks: Short.optional(),
 });
 export type SpeciesDef = z.infer<typeof SpeciesDef>;
 

@@ -43,6 +43,13 @@
       "when": 1791992687339,
       "tag": "0005_round_reminders",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792116037649,
+      "tag": "0006_hero_appearance",
+      "breakpoints": true
     }
   ]
 }

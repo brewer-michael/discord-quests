@@ -1,3 +1,4 @@
+export * from "./appearance";
 export * from "./campaign-service";
 export * from "./character-rules";
 export * from "./character-service";

@@ -359,6 +359,7 @@ async function paintPastScenes(
   });
   void (async () => {
     const { index } = ctx.worlds.get(c.worldId);
+    const look = await ctx.engine.campaigns.pictureLook(c.id);
     let painted = 0;
     let reused = 0;
     let stopped = false;
@@ -371,7 +372,7 @@ async function paintPastScenes(
         continue;
       }
       if (painted >= PICTURES_PER_REQUEST) break;
-      const image = await images.sceneImage(scope, scene.brief, index.world).catch((e: Error) => {
+      const image = await images.sceneImage(scope, scene.brief, index.world, { look }).catch((e: Error) => {
         ctx.log.warn("scene picture failed", { campaignId: c.id, error: e.message });
         return null;
       });

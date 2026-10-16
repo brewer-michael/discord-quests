@@ -3,6 +3,7 @@
   description: The everyday people of Lanternreach, found in every village and on every road.
   size: medium
   speed: 30
+  looks: an ordinary human of Lanternreach, sturdy and road-worn
   traits:
     - id: resourceful
       name: Resourceful
@@ -18,6 +19,7 @@
   description: Tall, quiet woodland folk with leaf-green eyes, who remember songs older than the Old Road.
   size: medium
   speed: 30
+  looks: a tall, slender woodland person with leaf-green eyes, long hair and gently pointed ears
   traits:
     - id: twilight-sight
       name: Twilight Sight
@@ -33,6 +35,7 @@
   description: Sturdy mountain folk with braided beards (all of them, even the children), famous for stubbornness.
   size: medium
   speed: 30
+  looks: a short, broad-shouldered, stocky dwarf with a long braided beard
   traits:
     - id: twilight-sight
       name: Twilight Sight
@@ -52,6 +55,7 @@
   description: Small, round-cheeked folk who love second breakfasts and are much braver than they look.
   size: small
   speed: 30
+  looks: a small, round-faced grown-up of the little folk, about half human height, with curly hair and bare feet
   traits:
     - id: lucky
       name: Lucky
@@ -67,6 +71,7 @@
   description: Clever, whiskery little tinkerers who live in cozy burrows full of clocks.
   size: small
   speed: 30
+  looks: a small grown-up gnome-like tinkerer with bushy whiskers, brass goggles and a belt of tools
   traits:
     - id: twilight-sight
       name: Twilight Sight
