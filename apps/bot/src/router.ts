@@ -11,6 +11,7 @@ import {
   wizardNameSubmit,
 } from "./handlers/character";
 import { approvalButton, approvalModal, dmCommand, loomCommand } from "./handlers/dm";
+import { galleryButton, galleryShare } from "./handlers/gallery";
 import {
   actCommand,
   choiceButton,
@@ -118,6 +119,12 @@ export async function route(ctx: BotContext, i: Interaction): Promise<void> {
         return;
       case "wizard":
         if (i.isButton() || i.isStringSelectMenu()) await wizardInteraction(ctx, i, id);
+        return;
+      case "gallery":
+        if (i.isButton()) await galleryButton(ctx, i, id);
+        return;
+      case "gallery-share":
+        if (i.isButton()) await galleryShare(ctx, i, id.campaignId, id.sceneId);
         return;
       case "wizard-name":
         if (i.isButton()) await wizardNameButton(ctx, i, id.campaignId);

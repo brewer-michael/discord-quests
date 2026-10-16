@@ -11,6 +11,7 @@ import { postTurn, restartClock, sendableChannel, stopClock } from "../flows";
 import { describePace, renderHub } from "../render/hub";
 import { renderScenePicture, sceneAttachment } from "../render/turn";
 import { canSeeRoom, checkRoom, fetchRoom } from "../rooms";
+import { galleryCommand } from "./gallery";
 import { campaignHere, refreshHub, say } from "./shared";
 
 export async function campaignNew(ctx: BotContext, i: ChatInputCommandInteraction) {
@@ -292,6 +293,8 @@ export async function campaignCommand(ctx: BotContext, i: ChatInputCommandIntera
       return;
     case "pictures":
       return paintPastScenes(ctx, i, c);
+    case "gallery":
+      return galleryCommand(ctx, i, c);
     case "delete": {
       if (!i.options.getBoolean("confirm", true)) {
         await say(i, "Nothing deleted.");
@@ -347,14 +350,9 @@ async function paintPastScenes(
     return;
   }
   const thread = channel;
-  const batch = todo.slice(0, PICTURES_PER_REQUEST);
   await say(
     i,
-    `Painting ${batch.length} scene${batch.length === 1 ? "" : "s"}, oldest first. They'll appear here one by one${
-      todo.length > batch.length
-        ? `; run \`/campaign pictures\` again afterwards for the other ${todo.length - batch.length}`
-        : ""
-    }.`,
+    `Painting the scenes that don't have a picture yet, oldest first (up to ${PICTURES_PER_REQUEST} new pictures at a time). They'll appear here one by one.`,
   ).catch((e) => {
     painting.delete(c.id);
     throw e;
@@ -362,8 +360,17 @@ async function paintPastScenes(
   void (async () => {
     const { index } = ctx.worlds.get(c.worldId);
     let painted = 0;
+    let reused = 0;
     let stopped = false;
-    for (const scene of batch) {
+    for (const scene of todo) {
+      // A return visit shares the picture of the place it went back to.
+      const placeAsset = await ctx.engine.campaigns.placePicture(scene.sceneId);
+      if (placeAsset) {
+        await ctx.engine.campaigns.setSceneImage(scene.sceneId, placeAsset);
+        reused++;
+        continue;
+      }
+      if (painted >= PICTURES_PER_REQUEST) break;
       const image = await images.sceneImage(scope, scene.brief, index.world).catch((e: Error) => {
         ctx.log.warn("scene picture failed", { campaignId: c.id, error: e.message });
         return null;
@@ -379,16 +386,20 @@ async function paintPastScenes(
       await thread.send({ ...renderScenePicture(scene, att.name), files: [att.file] } as never);
       painted++;
     }
-    const left = todo.length - painted;
+    const left = todo.length - painted - reused;
+    const shared =
+      reused > 0
+        ? ` ${reused} return visit${reused === 1 ? " shares" : "s share"} a picture of a place already painted.`
+        : "";
     await say(
       i,
       stopped
         ? painted === 0
-          ? "I couldn't paint any pictures. The picture service didn't answer, or today's picture limit (on the setup page) is used up."
-          : `Painted ${painted}, then stopped: the picture service didn't answer, or today's picture limit is used up.`
+          ? `I couldn't paint any new pictures.${shared} The picture service didn't answer, or today's picture limit (on the setup page) is used up.`
+          : `Painted ${painted}, then stopped: the picture service didn't answer, or today's picture limit is used up.${shared}`
         : left > 0
-          ? `Painted ${painted}. ${left} more to go: run \`/campaign pictures\` again.`
-          : `Painted ${painted}. Every scene so far has its picture now.`,
+          ? `Painted ${painted}.${shared} ${left} more to go: run \`/campaign pictures\` again.`
+          : `Painted ${painted}.${shared} Every scene so far has its picture now. \`/campaign gallery\` shows them all.`,
     ).catch(() => {});
   })()
     .catch((e: Error) => ctx.log.warn("painting scenes failed", { campaignId: c.id, error: e.message }))

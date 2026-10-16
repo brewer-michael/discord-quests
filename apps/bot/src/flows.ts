@@ -188,14 +188,20 @@ async function addSceneImage(ctx: BotContext, message: Message, view: TurnView) 
     const policy = (campaign.settings as Record<string, unknown>).imagePolicy ?? "new_scenes";
     if (policy === "off" || (policy === "cruxes_only" && view.sceneKind !== "crux")) return;
     const { index } = ctx.worlds.get(campaign.worldId);
-    const image = await ctx.images.sceneImage(
-      { guildId: campaign.guildId, campaignId: campaign.id },
-      view.imageBrief,
-      index.world,
-    );
+    const round = view.roundId ? await ctx.engine.turns.getRound(view.roundId) : null;
+    // Back somewhere the campaign already has a picture of: show that one again instead of painting anew.
+    const placeAsset = round?.sceneId ? await ctx.engine.campaigns.placePicture(round.sceneId) : null;
+    const reused = placeAsset ? await ctx.images.load(campaign.guildId, placeAsset) : null;
+    const image =
+      placeAsset && reused
+        ? { assetId: placeAsset, ...reused }
+        : await ctx.images.sceneImage(
+            { guildId: campaign.guildId, campaignId: campaign.id },
+            view.imageBrief,
+            index.world,
+          );
     if (!image) return;
     const att = sceneAttachment(image.bytes, image.mime);
-    const round = view.roundId ? await ctx.engine.turns.getRound(view.roundId) : null;
     // Remembered so /campaign pictures doesn't paint this scene again; never worth losing the picture over.
     if (round?.sceneId)
       await ctx.engine.campaigns

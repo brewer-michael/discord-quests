@@ -1,15 +1,24 @@
 import { VIRTUE_TAGS } from "@dq/core/loom";
+import { scenes, turns } from "@dq/db";
 import { createTestDb, TEST_DATABASE_URL } from "@dq/db/testing";
-import { createEngine, type DraftView, GUIDE, type TurnView, WorldCache } from "@dq/engine";
+import {
+  createEngine,
+  type DraftView,
+  GUIDE,
+  pictureSearchWords,
+  type TurnView,
+  WorldCache,
+} from "@dq/engine";
 import { FakeLlm, UnconfiguredLlm } from "@dq/engine/testing";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { commandsJson } from "./commands";
 import { battleMenu } from "./handlers/battle";
 import { renderSafetyLog } from "./handlers/campaign";
-import { decodeId, encodeId } from "./ids";
+import { type CustomId, decodeId, encodeId } from "./ids";
 import { RateLimiter } from "./rate-limit";
 import { countComponents, textLength } from "./render/common";
 import { draftModal, renderDraft } from "./render/draft";
+import { renderGallery } from "./render/gallery";
 import { renderGuide, renderWelcome } from "./render/guide";
 import { describePace, renderHub } from "./render/hub";
 import { renderAbout, renderHelp, renderJournal, renderPrivacy } from "./render/misc";
@@ -44,9 +53,28 @@ function checkLimits(payload: { components: Array<{ toJSON(): unknown }> }) {
   return json;
 }
 
+describe("picture search words", () => {
+  it("keep plain words, short enough to ride in a button", () => {
+    expect(pictureSearchWords("The Lantern-Bridge of Bellhollow!!")).toEqual([
+      "the",
+      "lantern",
+      "bridge",
+      "of",
+      "bellhollow",
+    ]);
+    expect(pictureSearchWords("Café café   x  ")).toEqual(["cafe"]);
+    expect(pictureSearchWords(null)).toEqual([]);
+    const many = pictureSearchWords("one two three four five six seven eight nine");
+    expect(many).toHaveLength(6);
+    const long = pictureSearchWords(`${"a".repeat(30)} ${"b".repeat(30)} ${"c".repeat(30)}`);
+    expect(long.join("+").length).toBeLessThanOrEqual(44);
+    expect(long.every((w) => w.length <= 20)).toBe(true);
+  });
+});
+
 describe("custom ids", () => {
   it("round-trip and stay short", () => {
-    const ids = [
+    const ids: CustomId[] = [
       { kind: "choice", roundId: UUID, index: 3 },
       { kind: "freeform", roundId: UUID },
       { kind: "wizard", campaignId: UUID, page: 1, action: "inc-str" },
@@ -57,7 +85,16 @@ describe("custom ids", () => {
       { kind: "battle", roundId: UUID, action: "magic" },
       { kind: "battle-pick", roundId: UUID, action: "magic", arg: "healing-word" },
       { kind: "battle-pick", roundId: UUID, action: "attack" },
-    ] as const;
+      { kind: "gallery", campaignId: UUID, index: 0, words: [] },
+      {
+        kind: "gallery",
+        campaignId: UUID,
+        index: 41,
+        words: pictureSearchWords("x".repeat(40) + " " + "y".repeat(40)),
+      },
+      { kind: "gallery", campaignId: UUID, index: 2, words: ["misty", "bridge"] },
+      { kind: "gallery-share", campaignId: UUID, sceneId: UUID },
+    ];
     for (const id of ids) {
       const raw = encodeId(id);
       expect(raw.length).toBeLessThanOrEqual(100);
@@ -559,6 +596,93 @@ describe.skipIf(!TEST_DATABASE_URL)("a whole campaign renders cleanly", () => {
       checkLimits(renderScenePicture(scene, "scene.png"));
     }
   }, 60_000);
+
+  it("finds pictures by place and words, and shares a place's picture on a return visit", async () => {
+    const engine = createEngine({ db: db.db, worlds, llm: new FakeLlm() });
+    const c = await engine.campaigns.create({
+      guildId: "g",
+      channelId: "c4",
+      name: "Gallery",
+      mode: "ai_dm",
+      createdBy: "u1",
+    });
+    const played = [
+      [
+        "Arrival at Bellhollow",
+        "copperpeak",
+        "bellhollow",
+        "exploration",
+        "Bells ring as the heroes arrive.",
+      ],
+      ["The Misty Crossing", "whisperwood", null, "travel", "Fog curls over an old stone bridge."],
+      ["Back in Bellhollow", "copperpeak", "bellhollow", "social", "The tinkers wave hello again."],
+      ["The Bell Tower Showdown", "copperpeak", "bellhollow", "crux", "Everything rides on this moment."],
+    ] as const;
+    const ids: string[] = [];
+    for (const [n, [title, regionId, poiId, kind, narration]] of played.entries()) {
+      await db.db.insert(turns).values({
+        campaignId: c.id,
+        seq: n + 1,
+        status: "committed",
+        data: {
+          narration: {
+            narration,
+            imageBrief: {
+              setting: title,
+              subjects: ["three young heroes"],
+              mood: "hopeful",
+              timeOfDay: "dusk",
+            },
+          },
+        },
+      });
+      const [row] = await db.db
+        .insert(scenes)
+        .values({ campaignId: c.id, kind, regionId, poiId, title, startedTurn: n + 1 })
+        .returning();
+      ids.push(row?.id ?? "");
+    }
+    const [arrival, crossing, back, showdown] = ids as [string, string, string, string];
+    const A = "aaaaaaaa-e89b-42d3-a456-426614174000";
+    const B = "bbbbbbbb-e89b-42d3-a456-426614174000";
+    await engine.campaigns.setSceneImage(arrival, A);
+    await engine.campaigns.setSceneImage(crossing, B);
+
+    // Back at Bellhollow: the picture of Bellhollow comes back. Decisive moments always get their own,
+    // and a road picture only stands in for the same road.
+    expect(await engine.campaigns.placePicture(back)).toBe(A);
+    expect(await engine.campaigns.placePicture(showdown)).toBeNull();
+    expect(await engine.campaigns.placePicture(crossing)).toBeNull();
+    await engine.campaigns.setSceneImage(back, A);
+
+    const titles = async (words: string[]) =>
+      (await engine.campaigns.findPictures(c.id, words)).map((p) => p.title);
+    // Each picture once, in story order.
+    expect(await titles([])).toEqual(["Arrival at Bellhollow", "The Misty Crossing"]);
+    expect(await titles(["bridge"])).toEqual(["The Misty Crossing"]);
+    expect(await titles(["bells"])).toEqual(["Arrival at Bellhollow"]);
+    expect(await titles(pictureSearchWords("Bellhollow"))).toEqual(["Arrival at Bellhollow"]);
+    // Either word will do; a scene found through a return visit still shows its picture once.
+    expect((await titles(["fog", "tinkers"])).sort()).toEqual(["Back in Bellhollow", "The Misty Crossing"]);
+    expect(await titles(["dragon"])).toEqual([]);
+
+    const [first] = await engine.campaigns.findPictures(c.id);
+    if (!first) throw new Error("expected a picture");
+    expect(first.locationName).toBe("Bellhollow");
+    for (const imageName of ["scene.png", null])
+      checkLimits(
+        renderGallery({
+          campaignId: c.id,
+          campaignName: "x".repeat(100),
+          entry: { ...first, title: "t".repeat(300) },
+          index: 0,
+          total: 2,
+          words: pictureSearchWords("misty bridge"),
+          imageName,
+          unpainted: 1,
+        }),
+      );
+  });
 
   it("scenes told without AI are painted from the world's own description of the place", async () => {
     const engine = createEngine({ db: db.db, worlds, llm: new UnconfiguredLlm() });

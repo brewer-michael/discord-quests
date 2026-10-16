@@ -14,7 +14,7 @@ import {
   scenes,
   turns,
 } from "@dq/db";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import { chapterRecaps } from "./chronicle";
 import { type EngineDeps, GameError } from "./deps";
 import { createLoom } from "./loom-store";
@@ -481,10 +481,85 @@ export class CampaignService {
           title: s.title,
           kind: s.kind,
           locationName: poi?.name ?? region?.name ?? s.regionId,
+          chapter: index.beatOrder.find((b) => b.beat.id === s.beatId)?.chapter.number ?? null,
           imageAssetId: s.imageAssetId,
           brief: briefs.get(s.startedTurn) ?? placeBrief(index, s),
         };
       });
+  }
+
+  /**
+   * A picture this campaign already has of a scene's place, for a return visit: same region and landmark, road
+   * pictures only for road scenes. Decisive moments always get their own picture and never lend theirs.
+   */
+  async placePicture(sceneId: string): Promise<string | null> {
+    const [scene] = await this.deps.db.select().from(scenes).where(eq(scenes.id, sceneId));
+    if (!scene || scene.kind === "crux") return null;
+    const [other] = await this.deps.db
+      .select({ assetId: scenes.imageAssetId })
+      .from(scenes)
+      .where(
+        and(
+          eq(scenes.campaignId, scene.campaignId),
+          eq(scenes.regionId, scene.regionId),
+          scene.poiId ? eq(scenes.poiId, scene.poiId) : isNull(scenes.poiId),
+          scene.kind === "travel" ? eq(scenes.kind, "travel") : ne(scenes.kind, "travel"),
+          ne(scenes.kind, "crux"),
+          ne(scenes.id, scene.id),
+          isNotNull(scenes.imageAssetId),
+        ),
+      )
+      .orderBy(desc(scenes.startedTurn))
+      .limit(1);
+    return other?.assetId ?? null;
+  }
+
+  /**
+   * The campaign's pictures, one per picture (a place visited three times shows once), in story order. With search
+   * words, only scenes whose name, place, story or picture notes mention them, best matches first.
+   */
+  async findPictures(campaignId: string, words: string[] = []): Promise<SceneGalleryEntry[]> {
+    const all = (await this.sceneGallery(campaignId)).filter((s) => s.imageAssetId);
+    let ordered = all;
+    if (words.length > 0) {
+      const query = words.map((w) => `${w}:*`).join(" | ");
+      const { rows } = await this.deps.db.execute<{ id: string; rank: number }>(sql`
+        select x.id, ts_rank(x.doc, q) as rank
+        from (
+          select s.id, to_tsvector('english', concat_ws(' ',
+            s.title,
+            replace(s.region_id, '-', ' '),
+            replace(coalesce(s.poi_id, ''), '-', ' '),
+            s.state->>'summary',
+            t.data->'narration'->>'narration',
+            t.data->'narration'->'imageBrief'->>'setting',
+            t.data->'narration'->'imageBrief'->>'subjects',
+            t.data->'narration'->'imageBrief'->>'mood'
+          )) as doc
+          from scenes s
+          left join turns t
+            on t.campaign_id = s.campaign_id and t.seq = s.started_turn and t.status = 'committed'
+          where s.campaign_id = ${campaignId} and s.image_asset_id is not null
+        ) x, to_tsquery('english', ${query}) q
+        where x.doc @@ q
+      `);
+      const rank = new Map(rows.map((r) => [r.id, Number(r.rank)]));
+      // Place names come from the world; match those here too ("Bellhollow" finds every scene there).
+      for (const s of all) {
+        const nameWords = pictureSearchWords(s.locationName);
+        if (words.some((w) => nameWords.some((n) => n.startsWith(w))))
+          rank.set(s.sceneId, (rank.get(s.sceneId) ?? 0) + 1);
+      }
+      ordered = all
+        .filter((s) => rank.has(s.sceneId))
+        .sort((a, b) => (rank.get(b.sceneId) ?? 0) - (rank.get(a.sceneId) ?? 0));
+    }
+    const seen = new Set<string>();
+    return ordered.filter((s) => {
+      if (seen.has(s.imageAssetId as string)) return false;
+      seen.add(s.imageAssetId as string);
+      return true;
+    });
   }
 
   /** Remembers a scene's picture, so it isn't painted again. */
@@ -508,8 +583,28 @@ export interface SceneGalleryEntry {
   title: string;
   kind: string;
   locationName: string;
+  chapter: number | null;
   imageAssetId: string | null;
   brief: ImageBrief;
+}
+
+/**
+ * The words of a picture search, cleaned for the full-text query and short enough to ride in a button id:
+ * lowercase letters and digits only, at most 6 words and 44 characters joined with "+".
+ */
+export function pictureSearchWords(text: string | null | undefined): string[] {
+  const out: string[] = [];
+  for (const w of (text ?? "").toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []) {
+    const word = w
+      .normalize("NFKD")
+      .replace(/[^a-z0-9]/g, "")
+      .slice(0, 20);
+    if (word.length < 2 || out.includes(word)) continue;
+    if ([...out, word].join("+").length > 44) break;
+    out.push(word);
+    if (out.length === 6) break;
+  }
+  return out;
 }
 
 function asBrief(v: unknown): ImageBrief | null {

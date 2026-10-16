@@ -40,6 +40,15 @@ export class ImageService {
 
   private readonly log?: { warn(msg: string, data?: Record<string, unknown>): void };
 
+  /** A picture already made for this server. */
+  async load(guildId: string, assetId: string): Promise<{ bytes: Buffer; mime: string } | null> {
+    const [row] = await this.db
+      .select({ bytes: imageAssets.bytes, mime: imageAssets.mime })
+      .from(imageAssets)
+      .where(and(eq(imageAssets.guildId, guildId), eq(imageAssets.id, assetId)));
+    return row?.bytes ? { bytes: Buffer.from(row.bytes), mime: row.mime } : null;
+  }
+
   /** Whether this server (or the bot's built-in services) has a picture service to paint with. */
   async available(scope: { guildId: string; campaignId?: string }): Promise<boolean> {
     return (await this.store.routes("image", scope)).length > 0;
@@ -119,7 +128,17 @@ export class ImageService {
           })
           .onConflictDoNothing()
           .returning();
-        return { assetId: row?.id ?? cacheKey, bytes, mime: result.mime, cached: false };
+        // Painted twice at once: the other copy was saved first, so point at that one.
+        const assetId =
+          row?.id ??
+          (
+            await this.db
+              .select({ id: imageAssets.id })
+              .from(imageAssets)
+              .where(and(eq(imageAssets.guildId, scope.guildId), eq(imageAssets.cacheKey, cacheKey)))
+          )[0]?.id;
+        if (!assetId) throw new Error("picture was not saved");
+        return { assetId, bytes, mime: result.mime, cached: false };
       } catch (e) {
         this.log?.warn("image provider failed", { configId: cfg.id, error: (e as Error).message });
       }

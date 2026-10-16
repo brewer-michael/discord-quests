@@ -22,12 +22,16 @@ export type CustomId =
   | { kind: "approval"; approvalId: string; action: ApprovalAction }
   | { kind: "approval-modal"; approvalId: string; action: ApprovalAction }
   | { kind: "battle"; roundId: string; action: BattleAction }
-  | { kind: "battle-pick"; roundId: string; action: BattleAction; arg?: string };
+  | { kind: "battle-pick"; roundId: string; action: BattleAction; arg?: string }
+  /** A page of the picture gallery. The search words ride along (see pictureSearchWords). */
+  | { kind: "gallery"; campaignId: string; index: number; words: string[] }
+  | { kind: "gallery-share"; campaignId: string; sceneId: string };
 
 /** The battle buttons. Picks carry a spell or item id when a second choice is needed. */
 export type BattleAction = "attack" | "magic" | "defend" | "help" | "potion" | "spare";
 const BATTLE_ACTIONS: readonly string[] = ["attack", "magic", "defend", "help", "potion", "spare"];
 const ARG = /^[a-z0-9-]{1,40}$/;
+const WORD = /^[a-z0-9]{1,20}$/;
 
 export type ApprovalAction = "ok" | "edit" | "redo" | "write";
 const APPROVAL_ACTIONS: readonly string[] = ["ok", "edit", "redo", "write"];
@@ -52,6 +56,8 @@ const CODES: Record<CustomId["kind"], string> = {
   "approval-modal": "apm",
   battle: "bt",
   "battle-pick": "bp",
+  gallery: "gl",
+  "gallery-share": "gls",
 };
 const KINDS = Object.fromEntries(Object.entries(CODES).map(([k, v]) => [v, k])) as Record<
   string,
@@ -86,6 +92,12 @@ export function encodeId(id: CustomId): string {
     case "battle-pick":
       parts.push(id.roundId, id.action);
       if (id.arg) parts.push(id.arg);
+      break;
+    case "gallery":
+      parts.push(id.campaignId, id.index, id.words.join("+"));
+      break;
+    case "gallery-share":
+      parts.push(id.campaignId, id.sceneId);
       break;
     default:
       parts.push(id.campaignId);
@@ -138,6 +150,15 @@ export function decodeId(raw: string): CustomId | null {
       if (!BATTLE_ACTIONS.includes(action) || (arg !== undefined && !ARG.test(arg))) return null;
       return { kind, roundId: a, action: action as BattleAction, ...(arg ? { arg } : {}) };
     }
+    case "gallery": {
+      const index = Number(parts[3]);
+      const words = (parts[4] ?? "").split("+").filter(Boolean);
+      return Number.isInteger(index) && index >= 0 && index < 1000 && words.every((w) => WORD.test(w))
+        ? { kind, campaignId: a, index, words }
+        : null;
+    }
+    case "gallery-share":
+      return UUID.test(parts[3] ?? "") ? { kind, campaignId: a, sceneId: parts[3] as string } : null;
     default:
       return { kind, campaignId: a } as CustomId;
   }

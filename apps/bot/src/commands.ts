@@ -84,6 +84,17 @@ export const COMMANDS = [
         .setName("pictures")
         .setDescription("Paint pictures of the places the story has already been (host or DM)"),
     )
+    .addSubcommand((s) =>
+      s
+        .setName("gallery")
+        .setDescription("Look through the pictures of places the story has been")
+        .addStringOption((o) =>
+          o
+            .setName("search")
+            .setDescription("Only pictures that mention these words, like a place or what happened there")
+            .setMaxLength(100),
+        ),
+    )
     .addSubcommand((s) => s.setName("join").setDescription("Join the campaign in this thread"))
     .addSubcommand((s) => s.setName("leave").setDescription("Leave the campaign in this thread"))
     .addSubcommand((s) => s.setName("start").setDescription("Begin the adventure (host or DM)"))

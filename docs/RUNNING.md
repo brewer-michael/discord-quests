@@ -119,6 +119,17 @@ thread to paint the places the story had already been: up to 10 at a time, oldes
 with the scene's name. Scenes told by the AI are painted from its own picture notes; scenes told without AI, from
 the world's description of the place. Pictures count against the server's daily picture limit.
 
+Going back to a place shows the picture the campaign already has of it instead of painting a new one (decisive
+moments always get their own, and road pictures only stand in for the same road), so places keep one look and the
+picture service isn't asked twice. `/campaign gallery` lets anyone page through a campaign's pictures privately,
+each with its scene, place and chapter, and share one with the table. `search:` finds pictures by place name or by
+words from the scene's story and picture notes ("bridge" finds the misty crossing; "bells" finds "bell"), using
+Postgres's built-in text search.
+
+Pictures are stored in the database (`image_assets`, as the picture service returned them, usually PNG) with the
+prompt they were painted from, and each scene points at its picture (`scenes.image_asset_id`). Back up the database
+and you've backed up the pictures.
+
 A picture service on your own network (Automatic1111, Forge, LocalAI and so on) needs `ALLOW_PRIVATE_ENDPOINTS=true`
 in `.env`, its network address rather than `localhost`, and **This runs on my own network** ticked under **More
 options** (already on for the Automatic1111 choice).
