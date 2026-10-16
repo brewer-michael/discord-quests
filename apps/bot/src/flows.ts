@@ -196,6 +196,11 @@ async function addSceneImage(ctx: BotContext, message: Message, view: TurnView) 
     if (!image) return;
     const att = sceneAttachment(image.bytes, image.mime);
     const round = view.roundId ? await ctx.engine.turns.getRound(view.roundId) : null;
+    // Remembered so /campaign pictures doesn't paint this scene again; never worth losing the picture over.
+    if (round?.sceneId)
+      await ctx.engine.campaigns
+        .setSceneImage(round.sceneId, image.assetId)
+        .catch((e: Error) => ctx.log.warn("could not record scene image", { error: e.message }));
     const stillOpen = round?.status === "collecting";
     const waitingOn =
       stillOpen && view.roundId ? await ctx.engine.turns.waitingOn(view.roundId, view.campaignId) : [];

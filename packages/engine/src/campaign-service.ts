@@ -1,4 +1,6 @@
 import { randomBytes } from "node:crypto";
+import type { ImageBrief } from "@dq/core/safety";
+import type { WorldIndex } from "@dq/core/world";
 import {
   campaignMembers,
   campaignRegions,
@@ -436,6 +438,60 @@ export class CampaignService {
     return { world: index.world, states, partyRegionId: story.regionId, trail };
   }
 
+  /**
+   * The scenes the table has played, oldest first, with what to paint for each: the narrator's picture brief from
+   * the turn that opened the scene, or the place's own description when that turn was told without AI.
+   */
+  async sceneGallery(campaignId: string): Promise<SceneGalleryEntry[]> {
+    const c = await this.require(campaignId);
+    const { index } = this.deps.worlds.get(c.worldId);
+    const sceneRows = await this.deps.db
+      .select()
+      .from(scenes)
+      .where(eq(scenes.campaignId, campaignId))
+      .orderBy(scenes.startedTurn);
+    if (sceneRows.length === 0) return [];
+    const openers = await this.deps.db
+      .select({ seq: turns.seq, data: turns.data })
+      .from(turns)
+      .where(
+        and(
+          eq(turns.campaignId, campaignId),
+          eq(turns.status, "committed"),
+          inArray(
+            turns.seq,
+            sceneRows.map((s) => s.startedTurn),
+          ),
+        ),
+      );
+    const briefs = new Map(
+      openers.map((t) => [
+        t.seq,
+        asBrief((t.data.narration as { imageBrief?: unknown } | undefined)?.imageBrief),
+      ]),
+    );
+    // A scene whose opening turn the players haven't seen yet (a draft waiting for the DM) isn't shown.
+    return sceneRows
+      .filter((s) => briefs.has(s.startedTurn))
+      .map((s) => {
+        const region = index.regions.get(s.regionId);
+        const poi = s.poiId ? index.pois.get(s.poiId)?.poi : undefined;
+        return {
+          sceneId: s.id,
+          title: s.title,
+          kind: s.kind,
+          locationName: poi?.name ?? region?.name ?? s.regionId,
+          imageAssetId: s.imageAssetId,
+          brief: briefs.get(s.startedTurn) ?? placeBrief(index, s),
+        };
+      });
+  }
+
+  /** Remembers a scene's picture, so it isn't painted again. */
+  async setSceneImage(sceneId: string, assetId: string) {
+    await this.deps.db.update(scenes).set({ imageAssetId: assetId }).where(eq(scenes.id, sceneId));
+  }
+
   /** Permanently deletes a campaign and its history (privacy purge). */
   async purge(campaignId: string, userId: string) {
     if (!(await this.isHostOrDm(campaignId, userId)))
@@ -445,4 +501,49 @@ export class CampaignService {
       await tx.delete(campaigns).where(eq(campaigns.id, campaignId));
     });
   }
+}
+
+export interface SceneGalleryEntry {
+  sceneId: string;
+  title: string;
+  kind: string;
+  locationName: string;
+  imageAssetId: string | null;
+  brief: ImageBrief;
+}
+
+function asBrief(v: unknown): ImageBrief | null {
+  const b = v as Partial<ImageBrief> | null | undefined;
+  if (!b || typeof b.setting !== "string" || !b.setting.trim()) return null;
+  return {
+    setting: b.setting,
+    subjects: Array.isArray(b.subjects) ? b.subjects.filter((x): x is string => typeof x === "string") : [],
+    mood: typeof b.mood === "string" ? b.mood : "",
+    timeOfDay: typeof b.timeOfDay === "string" ? b.timeOfDay : "",
+  };
+}
+
+const SCENE_MOODS: Record<string, string> = {
+  exploration: "curious and full of wonder",
+  social: "warm and friendly",
+  combat: "brave and exciting, but never scary",
+  travel: "a long road and a sense of adventure",
+  rest: "cozy and peaceful",
+  crux: "dramatic and hopeful",
+  choice: "thoughtful",
+};
+
+/** A picture brief from the world's own description of the place, for scenes told without AI. */
+function placeBrief(
+  index: WorldIndex,
+  s: { title: string; kind: string; regionId: string; poiId: string | null },
+): ImageBrief {
+  const region = index.regions.get(s.regionId);
+  const poi = s.poiId ? index.pois.get(s.poiId)?.poi : undefined;
+  return {
+    setting: [poi?.description, region?.description].filter(Boolean).join(" ") || s.title,
+    subjects: ["a small party of young adventurers"],
+    mood: SCENE_MOODS[s.kind] ?? "hopeful",
+    timeOfDay: "daytime",
+  };
 }

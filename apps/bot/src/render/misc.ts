@@ -47,6 +47,7 @@ export function renderHelp() {
         "4. Each turn, pick a choice, or press **Something else…** and say what your hero does. When everyone has chosen, the story continues.",
         "",
         "**Handy commands:** `/character sheet`, `/map`, `/journal`, `/roll 1d20+3`, `/character levelup`",
+        "**Pictures:** with a picture service set up, each new place gets its own scene art. The host or DM can run `/campaign pictures` to paint the places the story has already been.",
         "**Game night or play by post?** `/campaign pace` switches any time: quick rounds with everyone online, or turns over days with pings and reminders. `/campaign pause` stops the clock.",
         "**Setting the bot up?** `/help topic:setup`",
         "**In a fight:** everyone picks ⚔️ Attack, ✨ Magic, 🛡️ Defend, 🤝 Distract or 🧪 Potion, then the round plays out in turn order. A hero knocked down is only Dazed and can Rally. Foes who give up can be spared with 🕊️.",

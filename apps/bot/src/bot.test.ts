@@ -1,7 +1,7 @@
 import { VIRTUE_TAGS } from "@dq/core/loom";
 import { createTestDb, TEST_DATABASE_URL } from "@dq/db/testing";
 import { createEngine, type DraftView, GUIDE, type TurnView, WorldCache } from "@dq/engine";
-import { FakeLlm } from "@dq/engine/testing";
+import { FakeLlm, UnconfiguredLlm } from "@dq/engine/testing";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { commandsJson } from "./commands";
 import { battleMenu } from "./handlers/battle";
@@ -13,7 +13,7 @@ import { draftModal, renderDraft } from "./render/draft";
 import { renderGuide, renderWelcome } from "./render/guide";
 import { describePace, renderHub } from "./render/hub";
 import { renderAbout, renderHelp, renderJournal, renderPrivacy } from "./render/misc";
-import { freezeComponents, renderTurn, waitingLine } from "./render/turn";
+import { freezeComponents, renderScenePicture, renderTurn, waitingLine } from "./render/turn";
 import { nameModal, renderWizard } from "./render/wizard";
 import { roomProblems } from "./rooms";
 import { RoundScheduler } from "./scheduler";
@@ -550,5 +550,51 @@ describe.skipIf(!TEST_DATABASE_URL)("a whole campaign renders cleanly", () => {
     checkLimits(renderTurn(view));
     expect(view.campaignEnded).toBe(true);
     expect(fights).toBeGreaterThan(0);
+
+    // Every place the story went can be painted afterwards, from the narrator's own picture briefs.
+    const gallery = await engine.campaigns.sceneGallery(c.id);
+    expect(gallery.length).toBeGreaterThan(5);
+    for (const scene of gallery) {
+      expect(scene.brief.subjects).toContain("three young heroes");
+      checkLimits(renderScenePicture(scene, "scene.png"));
+    }
   }, 60_000);
+
+  it("scenes told without AI are painted from the world's own description of the place", async () => {
+    const engine = createEngine({ db: db.db, worlds, llm: new UnconfiguredLlm() });
+    const c = await engine.campaigns.create({
+      guildId: "g",
+      channelId: "c3",
+      name: "No AI",
+      mode: "ai_dm",
+      createdBy: "u1",
+    });
+    await engine.characters.startDraft(c.id, "u1");
+    for (const op of [
+      { op: "class", classId: "scout" },
+      { op: "path", pathId: "long-road" },
+      { op: "background", backgroundId: "farmhand" },
+      { op: "species", speciesId: "pipkin" },
+      { op: "recommended" },
+      { op: "keepsake", keepsakeId: "lucky-button" },
+      { op: "name", name: "Wren Ashby", look: "" },
+    ] as const)
+      await engine.characters.updateDraft(c.id, "u1", op);
+    await engine.characters.finalize(c.id, "u1");
+    expect(await engine.campaigns.sceneGallery(c.id)).toEqual([]);
+    const view = await engine.turns.openCampaign(c.id, "u1");
+
+    const [first] = await engine.campaigns.sceneGallery(c.id);
+    expect(first?.title).toBe(view.sceneTitle);
+    expect(first?.locationName).toBe(view.locationName);
+    expect(first?.imageAssetId).toBeNull();
+    const region = world.regions.find((r) => r.id === view.regionId);
+    expect(first?.brief.setting).toContain(region?.description.slice(0, 30));
+    expect(first?.brief.subjects).toEqual(["a small party of young adventurers"]);
+
+    // Once painted, a scene isn't painted again.
+    const assetId = "123e4567-e89b-42d3-a456-426614174999";
+    await engine.campaigns.setSceneImage(first?.sceneId ?? "", assetId);
+    expect((await engine.campaigns.sceneGallery(c.id))[0]?.imageAssetId).toBe(assetId);
+  });
 });

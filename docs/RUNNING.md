@@ -111,6 +111,18 @@ no reminders, nothing moves on); `/campaign resume` restarts the open turn's clo
 Deadlines and reminders live in the database, so they survive restarts and deploys. Server-wide defaults for new
 campaigns are on the setup page's Settings.
 
+### Pictures
+
+With a picture service set up on the setup page, each new place or challenge gets its own scene art (choose how
+often under **Settings & budget** → **Scene art**). The host or DM can run `/campaign pictures` in a campaign's
+thread to paint the places the story had already been: up to 10 at a time, oldest first, each posted in the thread
+with the scene's name. Scenes told by the AI are painted from its own picture notes; scenes told without AI, from
+the world's description of the place. Pictures count against the server's daily picture limit.
+
+A picture service on your own network (Automatic1111, Forge, LocalAI and so on) needs `ALLOW_PRIVATE_ENDPOINTS=true`
+in `.env`, its network address rather than `localhost`, and **This runs on my own network** ticked under **More
+options** (already on for the Automatic1111 choice).
+
 ### With a human DM (Assist mode)
 
 Start with `/campaign new storyteller:A person runs it, the bot helps dm:@you`. Alongside the table thread, the

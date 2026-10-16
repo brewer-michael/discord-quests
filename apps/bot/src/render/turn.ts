@@ -222,6 +222,24 @@ function renderBattle(
   }
 }
 
+/** A picture of a scene the story has already been through, painted on request. */
+export function renderScenePicture(
+  scene: { title: string; locationName: string; kind: string },
+  imageName: string,
+) {
+  const c = new ContainerBuilder()
+    .setAccentColor(SCENE_COLOR[scene.kind] ?? SCENE_COLOR.exploration ?? 0)
+    .addTextDisplayComponents(text(`🖼️ **${esc(scene.title)}** · ${esc(scene.locationName)}`))
+    .addMediaGalleryComponents(
+      new MediaGalleryBuilder().addItems(
+        new MediaGalleryItemBuilder()
+          .setURL(`attachment://${imageName}`)
+          .setDescription(clip(scene.title, 1000)),
+      ),
+    );
+  return { components: [c], flags: V2, allowedMentions: { parse: [] } };
+}
+
 export function sceneAttachment(bytes: Buffer, mime: string) {
   const ext = mime === "image/jpeg" ? "jpg" : mime === "image/webp" ? "webp" : "png";
   const name = `scene.${ext}`;

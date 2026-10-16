@@ -9,6 +9,7 @@ import {
 import type { BotContext } from "../context";
 import { postTurn, restartClock, sendableChannel, stopClock } from "../flows";
 import { describePace, renderHub } from "../render/hub";
+import { renderScenePicture, sceneAttachment } from "../render/turn";
 import { canSeeRoom, checkRoom, fetchRoom } from "../rooms";
 import { campaignHere, refreshHub, say } from "./shared";
 
@@ -289,6 +290,8 @@ export async function campaignCommand(ctx: BotContext, i: ChatInputCommandIntera
       );
       await refreshHub(ctx, c.id);
       return;
+    case "pictures":
+      return paintPastScenes(ctx, i, c);
     case "delete": {
       if (!i.options.getBoolean("confirm", true)) {
         await say(i, "Nothing deleted.");
@@ -301,4 +304,93 @@ export async function campaignCommand(ctx: BotContext, i: ChatInputCommandIntera
       return;
     }
   }
+}
+
+/** Campaigns being painted right now, so asking twice doesn't post every picture twice. */
+const painting = new Set<string>();
+/** Pictures per request: enough to catch up a chapter without flooding the thread (or the GPU). */
+export const PICTURES_PER_REQUEST = 10;
+
+/** Paints the scenes the story has already passed that don't have a picture yet, oldest first. */
+async function paintPastScenes(
+  ctx: BotContext,
+  i: ChatInputCommandInteraction,
+  c: { id: string; guildId: string; worldId: string; threadId: string | null },
+) {
+  if (!(await ctx.engine.campaigns.isHostOrDm(c.id, i.user.id)))
+    throw new GameError("not host", "Only the host or the DM can ask for pictures.");
+  const images = ctx.images;
+  const scope = { guildId: c.guildId, campaignId: c.id };
+  if (!images || !(await images.available(scope)))
+    throw new GameError(
+      "no images",
+      "No picture service is set up for this server yet. Add one on the setup page (**Add a picture service**).",
+    );
+  if (painting.has(c.id)) {
+    await say(i, "I'm already painting this campaign's scenes. They'll appear in the thread one by one.");
+    return;
+  }
+  painting.add(c.id);
+  let todo: Awaited<ReturnType<typeof ctx.engine.campaigns.sceneGallery>>;
+  let channel: Awaited<ReturnType<typeof sendableChannel>>;
+  try {
+    todo = (await ctx.engine.campaigns.sceneGallery(c.id)).filter((s) => !s.imageAssetId);
+    channel = todo.length > 0 ? await sendableChannel(ctx, c.threadId) : null;
+  } catch (e) {
+    painting.delete(c.id);
+    throw e;
+  }
+  if (todo.length === 0 || !channel) {
+    painting.delete(c.id);
+    if (todo.length === 0) await say(i, "Every scene so far already has its picture.");
+    else throw new GameError("no thread", "I can't find this campaign's thread any more.");
+    return;
+  }
+  const thread = channel;
+  const batch = todo.slice(0, PICTURES_PER_REQUEST);
+  await say(
+    i,
+    `Painting ${batch.length} scene${batch.length === 1 ? "" : "s"}, oldest first. They'll appear here one by one${
+      todo.length > batch.length
+        ? `; run \`/campaign pictures\` again afterwards for the other ${todo.length - batch.length}`
+        : ""
+    }.`,
+  ).catch((e) => {
+    painting.delete(c.id);
+    throw e;
+  });
+  void (async () => {
+    const { index } = ctx.worlds.get(c.worldId);
+    let painted = 0;
+    let stopped = false;
+    for (const scene of batch) {
+      const image = await images.sceneImage(scope, scene.brief, index.world).catch((e: Error) => {
+        ctx.log.warn("scene picture failed", { campaignId: c.id, error: e.message });
+        return null;
+      });
+      if (!image) {
+        stopped = true;
+        break;
+      }
+      await ctx.engine.campaigns.setSceneImage(scene.sceneId, image.assetId);
+      if (painted === 0)
+        await thread.send({ content: "🖼️ **Scenes from the story so far**", allowedMentions: { parse: [] } });
+      const att = sceneAttachment(image.bytes, image.mime);
+      await thread.send({ ...renderScenePicture(scene, att.name), files: [att.file] } as never);
+      painted++;
+    }
+    const left = todo.length - painted;
+    await say(
+      i,
+      stopped
+        ? painted === 0
+          ? "I couldn't paint any pictures. The picture service didn't answer, or today's picture limit (on the setup page) is used up."
+          : `Painted ${painted}, then stopped: the picture service didn't answer, or today's picture limit is used up.`
+        : left > 0
+          ? `Painted ${painted}. ${left} more to go: run \`/campaign pictures\` again.`
+          : `Painted ${painted}. Every scene so far has its picture now.`,
+    ).catch(() => {});
+  })()
+    .catch((e: Error) => ctx.log.warn("painting scenes failed", { campaignId: c.id, error: e.message }))
+    .finally(() => painting.delete(c.id));
 }

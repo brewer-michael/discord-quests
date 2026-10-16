@@ -79,6 +79,11 @@ export const COMMANDS = [
             .setDescription("Mention players when it's their turn, and remind them before it closes"),
         ),
     )
+    .addSubcommand((s) =>
+      s
+        .setName("pictures")
+        .setDescription("Paint pictures of the places the story has already been (host or DM)"),
+    )
     .addSubcommand((s) => s.setName("join").setDescription("Join the campaign in this thread"))
     .addSubcommand((s) => s.setName("leave").setDescription("Leave the campaign in this thread"))
     .addSubcommand((s) => s.setName("start").setDescription("Begin the adventure (host or DM)"))

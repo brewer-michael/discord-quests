@@ -40,6 +40,11 @@ export class ImageService {
 
   private readonly log?: { warn(msg: string, data?: Record<string, unknown>): void };
 
+  /** Whether this server (or the bot's built-in services) has a picture service to paint with. */
+  async available(scope: { guildId: string; campaignId?: string }): Promise<boolean> {
+    return (await this.store.routes("image", scope)).length > 0;
+  }
+
   async sceneImage(
     scope: { guildId: string; campaignId?: string },
     brief: ImageBrief,
