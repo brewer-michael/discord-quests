@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import {
   type CombatAction,
   CombatActionSchema,
+  type CombatRules,
+  type CombatState,
   canCast,
   fightingFoes,
   foeCondition,
@@ -65,6 +67,7 @@ import { chapterComplete, clockKey, cruxDc, storyProgress, tickClock } from "@dq
 import type { WorldIndex } from "@dq/core/world";
 import {
   approvalRequests,
+  campaignMembers,
   campaignRegions,
   campaigns,
   canonEntities,
@@ -89,6 +92,7 @@ import {
   type CombatView,
   combatView,
   heroesFor,
+  listFoes,
   rollViewsFrom,
   syncEntities,
   withEncounter,
@@ -98,8 +102,9 @@ import { nextSceneSpec, type SceneEntityState, type SceneSpec } from "./director
 import { clearPendingLoom, loadLoom, loadPendingLoom, saveLoom, savePendingLoom } from "./loom-store";
 import { narrate } from "./narrator";
 import { applyPlan, latestPlan, planChapter } from "./planner";
+import { applyRestorePoint, loadRestorePoint, restorePointSeqs, saveRestorePoint } from "./restore-points";
 import { campaignStory } from "./story-profile";
-import { asStory, type StoryState } from "./story-state";
+import { asStory, isRewound, type StoryState } from "./story-state";
 import type { DmDraft, PreparedTurn, ResolveResult, RollView, SubmitResult, TurnView } from "./views";
 
 type CharacterRow = typeof characters.$inferSelect;
@@ -136,6 +141,8 @@ export function campaignSettings(c: CampaignRow) {
   const s = c.settings as Record<string, unknown>;
   return {
     epilogueStyle: (s.epilogueStyle as EpilogueStyle) ?? "subtle",
+    /** Table rules for fights (partialHits is a placeholder for now). Off unless the campaign switches it on. */
+    combatRules: { partialHits: s.partialHits === true } satisfies CombatRules,
   };
 }
 
@@ -264,6 +271,7 @@ export class TurnService {
           updatedAt: new Date(),
         })
         .where(eq(campaigns.id, campaignId));
+      await saveRestorePoint(tx, campaignId, seq, roundId);
       return this.turnView({
         c: locked,
         index,
@@ -519,7 +527,17 @@ export class TurnService {
     // 2. Dice: a round of a fight, or checks.
     const fight =
       spec.combat?.phase === "fighting"
-        ? this.fightRound(index, loom.masterSeed, seq, spec.combat, party, inventory, actions, acted)
+        ? this.fightRound(
+            index,
+            loom.masterSeed,
+            seq,
+            spec.combat,
+            party,
+            inventory,
+            actions,
+            acted,
+            settings.combatRules,
+          )
         : null;
     const sceneSpec = fight ? syncEntities(spec, fight.result.state) : spec;
     const closing = fight
@@ -788,6 +806,7 @@ export class TurnService {
     inventory: Array<typeof inventoryItems.$inferSelect>,
     actions: ResolvedAction[],
     acted: Array<typeof pendingActions.$inferSelect>,
+    rules: CombatRules,
   ) {
     const heroes = heroesFor(index, party, inventory);
     const byChar = new Map(acted.map((a) => [a.characterId, a]));
@@ -844,6 +863,7 @@ export class TurnService {
       chosen,
       index.creatures,
       this.dice(seed, seq, "combat"),
+      rules,
     );
     const mercy: DeedCandidate[] = result.events
       .filter((e) => e.kind === "spare" && e.targetId)
@@ -1168,6 +1188,7 @@ export class TurnService {
           updatedAt: new Date(),
         })
         .where(eq(campaigns.id, c.id));
+      await saveRestorePoint(tx, c.id, seq, ended ? null : roundId);
 
       const shown = nextSpec ?? spec;
       const partyNow = await this.partyTx(tx, c.id);
@@ -2028,6 +2049,245 @@ export class TurnService {
     });
   }
 
+  // ------------------------------------------------------------ rewinding
+
+  /** The host, the DM or a guardian. */
+  private async supervised(campaignId: string, userId: string): Promise<CampaignRow> {
+    const [c] = await this.deps.db.select().from(campaigns).where(eq(campaigns.id, campaignId));
+    if (!c) throw new GameError("no campaign", "That campaign doesn't exist.");
+    let ok = c.createdBy === userId || c.dmUserId === userId;
+    if (!ok) {
+      const [m] = await this.deps.db
+        .select()
+        .from(campaignMembers)
+        .where(and(eq(campaignMembers.campaignId, c.id), eq(campaignMembers.userId, userId)));
+      ok = m?.role === "guardian";
+    }
+    if (!ok) throw new GameError("not supervisor", "Only the host, the DM or a guardian can do that.");
+    if (c.status === "setup") throw new GameError("not started", "The adventure hasn't started yet.");
+    return c;
+  }
+
+  /** The turns this campaign can rewind to, newest first, and how the party stood after each. */
+  async rewindPoints(campaignId: string, userId: string) {
+    const c = await this.supervised(campaignId, userId);
+    const party = await this.party(c.id);
+    const names = new Map(party.map((p) => [p.id, p.name]));
+    const points = await restorePointSeqs(this.deps.db, c.id, c.turnSeq, 15);
+    return {
+      campaignId: c.id,
+      campaignName: c.name,
+      turnSeq: c.turnSeq,
+      party: party.map((p) => ({ name: p.name, hp: p.hp, hpMax: p.hpMax })),
+      fighting: Boolean(asStory(c.story).sceneKind) && (await this.currentFight(c)) !== null,
+      points: points
+        .filter((p) => !isRewound(c.story, p.turnSeq))
+        .slice(0, 10)
+        .map((p) => ({
+          turnSeq: p.turnSeq,
+          turnsBack: c.turnSeq - p.turnSeq,
+          sceneTitle: p.sceneTitle,
+          fighting: p.fighting,
+          battleRound: p.battleRound,
+          party: p.heroes
+            .filter((h) => names.has(h.id))
+            .map((h) => ({ name: names.get(h.id) as string, hp: h.hp, hpMax: h.hpMax })),
+        })),
+    };
+  }
+
+  /**
+   * Puts the game back as it stood after turn `toSeq`: the party, their packs, the scene and the choices
+   * before them. History stays append-only; the turns after it are marked rewound and the storyteller
+   * forgets them.
+   */
+  async rewind(
+    campaignId: string,
+    userId: string,
+    toSeq: number,
+    reason = "",
+  ): Promise<{ view: TurnView; undone: number }> {
+    await this.supervised(campaignId, userId);
+    return this.deps.db.transaction(async (tx) => {
+      const [locked] = await tx.select().from(campaigns).where(eq(campaigns.id, campaignId)).for("update");
+      if (!locked) throw new GameError("no campaign", "That campaign doesn't exist.");
+      if (toSeq >= locked.turnSeq) throw new GameError("nothing to undo", "The story is already there.");
+      if (isRewound(locked.story, toSeq))
+        throw new GameError("already undone", "That turn was itself rewound. Pick another.");
+      const point = await loadRestorePoint(tx, campaignId, toSeq);
+      if (!point?.scene)
+        throw new GameError(
+          "no restore point",
+          "I can't rewind that far: restore points begin with the first turn played after the update that added them.",
+        );
+      const seq = locked.turnSeq + 1;
+      const why = reason.trim().slice(0, 300);
+      await tx
+        .update(rounds)
+        .set({ status: "cancelled" })
+        .where(and(eq(rounds.campaignId, campaignId), inArray(rounds.status, ["collecting", "resolving"])));
+      // Drafts waiting for a DM are for a turn that won't happen now.
+      await tx
+        .delete(turns)
+        .where(and(eq(turns.campaignId, campaignId), sql`${turns.seq} > ${locked.turnSeq}`));
+      const { roundId } = await applyRestorePoint(tx, campaignId, point, seq);
+      const story: StoryState = {
+        ...asStory(point.story),
+        rewound: [...(asStory(locked.story).rewound ?? []), [toSeq + 1, seq]],
+      };
+      await tx.insert(turns).values({
+        campaignId,
+        seq,
+        status: "committed",
+        stage: "committed",
+        data: { mode: "rewind", toSeq, fromSeq: locked.turnSeq, by: userId, reason: why },
+        committedAt: new Date(),
+      });
+      await tx.insert(events).values({
+        campaignId,
+        turnSeq: seq,
+        type: "rewound",
+        payload: { toSeq, fromSeq: locked.turnSeq, by: userId, reason: why },
+      });
+      await tx
+        .update(campaigns)
+        .set({
+          turnSeq: seq,
+          story: story as unknown as Record<string, unknown>,
+          status: locked.status === "paused" ? "paused" : "active",
+          updatedAt: new Date(),
+        })
+        .where(eq(campaigns.id, campaignId));
+      await saveRestorePoint(tx, campaignId, seq, roundId);
+
+      const { index } = this.deps.worlds.get(locked.worldId);
+      const spec = point.scene.state as unknown as SceneSpec;
+      const [told] = await tx
+        .select()
+        .from(turns)
+        .where(and(eq(turns.campaignId, campaignId), eq(turns.seq, toSeq)));
+      const said = told?.data.narration as NarratorOutput | undefined;
+      const party = await this.partyTx(tx, campaignId);
+      const fighting = spec.combat?.phase === "fighting";
+      const view = this.turnView({
+        c: locked,
+        index,
+        seq,
+        spec,
+        out: said ?? quietNarration(`The story returns to ${spec.title}.`),
+        rolls: [],
+        roundId,
+        sceneChanged: true,
+        levelUps: [],
+        ended: false,
+        fallback: false,
+        combat: spec.combat ? combatView(spec.combat, party) : null,
+        choices: fighting ? [] : ((point.round?.choices ?? []) as Array<{ label: string }>),
+      });
+      return { view, undone: locked.turnSeq - toSeq };
+    });
+  }
+
+  private async currentFight(c: CampaignRow) {
+    const sceneId = asStory(c.story).sceneId;
+    if (!sceneId) return null;
+    const [row] = await this.deps.db.select().from(scenes).where(eq(scenes.id, sceneId));
+    const spec = row?.state as unknown as SceneSpec | undefined;
+    return row && spec?.combat?.phase === "fighting" ? { row, spec } : null;
+  }
+
+  /** For any campaign, restore points or not: everyone back on their feet and fully rested. */
+  async mendParty(campaignId: string, userId: string): Promise<string[]> {
+    const c = await this.supervised(campaignId, userId);
+    const party = await this.party(c.id);
+    await this.deps.db.transaction(async (tx) => {
+      await this.longRest(tx, party);
+      await tx.insert(events).values({
+        campaignId,
+        turnSeq: c.turnSeq,
+        type: "party_mended",
+        payload: { by: userId, heroes: party.map((p) => ({ id: p.id, hp: p.hp, hpMax: p.hpMax })) },
+      });
+      await saveRestorePoint(tx, campaignId, c.turnSeq, (await this.currentRound(campaignId))?.id ?? null);
+    });
+    return party.map((p) => p.name);
+  }
+
+  /**
+   * Builds the fight in progress again from the bestiary, balanced for the party as it is now. For fights
+   * that began before the balance did, or that went wrong.
+   */
+  async rebuildFight(campaignId: string, userId: string): Promise<TurnView> {
+    const c = await this.supervised(campaignId, userId);
+    const fight = await this.currentFight(c);
+    if (!fight) throw new GameError("no fight", "There's no fight going on right now.");
+    const { index } = this.deps.worlds.get(c.worldId);
+    const party = await this.party(c.id);
+    const loom = await loadLoom(this.deps.db, c.id);
+    const told = await campaignStory(this.deps.db, c);
+    const old = fight.spec;
+    const oldFoes = new Set(old.combat?.foes.map((f) => f.id) ?? []);
+    // A story fight keeps its own foes (balanced now); a road ambush draws afresh from where it happens.
+    const bare: SceneSpec = {
+      ...old,
+      kind: "combat",
+      beatId: old.kind === "combat" ? old.beatId : null,
+      entities: old.entities.filter((e) => !oldFoes.has(e.ref.id)),
+    };
+    delete bare.combat;
+    const built = withEncounter(
+      index,
+      bare,
+      party,
+      heroesFor(index, party, await this.inventoryFor(party)),
+      this.dice(loom.masterSeed, c.turnSeq + 1, "rebuild"),
+      { intensity: told.story.intensity, avoid: told.story.lines },
+    );
+    if (!built.combat)
+      throw new GameError("no foes", "I couldn't find foes that fit here. Try a rewind instead.");
+    const spec: SceneSpec = { ...built, kind: old.kind, beatId: old.beatId };
+    return this.deps.db.transaction(async (tx) => {
+      const [open] = await tx
+        .select()
+        .from(rounds)
+        .where(and(eq(rounds.campaignId, c.id), eq(rounds.status, "collecting")));
+      await tx
+        .update(rounds)
+        .set({ status: "cancelled" })
+        .where(and(eq(rounds.campaignId, c.id), inArray(rounds.status, ["collecting", "resolving"])));
+      await tx
+        .update(scenes)
+        .set({ state: spec as unknown as Record<string, unknown> })
+        .where(eq(scenes.id, fight.row.id));
+      const roundId = await this.insertRound(tx, c.id, fight.row.id, (open?.n ?? 0) + 1, [], "combat");
+      await tx.insert(events).values({
+        campaignId,
+        turnSeq: c.turnSeq,
+        type: "fight_rebuilt",
+        payload: { by: userId, foes: spec.combat?.foes.map((f) => f.creatureId) ?? [] },
+      });
+      await saveRestorePoint(tx, campaignId, c.turnSeq, roundId);
+      const partyNow = await this.partyTx(tx, c.id);
+      return this.turnView({
+        c,
+        index,
+        seq: c.turnSeq,
+        spec,
+        out: quietNarration(
+          `The fight shifts. Now ${listFoes(spec.combat as CombatState)} stand against the heroes.`,
+        ),
+        rolls: [],
+        roundId,
+        sceneChanged: false,
+        levelUps: [],
+        ended: false,
+        fallback: false,
+        combat: spec.combat ? combatView(spec.combat, partyNow) : null,
+        choices: [],
+      });
+    });
+  }
+
   // ------------------------------------------------------------ helpers
 
   private async insertScene(tx: Tx, campaignId: string, spec: SceneSpec, seq: number): Promise<string> {
@@ -2062,13 +2322,19 @@ export class TurnService {
   }
 
   private async recentNarration(campaignId: string, n: number): Promise<string[]> {
+    const [c] = await this.deps.db
+      .select({ story: campaigns.story })
+      .from(campaigns)
+      .where(eq(campaigns.id, campaignId));
     const rows = await this.deps.db
       .select()
       .from(turns)
       .where(eq(turns.campaignId, campaignId))
       .orderBy(sql`${turns.seq} desc`)
-      .limit(n);
+      .limit(n + 30);
     return rows
+      .filter((r) => !isRewound(c?.story, r.seq))
+      .slice(0, n)
       .reverse()
       .map((r) => String((r.data.narration as { narration?: string } | undefined)?.narration ?? ""))
       .filter(Boolean)
@@ -2250,5 +2516,18 @@ function toLoomEntity(e: SceneEntityState): SceneEntity {
     status,
     lowly: e.lowly,
     present: e.present && e.status !== "away" && e.status !== "fled",
+  };
+}
+
+/** A line of narration with nothing else: no voices, choices, picture or changes. */
+function quietNarration(narration: string): NarratorOutput {
+  return {
+    narration,
+    npcLines: [],
+    proposedDeltas: [],
+    choices: [],
+    goalMet: false,
+    imageBrief: null,
+    significance: "minor",
   };
 }

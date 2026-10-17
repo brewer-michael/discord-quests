@@ -67,6 +67,7 @@
   size: medium
   cr: "2"
   ac: 16
+  defense: armor
   hp: 6d8+12
   speed: 30
   abilities: { str: 16, dex: 10, con: 14, int: 8, wis: 10, cha: 10 }

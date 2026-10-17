@@ -373,6 +373,31 @@ export function heroCombatant(args: {
 
 // ------------------------------------------------------------------ helpers
 
+export type Defense = "agile" | "hide" | "armor" | "ward";
+
+/** Where a creature's armor class comes from, as its stat block says or as its numbers suggest. */
+export function defenseOf(c: Pick<CreatureDef, "defense" | "kind" | "ac" | "abilities">): Defense {
+  if (c.defense) return c.defense;
+  if (c.kind === "construct") return "armor";
+  const dex = abilityModifier(c.abilities.dex);
+  if (dex >= 2 && c.ac <= 11 + dex) return "agile";
+  return c.kind === "person" ? "armor" : "hide";
+}
+
+/**
+ * Table rules a campaign can switch on. Off, a fight plays as the SRD has it.
+ *
+ * partialHits: partial hits and momentum, after the degrees of success in Pathfinder 2e and Blades in the
+ * Dark and the Battle Master's Studied Attacks in 5e, so that a miss still moves the fight along. Not built
+ * yet: the flag is in place, and what it will do is set out where attacks miss, to be tuned before it does
+ * anything.
+ */
+export interface CombatRules {
+  partialHits: boolean;
+}
+
+export const STANDARD_RULES: CombatRules = { partialHits: false };
+
 export const isDownHero = (h: Pick<HeroCombatant, "hp" | "conditions">) =>
   h.hp <= 0 || h.conditions.includes("dazed");
 
@@ -425,6 +450,7 @@ export function resolveCombatRound(
   actions: Readonly<Record<string, CombatAction>>,
   creatures: ReadonlyMap<string, CreatureDef>,
   rng: Rng,
+  rules: CombatRules = STANDARD_RULES,
 ): RoundResult {
   const state: CombatState = structuredClone(input);
   const heroes = new Map(heroList.map((h) => [h.id, structuredClone(h) as HeroCombatant]));
@@ -573,7 +599,16 @@ export function resolveCombatRound(
           text += roll.critical
             ? ` and lands a mighty hit for ${dmg}!${note}`
             : ` and hits for ${dmg}.${note}`;
-        } else text += " but misses.";
+        } else {
+          text += " but misses.";
+          if (rules.partialHits) {
+            // Partial hits and momentum (placeholder, to be tuned):
+            // - Near miss: missing by no more than the hero's edge against this foe lands a glancing blow for
+            //   the attack's ability modifier. The edge comes from the hero's stats; it's never guaranteed.
+            // - Clean miss: +1 on the hero's next attack against the same foe, so misses build toward a hit.
+            // - A natural 1 is always a clean miss, with no momentum.
+          }
+        }
         events.push({
           actorId: h.id,
           actor: h.name,
@@ -581,7 +616,7 @@ export function resolveCombatRound(
           targetId: foe.id,
           target: foe.name,
           text,
-          roll: toRoll(atk.name, roll, atk.bonus + bless, roll.total, `armor ${foe.ac}`, roll.hit, dmg),
+          roll: toRoll(atk.name, roll, atk.bonus + bless, roll.total, `defense ${foe.ac}`, roll.hit, dmg),
         });
         if (dmg > 0) hurtFoe(foe, dmg);
         return;
@@ -735,13 +770,18 @@ export function resolveCombatRound(
           const { dealt, note } = dealtTo(foe, raw, e.damageType);
           dmg = dealt;
           text += ` and hits for ${dmg}.${note}`;
-        } else text += " but it goes wide.";
+        } else {
+          text += " but it goes wide.";
+          if (rules.partialHits) {
+            // Partial hits and momentum (placeholder): spell attacks follow the same rule as weapon attacks.
+          }
+        }
         events.push({
           ...base,
           targetId: foe.id,
           target: foe.name,
           text,
-          roll: toRoll(spell.name, roll, bonus, roll.total, `armor ${foe.ac}`, roll.hit, dmg),
+          roll: toRoll(spell.name, roll, bonus, roll.total, `defense ${foe.ac}`, roll.hit, dmg),
         });
         if (dmg > 0) hurtFoe(foe, dmg);
         return;
@@ -902,7 +942,7 @@ export function resolveCombatRound(
       targetId: target.id,
       target: target.name,
       text,
-      roll: toRoll(attack.name, roll, attack.bonus, roll.total, `armor ${ac}`, roll.hit, dmg),
+      roll: toRoll(attack.name, roll, attack.bonus, roll.total, `defense ${ac}`, roll.hit, dmg),
     });
   };
 

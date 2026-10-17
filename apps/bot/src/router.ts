@@ -25,6 +25,7 @@ import {
   rollCommand,
   xcard,
 } from "./handlers/play";
+import { rewindInteraction } from "./handlers/rewind";
 import { setupCommand } from "./handlers/setup";
 import { friendly, say } from "./handlers/shared";
 import { storyInteraction, storyModalSubmit } from "./handlers/story";
@@ -129,6 +130,9 @@ export async function route(ctx: BotContext, i: Interaction): Promise<void> {
         return;
       case "story-modal":
         if (i.isModalSubmit()) await storyModalSubmit(ctx, i, id.campaignId);
+        return;
+      case "rewind":
+        if (i.isButton() || i.isStringSelectMenu()) await rewindInteraction(ctx, i, id);
         return;
       case "gallery-share":
         if (i.isButton()) await galleryShare(ctx, i, id.campaignId, id.sceneId);

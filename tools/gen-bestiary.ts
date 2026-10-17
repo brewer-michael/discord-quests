@@ -10,6 +10,7 @@
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { defenseOf } from "@dq/core/combat";
 import type { Ability } from "@dq/core/rules";
 import { checkNarration } from "@dq/core/safety";
 import { CreatureDef, loadWorld, type World } from "@dq/core/world";
@@ -35,6 +36,8 @@ const Curated = z.strictObject({
   drop: z.array(z.string()).optional(),
   /** A multiattack the data doesn't spell out, by attack name ("as many Bite attacks as it has heads"). */
   multi: z.record(z.string(), z.number().int().min(1).max(6)).optional(),
+  /** Where its armor class comes from, when the numbers mislead (a ghost's is magic, not hide). */
+  defense: z.enum(["agile", "hide", "armor", "ward"]).optional(),
 });
 type Curated = z.infer<typeof Curated>;
 
@@ -70,7 +73,7 @@ interface SrdMonster {
   name: string;
   size: string;
   type: string;
-  armor_class: Array<{ value: number }>;
+  armor_class: Array<{ value: number; armor?: Array<{ index: string }> }>;
   hit_points_roll: string;
   speed: Record<string, string>;
   strength: number;
@@ -327,6 +330,20 @@ function convert(m: SrdMonster, c: Curated, world: World) {
   const types = (list: string[]) => [
     ...new Set(list.flatMap((s) => s.toLowerCase().split(/[^a-z]+/)).filter((w) => DAMAGE_TYPES.has(w))),
   ];
+  // Worn armor says so; an unarmored person tougher than their agility allows is warded by magic.
+  const ac = clamp(m.armor_class[0]?.value ?? 10, 5, 25);
+  const worn = (m.armor_class[0]?.armor ?? []).length > 0;
+  const defense =
+    c.defense ??
+    (worn
+      ? "armor"
+      : kind === "person" && ac > 11 + mod(m.dexterity)
+        ? "ward"
+        : defenseOf({
+            kind: kind as CreatureDef["kind"],
+            ac,
+            abilities: { dex: m.dexterity } as CreatureDef["abilities"],
+          }));
   const speedOf = (s: string | undefined) => Number(/(\d+)/.exec(s ?? "")?.[1] ?? 0);
   const walk = speedOf(m.speed.walk);
   const speed = walk || Math.max(0, ...Object.values(m.speed).map(speedOf));
@@ -338,7 +355,8 @@ function convert(m: SrdMonster, c: Curated, world: World) {
     kind,
     size: m.size.toLowerCase().split(" ")[0],
     cr: CR(m.challenge_rating),
-    ac: clamp(m.armor_class[0]?.value ?? 10, 5, 25),
+    ac,
+    defense,
     hp: m.hit_points_roll.replace(/\s+/g, ""),
     speed: clamp(speed, 0, 120),
     abilities: {

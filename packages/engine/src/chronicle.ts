@@ -6,10 +6,11 @@ import type { LlmGateway } from "@dq/core/llm";
 import { audienceLine, contentRulesText, type NarrationStory } from "@dq/core/narration";
 import { checkNarration } from "@dq/core/safety";
 import type { WorldIndex } from "@dq/core/world";
-import { chapterSummaries, type Db, turns } from "@dq/db";
+import { campaigns, chapterSummaries, type Db, turns } from "@dq/db";
 import { and, desc, eq, gt } from "drizzle-orm";
 import { z } from "zod";
 import type { Logger } from "./deps";
+import { isRewound } from "./story-state";
 
 export const ChapterRecap = z.object({ recap: z.string().min(20).max(900) });
 
@@ -64,8 +65,14 @@ export async function writeChapterRecap(args: {
       ),
     )
     .orderBy(turns.seq)
-    .limit(40);
+    .limit(60);
+  const [c] = await db
+    .select({ story: campaigns.story })
+    .from(campaigns)
+    .where(eq(campaigns.id, args.campaignId));
   const story = rows
+    .filter((r) => !isRewound(c?.story, r.seq))
+    .slice(0, 40)
     .map((r) => String((r.data.narration as { narration?: string } | undefined)?.narration ?? ""))
     .filter(Boolean)
     .map((t) => (t.length > 500 ? `${t.slice(0, 499)}…` : t));

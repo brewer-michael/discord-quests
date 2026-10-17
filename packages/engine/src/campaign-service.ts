@@ -22,7 +22,7 @@ import { type EngineDeps, GameError } from "./deps";
 import { createLoom } from "./loom-store";
 import { PACES, type Pace, type PaceSettings, paceOf, timerFitsPace, validTimer } from "./pace";
 import { audienceOf, type CampaignStory, campaignStory, profileOf } from "./story-profile";
-import { asStory, initialStoryState } from "./story-state";
+import { asStory, initialStoryState, isRewound } from "./story-state";
 import { DEFAULT_WORLD_ID } from "./world-cache";
 
 export interface CampaignSettings {
@@ -471,7 +471,8 @@ export class CampaignService {
         .from(turns)
         .where(eq(turns.campaignId, campaignId))
         .orderBy(sql`${turns.seq} desc`)
-        .limit(3),
+        .limit(20)
+        .then((rows) => rows.filter((r) => !isRewound(c.story, r.seq)).slice(0, 3)),
       chapterRecaps(this.deps.db, campaignId, 8),
     ]);
     const npcName = (id: string) => index.namedNpcs.get(id)?.name ?? id;

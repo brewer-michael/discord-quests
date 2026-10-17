@@ -1,4 +1,14 @@
-import { bigserial, index, integer, jsonb, pgSchema, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import {
+  bigserial,
+  index,
+  integer,
+  jsonb,
+  pgSchema,
+  primaryKey,
+  text,
+  timestamp,
+  uuid,
+} from "drizzle-orm/pg-core";
 import { campaigns } from "./public";
 
 /**
@@ -34,4 +44,21 @@ export const evaluations = loom.table(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("evaluations_campaign_idx").on(t.campaignId, t.turnSeq)],
+);
+
+/**
+ * Where the game stood after each turn: the party, their packs, the scene, the story and the loom. A host,
+ * DM or guardian can rewind to one; history itself stays append-only. Lives here because it holds the loom.
+ */
+export const restorePoints = loom.table(
+  "restore_points",
+  {
+    campaignId: uuid("campaign_id")
+      .notNull()
+      .references(() => campaigns.id, { onDelete: "cascade" }),
+    turnSeq: integer("turn_seq").notNull(),
+    state: jsonb("state").$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.campaignId, t.turnSeq] })],
 );

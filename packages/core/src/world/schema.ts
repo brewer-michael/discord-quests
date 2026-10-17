@@ -256,6 +256,11 @@ export const CreatureDef = z.strictObject({
   size: z.enum(["tiny", "small", "medium", "large", "huge", "gargantuan"]),
   cr: z.enum(CHALLENGE_RATINGS),
   ac: z.number().int().min(5).max(25),
+  /**
+   * Where its armor class comes from: dodging (agile), thick hide or scales (hide), worn armor or plates
+   * (armor), or magic (ward). Worked out from the stat block when left out.
+   */
+  defense: z.enum(["agile", "hide", "armor", "ward"]).optional(),
   hp: Dice,
   speed: z.number().int().min(0).max(120),
   abilities: CreatureScores,

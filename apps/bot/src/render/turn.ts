@@ -12,18 +12,25 @@ import {
 import { encodeId } from "../ids";
 import { clip, divider, esc, SCENE_COLOR, text, V2 } from "./common";
 
-/** One roll: "🎲 Cuthbert: Longbow: 15 +7 = 22 vs armor 13 ✅ 9 damage", with a foe's attacks marked 👾. */
+/**
+ * One roll: "🎲 Cuthbert: Longbow: 15 +7 = 22 vs defense 13 ✅ 9 damage", with a foe's attacks marked 👾. A
+ * passed saving throw shows the damage it still took.
+ */
 const DICE = (r: TurnView["rolls"][number]) => {
   const modeNote =
     r.mode === "advantage" ? " (advantage)" : r.mode === "disadvantage" ? " (disadvantage)" : "";
   const mod = r.modifier >= 0 ? `+${r.modifier}` : `${r.modifier}`;
-  const attack = r.difficulty.startsWith("armor");
-  const result = r.damage
-    ? `✅ **${r.damage} damage**`
-    : r.success
-      ? attack
+  const attack = r.difficulty.startsWith("defense ");
+  const result = r.success
+    ? r.damage
+      ? `✅ **${r.damage} damage**`
+      : attack
         ? "✅ hit"
         : "✅"
+    : r.damage
+      ? attack
+        ? `❌ miss · **${r.damage} damage**`
+        : `❌ · **${r.damage} damage**`
       : attack
         ? "❌ miss"
         : "❌";

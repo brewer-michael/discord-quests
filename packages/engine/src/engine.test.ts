@@ -1,4 +1,13 @@
-import { campaigns, chapterSummaries, characters, events, safetyEvents, storyPlans, turns } from "@dq/db";
+import {
+  campaigns,
+  chapterSummaries,
+  characters,
+  events,
+  inventoryItems,
+  safetyEvents,
+  storyPlans,
+  turns,
+} from "@dq/db";
 import { campaignLoom } from "@dq/db/loom";
 import { createTestDb, TEST_DATABASE_URL } from "@dq/db/testing";
 import { eq } from "drizzle-orm";
@@ -820,5 +829,139 @@ describe("logs", () => {
     const entry = JSON.parse(lines[0] as string);
     expect(entry).toMatchObject({ level: "warn", service: "bot", campaignId: "c-1", apiKey: "[redacted]" });
     expect(lines[0]).not.toMatch(/sk-(ant|live|proj)|abcdefghijklmnop/);
+  });
+});
+
+describe.skipIf(!TEST_DATABASE_URL)("rewinding", () => {
+  let db: Awaited<ReturnType<typeof createTestDb>>;
+  beforeAll(async () => {
+    db = await createTestDb();
+  }, 30_000);
+  afterAll(async () => {
+    await db?.drop();
+  });
+
+  async function playing(guildId: string) {
+    const llm = new FakeLlm();
+    const engine = createEngine({ db: db.db, worlds, llm, dice: seededDice });
+    const c = await engine.campaigns.create({
+      guildId,
+      channelId: `${guildId}-ch`,
+      name: "Rewind Road",
+      mode: "ai_dm",
+      createdBy: "host",
+    });
+    await engine.campaigns.join(c.id, "player");
+    await makeHero(engine, c.id, "host", "shieldheart", "Bram Stout");
+    let view = await engine.turns.openCampaign(c.id, "host");
+    // Always the round that's open now, so a rewind or a rebuilt fight carries on from its own round.
+    const step = async () => {
+      const roundId = (await engine.turns.currentRound(c.id))?.id as string;
+      await engine.turns.submitAction({ roundId, userId: "host", kind: "choice", choiceIndex: 0 });
+      const r = await engine.turns.resolveRound(roundId);
+      view = (r as { kind: "turn"; view: typeof view }).view;
+      return view;
+    };
+    return { llm, engine, c, step, view: () => view };
+  }
+
+  it("puts the party, their packs and the scene back, and the storyteller forgets the undone turns", async () => {
+    const { llm, engine, c, step, view } = await playing("g-rewind");
+    await step();
+    const kept = await step();
+    const heroBefore = (await db.db.select().from(characters).where(eq(characters.campaignId, c.id)))[0];
+    if (!heroBefore) throw new Error("no hero");
+    const packBefore = await db.db
+      .select()
+      .from(inventoryItems)
+      .where(eq(inventoryItems.characterId, heroBefore.id));
+    expect(packBefore.length).toBeGreaterThan(0);
+
+    // Then something goes wrong: the hero is left at 1 hit point, knocked down, with an empty pack.
+    await step();
+    await db.db
+      .update(characters)
+      .set({ hp: 1, conditions: ["prone"] })
+      .where(eq(characters.id, heroBefore.id));
+    await db.db.delete(inventoryItems).where(eq(inventoryItems.characterId, heroBefore.id));
+    await step();
+
+    // Only the host, a DM or a guardian may rewind.
+    await expect(engine.turns.rewindPoints(c.id, "player")).rejects.toThrow();
+    const points = await engine.turns.rewindPoints(c.id, "host");
+    const target = points.points.find((p) => p.turnSeq === kept.seq);
+    expect(target?.turnsBack).toBe(2);
+
+    const { view: back, undone } = await engine.turns.rewind(c.id, "host", kept.seq, "the fight went wrong");
+    expect(undone).toBe(2);
+    const heroAfter = (await db.db.select().from(characters).where(eq(characters.id, heroBefore.id)))[0];
+    expect([heroAfter?.hp, heroAfter?.conditions]).toEqual([heroBefore.hp, heroBefore.conditions]);
+    const packAfter = await db.db
+      .select()
+      .from(inventoryItems)
+      .where(eq(inventoryItems.characterId, heroBefore.id));
+    expect(packAfter.map((x) => [x.itemId, x.qty]).sort()).toEqual(
+      packBefore.map((x) => [x.itemId, x.qty]).sort(),
+    );
+    expect(back.sceneTitle).toBe(kept.sceneTitle);
+    expect(back.choices.map((x) => x.label)).toEqual(kept.choices.map((x) => x.label));
+    expect(back.roundId).not.toBeNull();
+    expect((await engine.turns.currentRound(c.id))?.id).toBe(back.roundId);
+
+    // History stays: the undone turns are still there, marked, and the rewind is recorded.
+    const history = await db.db.select().from(turns).where(eq(turns.campaignId, c.id));
+    expect(history.map((t) => t.seq).sort((a, b) => a - b)).toEqual(
+      Array.from({ length: kept.seq + 3 }, (_, i) => i + 1),
+    );
+    const [camp] = await db.db.select().from(campaigns).where(eq(campaigns.id, c.id));
+    expect(asStory(camp?.story).rewound).toEqual([[kept.seq + 1, kept.seq + 3]]);
+    const log = await db.db.select().from(events).where(eq(events.campaignId, c.id));
+    expect(log.find((e) => e.type === "rewound")?.payload).toMatchObject({ toSeq: kept.seq, by: "host" });
+
+    // The story goes on from there, and the storyteller hears only about turns that still happened.
+    const undoneLines = history
+      .filter((t) => t.seq > kept.seq && t.seq <= kept.seq + 2)
+      .map((t) => String((t.data.narration as { narration?: string } | undefined)?.narration ?? ""));
+    const keptLines = history
+      .filter((t) => t.seq <= kept.seq)
+      .map((t) => String((t.data.narration as { narration?: string } | undefined)?.narration ?? ""));
+    const callsBefore = llm.calls.length;
+    await step();
+    const prompt = llm.calls
+      .slice(callsBefore)
+      .filter((x) => x.task === "narrator")
+      .map((x) => x.user)
+      .join("\n");
+    const recently = prompt.split("## Recently")[1]?.split("\n## ")[0] ?? "";
+    for (const line of recently.split("\n").filter((l) => l.startsWith("- ")))
+      expect(keptLines.some((k) => k.startsWith(line.slice(2, 60)))).toBe(true);
+    expect(undoneLines.length).toBe(2);
+    expect(view().roundId).not.toBeNull();
+
+    // An undone turn can't be rewound to.
+    await expect(engine.turns.rewind(c.id, "host", kept.seq + 1)).rejects.toThrow(/undone/);
+  });
+
+  it("mends the party and rebuilds a fight, for campaigns from before restore points too", async () => {
+    const { engine, c, step, view } = await playing("g-mend");
+    const hero = (await db.db.select().from(characters).where(eq(characters.campaignId, c.id)))[0];
+    if (!hero) throw new Error("no hero");
+    await db.db
+      .update(characters)
+      .set({ hp: 2, conditions: ["prone"] })
+      .where(eq(characters.id, hero.id));
+    await expect(engine.turns.mendParty(c.id, "player")).rejects.toThrow();
+    expect(await engine.turns.mendParty(c.id, "host")).toEqual(["Bram Stout"]);
+    const mended = (await db.db.select().from(characters).where(eq(characters.id, hero.id)))[0];
+    expect([mended?.hp, mended?.conditions]).toEqual([hero.hpMax, []]);
+
+    await expect(engine.turns.rebuildFight(c.id, "host")).rejects.toThrow(/no fight/i);
+    for (let i = 0; i < 20 && view().combat?.phase !== "fighting"; i++) await step();
+    expect(view().combat?.phase).toBe("fighting");
+    const rebuilt = await engine.turns.rebuildFight(c.id, "host");
+    expect(rebuilt.combat?.phase).toBe("fighting");
+    expect(rebuilt.combat?.foes.length).toBeGreaterThan(0);
+    expect(rebuilt.roundId).not.toBe(view().roundId);
+    expect((await engine.turns.currentRound(c.id))?.id).toBe(rebuilt.roundId);
   });
 });

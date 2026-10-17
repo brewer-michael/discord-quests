@@ -166,7 +166,7 @@ export function withEncounter(
   };
 }
 
-function listFoes(combat: CombatState): string {
+export function listFoes(combat: CombatState): string {
   const names = combat.foes.map((f) => f.name.replace(/ [A-J]$/, ""));
   const counts = new Map<string, number>();
   for (const n of names) counts.set(n, (counts.get(n) ?? 0) + 1);

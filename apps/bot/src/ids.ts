@@ -28,7 +28,12 @@ export type CustomId =
   | { kind: "gallery-share"; campaignId: string; sceneId: string }
   /** The story settings card: a select (intensity, voice, humor, art) or a button (wishes, done). */
   | { kind: "story"; campaignId: string; action: StoryAction }
-  | { kind: "story-modal"; campaignId: string };
+  | { kind: "story-modal"; campaignId: string }
+  /** The DM room's rewind card: pick a turn, confirm, or mend the party / rebuild the fight. */
+  | { kind: "rewind"; campaignId: string; action: RewindAction; seq?: number };
+
+export type RewindAction = "pick" | "go" | "back" | "mend" | "rebuild" | "cancel";
+const REWIND_ACTIONS: readonly string[] = ["pick", "go", "back", "mend", "rebuild", "cancel"];
 
 export type StoryAction = "intensity" | "voice" | "humor" | "art" | "wishes" | "done";
 const STORY_ACTIONS: readonly string[] = ["intensity", "voice", "humor", "art", "wishes", "done"];
@@ -66,6 +71,7 @@ const CODES: Record<CustomId["kind"], string> = {
   "gallery-share": "gls",
   story: "sty",
   "story-modal": "stm",
+  rewind: "rw",
 };
 const KINDS = Object.fromEntries(Object.entries(CODES).map(([k, v]) => [v, k])) as Record<
   string,
@@ -109,6 +115,10 @@ export function encodeId(id: CustomId): string {
       break;
     case "story":
       parts.push(id.campaignId, id.action);
+      break;
+    case "rewind":
+      parts.push(id.campaignId, id.action);
+      if (id.seq !== undefined) parts.push(id.seq);
       break;
     default:
       parts.push(id.campaignId);
@@ -173,6 +183,13 @@ export function decodeId(raw: string): CustomId | null {
     case "story": {
       const action = parts[3] ?? "";
       return STORY_ACTIONS.includes(action) ? { kind, campaignId: a, action: action as StoryAction } : null;
+    }
+    case "rewind": {
+      const action = parts[3] ?? "";
+      const seq = parts[4] === undefined ? undefined : Number(parts[4]);
+      if (!REWIND_ACTIONS.includes(action) || (seq !== undefined && !(Number.isInteger(seq) && seq >= 0)))
+        return null;
+      return { kind, campaignId: a, action: action as RewindAction, ...(seq !== undefined ? { seq } : {}) };
     }
     default:
       return { kind, campaignId: a } as CustomId;

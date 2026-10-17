@@ -20,6 +20,8 @@ export interface StoryState {
   steerAway?: boolean;
   /** Branch beats opened by failed cruxes. */
   branches?: string[];
+  /** Turns undone by a rewind, as [first, last] seq ranges. Still in the history, but they never happened. */
+  rewound?: Array<[number, number]>;
 }
 
 export function initialStoryState(index: WorldIndex): StoryState {
@@ -43,4 +45,9 @@ export function initialStoryState(index: WorldIndex): StoryState {
 
 export function asStory(value: unknown): StoryState {
   return value as StoryState;
+}
+
+/** Whether a turn was undone by a rewind. */
+export function isRewound(story: unknown, seq: number): boolean {
+  return (asStory(story)?.rewound ?? []).some(([from, to]) => seq >= from && seq <= to);
 }

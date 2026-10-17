@@ -11,7 +11,8 @@
 #   d     one line in the world's voice, safe at that intensity
 # Optional: name (a new name), kind, defeat, morale, friendly (never a random foe), tags, boss (a big fight),
 #   rename (attack or trait names to change), drop (attacks or traits to leave out), multi (a multiattack the
-#   data doesn't spell out, as { attack name: count })
+#   data doesn't spell out, as { attack name: count }), defense (agile, hide, armor or ward, when the numbers
+#   mislead)
 
 # ------------------------------------------------------------------ beasts
 baboon: { i: light, h: [forest, hills, meadow], d: "A noisy, clever monkey that travels in troops and steals anything shiny." }
@@ -167,7 +168,7 @@ fire-elemental: { i: classic, name: Fire Elemental, h: [volcano, desert], d: "A 
 salamander: { i: classic, h: [volcano], d: "A serpent-bodied creature of fire, fierce and proud.", multi: { "Flame Spear": 2 } }
 water-elemental: { i: classic, name: Water Elemental, h: [sea, coast, river, marsh], d: "A rushing wave with a mind of its own." }
 xorn: { i: light, h: [caves, mountain], d: "A strange, three-armed creature of stone that eats gems and metal." }
-invisible-stalker: { i: epic, name: Invisible Stalker, h: [mountain, ruins, town], d: "An unseen hunter of wind, bound to follow one task to its end." }
+invisible-stalker: { i: epic, name: Invisible Stalker, h: [mountain, ruins, town], d: "An unseen hunter of wind, bound to follow one task to its end.", defense: agile }
 djinni: { i: classic, h: [desert, mountain], d: "A towering genie of the air, proud and generous to its friends.", friendly: true }
 efreeti: { i: epic, h: [volcano, desert], d: "A towering genie of fire, proud and quick to anger.", boss: true }
 
@@ -276,14 +277,14 @@ treant: { i: classic, h: [forest], d: "An ancient tree-shepherd, slow to anger a
 
 # ------------------------------------------------------------------ restless dead
 skeleton: { i: classic, h: [ruins, caves], d: "A rattling skeleton stirred by old magic to guard a tomb.", tags: [undead], defeat: crumbles }
-shadow: { i: classic, h: [ruins, caves], d: "A living shadow that chills whatever it touches.", tags: [undead], defeat: poofs }
+shadow: { i: classic, h: [ruins, caves], d: "A living shadow that chills whatever it touches.", tags: [undead], defeat: poofs, defense: agile }
 warhorse-skeleton: { i: classic, name: Warhorse Skeleton, h: [ruins], d: "The bones of a warhorse, still galloping into battle.", tags: [undead, skeleton], defeat: crumbles }
-specter: { i: epic, h: [ruins], d: "A cold, angry spirit that passes through walls.", tags: [undead, ghost], defeat: fades }
+specter: { i: epic, h: [ruins], d: "A cold, angry spirit that passes through walls.", tags: [undead, ghost], defeat: fades, defense: ward }
 minotaur-skeleton: { i: classic, name: Minotaur Skeleton, h: [ruins, caves], d: "The towering bones of a minotaur, still guarding its maze.", tags: [undead, skeleton], defeat: crumbles }
-will-o-wisp: { i: classic, name: Will-o'-Wisp, h: [marsh], d: "A drifting light that leads travelers astray.", tags: [undead], defeat: fades }
+will-o-wisp: { i: classic, name: Will-o'-Wisp, h: [marsh], d: "A drifting light that leads travelers astray.", tags: [undead], defeat: fades, defense: agile }
 wight: { i: epic, h: [ruins, arctic], d: "A cold, grim warrior risen from an old barrow.", tags: [undead], defeat: crumbles }
-ghost: { i: epic, h: [ruins, town], d: "A restless spirit bound to the place it once loved.", tags: [undead], defeat: fades, drop: [Possession] }
-wraith: { i: epic, h: [ruins], d: "A spirit of pure malice, dark as a moonless night.", tags: [undead], defeat: fades }
+ghost: { i: epic, h: [ruins, town], d: "A restless spirit bound to the place it once loved.", tags: [undead], defeat: fades, drop: [Possession], defense: ward }
+wraith: { i: epic, h: [ruins], d: "A spirit of pure malice, dark as a moonless night.", tags: [undead], defeat: fades, defense: ward }
 
 # ------------------------------------------------------------------ strange things of the deep
 grimlock: { i: classic, kind: person, h: [caves], d: "A blind cave-dweller that hunts by sound and smell." }

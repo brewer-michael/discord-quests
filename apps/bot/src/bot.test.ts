@@ -14,6 +14,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { commandsJson } from "./commands";
 import { battleMenu } from "./handlers/battle";
 import { renderSafetyLog } from "./handlers/campaign";
+import { turnsAsked } from "./handlers/rewind";
 import { type CustomId, decodeId, encodeId } from "./ids";
 import { RateLimiter } from "./rate-limit";
 import { countComponents, textLength } from "./render/common";
@@ -22,6 +23,7 @@ import { renderGallery } from "./render/gallery";
 import { renderGuide, renderWelcome } from "./render/guide";
 import { describePace, renderHub } from "./render/hub";
 import { renderAbout, renderHelp, renderJournal, renderPrivacy } from "./render/misc";
+import { renderRewindCard, renderRewindConfirm, renderRewindDone } from "./render/rewind";
 import { renderStoryCard, renderStoryDone, storyModal } from "./render/story";
 import { freezeComponents, renderScenePicture, renderTurn, waitingLine } from "./render/turn";
 import { nameModal, renderWizard } from "./render/wizard";
@@ -134,6 +136,9 @@ describe("custom ids", () => {
       { kind: "story", campaignId: UUID, action: "intensity" },
       { kind: "story", campaignId: UUID, action: "wishes" },
       { kind: "story-modal", campaignId: UUID },
+      { kind: "rewind", campaignId: UUID, action: "pick" },
+      { kind: "rewind", campaignId: UUID, action: "go", seq: 1234 },
+      { kind: "rewind", campaignId: UUID, action: "mend" },
     ];
     for (const id of ids) {
       const raw = encodeId(id);
@@ -154,6 +159,9 @@ describe("custom ids", () => {
       `dq:bt:${UUID}:explode`,
       `dq:bp:${UUID}:magic:Not_An_Id`,
       `dq:ap:${UUID}`,
+      `dq:rw:${UUID}:erase`,
+      `dq:rw:${UUID}:go:-1`,
+      `dq:rw:${UUID}:go:two`,
     ]) {
       expect(decodeId(raw), raw).toBeNull();
     }
@@ -414,7 +422,7 @@ describe("renderers stay within Discord's limits", () => {
         rolls: [15, 3],
         modifier: 7,
         total: 22,
-        difficulty: "armor 13",
+        difficulty: "defense 13",
         success: true,
         mode: "advantage",
         damage: 9,
@@ -426,7 +434,7 @@ describe("renderers stay within Discord's limits", () => {
         rolls: [4],
         modifier: 4,
         total: 8,
-        difficulty: "armor 13",
+        difficulty: "defense 13",
         success: false,
         mode: "normal",
         foe: true,
@@ -438,8 +446,8 @@ describe("renderers stay within Discord's limits", () => {
     expect(json).toContain("Spare");
     expect(json).toContain("Battle · round 4");
     // Every roll shows what it did, the foes' attacks too, and foes show how hurt they are.
-    expect(json).toContain("Longbow (advantage): 15/3 +7 = **22** vs armor 13 ✅ **9 damage**");
-    expect(json).toContain("👾 **Shadow Wolf**: Shadow Bite: 4 +4 = **8** vs armor 13 ❌ miss");
+    expect(json).toContain("Longbow (advantage): 15/3 +7 = **22** vs defense 13 ✅ **9 damage**");
+    expect(json).toContain("👾 **Shadow Wolf**: Shadow Bite: 4 +4 = **8** vs defense 13 ❌ miss");
     expect(json).toContain("Gloam Skulker A** ▰▰▰▱▱ nearly done");
     expect(json).not.toContain("What do you do?");
     const over = JSON.stringify(
@@ -793,5 +801,129 @@ describe.skipIf(!TEST_DATABASE_URL)("a whole campaign renders cleanly", () => {
     const assetId = "123e4567-e89b-42d3-a456-426614174999";
     await engine.campaigns.setSceneImage(first?.sceneId ?? "", assetId);
     expect((await engine.campaigns.sceneGallery(c.id))[0]?.imageAssetId).toBe(assetId);
+  });
+});
+
+describe("rewinding from the DM room", () => {
+  it("reads how far back the DM asked to go", () => {
+    expect(turnsAsked("@Quests rewind 2 turns, the wolf fight was bugged")).toBe(2);
+    expect(turnsAsked("please go back three rounds")).toBe(3);
+    expect(turnsAsked("undo the last turn")).toBe(1);
+    expect(turnsAsked("rewind a turn")).toBe(1);
+    expect(turnsAsked("rewind please")).toBeNull();
+    expect(turnsAsked("we lost 12 hp")).toBeNull();
+  });
+
+  it("fits the card, its confirm step and its result in one message", () => {
+    const party = Array.from({ length: 6 }, (_, i) => ({
+      name: `Hero With A Long Name ${i}`,
+      hp: 3,
+      hpMax: 40,
+    }));
+    const info = {
+      campaignId: UUID,
+      campaignName: "A Campaign With A Very Long Name Indeed",
+      turnSeq: 99,
+      fighting: true,
+      party,
+      points: Array.from({ length: 10 }, (_, i) => ({
+        turnSeq: 98 - i,
+        turnsBack: i + 1,
+        sceneTitle: "The Long and Winding Road to the Mountain of Cinders",
+        fighting: i % 2 === 0,
+        battleRound: i,
+        party,
+      })),
+    };
+    const card = JSON.stringify(checkLimits(renderRewindCard(info, "That turn was itself rewound.")));
+    expect(card).toContain("Go back to…");
+    expect(card).toContain("Rebuild this fight");
+    expect(JSON.stringify(checkLimits(renderRewindConfirm(info, 97)))).toContain("Go back 2 turns?");
+    const none = JSON.stringify(checkLimits(renderRewindCard({ ...info, points: [], fighting: false })));
+    expect(none).toContain("No restore points yet");
+    expect(none).not.toContain("Rebuild this fight");
+    checkLimits(renderRewindDone("Done."));
+  });
+});
+
+describe("rewind mentions", () => {
+  const campaign = { id: UUID, name: "Rewind Road", status: "active", threadId: "table-thread" };
+  const ctx = () =>
+    ({
+      client: { user: { id: "bot" } },
+      engine: {
+        campaigns: {
+          rooms: async () => ({
+            table: { id: "table", name: "quest-table" },
+            dm: { id: "dm-room", name: "dm-screen" },
+          }),
+          findByThread: async () => null,
+          listForGuild: async () => [campaign],
+          canSupervise: async (_: string, userId: string) => userId === "host",
+        },
+        turns: {
+          rewindPoints: async () => ({
+            campaignId: UUID,
+            campaignName: "Rewind Road",
+            turnSeq: 9,
+            fighting: false,
+            party: [{ name: "Bram", hp: 3, hpMax: 12 }],
+            points: [
+              {
+                turnSeq: 7,
+                turnsBack: 2,
+                sceneTitle: "The Ford",
+                fighting: true,
+                battleRound: 1,
+                party: [{ name: "Bram", hp: 12, hpMax: 12 }],
+              },
+            ],
+          }),
+        },
+      },
+    }) as never;
+  const message = (
+    channel: { id: string; parentId?: string | null; thread?: boolean },
+    author = "host",
+    content = "<@bot> rewind 2 turns",
+  ) => {
+    const reply = vi.fn(async () => ({}));
+    return {
+      reply,
+      msg: {
+        reply,
+        author: { id: author, bot: false },
+        content,
+        guildId: "g",
+        inGuild: () => true,
+        mentions: { users: { has: (id: string) => id === "bot" } },
+        channel: {
+          id: channel.id,
+          parentId: channel.parentId ?? null,
+          isThread: () => Boolean(channel.thread),
+        },
+      } as never,
+    };
+  };
+
+  it("answer only in the DM room (and its threads), and only the host, a DM or a guardian", async () => {
+    const { rewindMention } = await import("./handlers/rewind");
+    const table = message({ id: "table" });
+    await rewindMention(ctx(), table.msg);
+    expect(table.reply).not.toHaveBeenCalled();
+    const tableThread = message({ id: "table-thread", parentId: "table", thread: true });
+    await rewindMention(ctx(), tableThread.msg);
+    expect(tableThread.reply).not.toHaveBeenCalled();
+
+    const player = message({ id: "dm-room" }, "player");
+    await rewindMention(ctx(), player.msg);
+    expect(JSON.stringify(player.reply.mock.calls)).toContain("Only the host, a DM or a guardian");
+
+    const host = message({ id: "dm-room" });
+    await rewindMention(ctx(), host.msg);
+    expect(JSON.stringify(host.reply.mock.calls)).toContain("Go back 2 turns?");
+    const screen = message({ id: "screen", parentId: "dm-room", thread: true }, "host", "<@bot> rewind");
+    await rewindMention(ctx(), screen.msg);
+    expect(JSON.stringify(screen.reply.mock.calls)).toContain("Go back to");
   });
 });

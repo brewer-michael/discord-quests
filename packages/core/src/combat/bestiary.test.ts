@@ -11,6 +11,7 @@ import { creatureAllowed, matchesTopic, pickWild, regionHabitats } from "./besti
 import {
   buildEncounter,
   type CombatState,
+  defenseOf,
   type HeroCombatant,
   heroCombatant,
   resolveCombatRound,
@@ -236,5 +237,49 @@ describe("real stat blocks in a fight", () => {
     });
     expect(weak.foes.some((f) => f.creature.id === "young-red-dragon")).toBe(false);
     expect(weak.foes.every((f) => !f.creature.friendly)).toBe(true);
+  });
+});
+
+describe("defenses and misses", () => {
+  it("knows where a creature's defense comes from", () => {
+    expect(defenseOf(creature("wolf"))).toBe("agile");
+    expect(defenseOf(creature("shadow-wolf"))).toBe("agile");
+    expect(defenseOf(creature("owlbear"))).toBe("hide");
+    expect(defenseOf(creature("knight"))).toBe("armor");
+    expect(defenseOf(creature("gloam-knight"))).toBe("armor");
+    expect(defenseOf(creature("mage"))).toBe("ward");
+  });
+
+  it("plays misses as the SRD has them, with or without the partial-hits flag until it's built", () => {
+    const h = hero("a");
+    const wolfFight = buildEncounter({
+      foes: [{ creature: creature("shadow-wolf"), count: 1 }],
+      heroes: [h],
+      rng: createRng("w"),
+    });
+    const foe = wolfFight.foes[0] as NonNullable<(typeof wolfFight.foes)[number]>;
+    let misses = 0;
+    for (let i = 0; i < 200; i++) {
+      for (const partialHits of [false, true]) {
+        const r = resolveCombatRound(
+          wolfFight,
+          [h],
+          { a: { kind: "attack" } },
+          index.creatures,
+          createRng(`n${i}`),
+          { partialHits },
+        );
+        // The wolf may get there first and knock the hero down before they swing.
+        const swing = r.events.find((e) => e.kind === "attack");
+        if (!swing?.roll) continue;
+        expect(swing.roll.against).toBe(`defense ${foe.ac}`);
+        if (!swing.roll.success) {
+          misses++;
+          expect(swing.roll.damage).toBeUndefined();
+          expect(r.state.foes[0]?.hp).toBe(foe.hp);
+        }
+      }
+    }
+    expect(misses).toBeGreaterThan(0);
   });
 });

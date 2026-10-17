@@ -13,12 +13,20 @@ import {
 import { eq, notInArray } from "drizzle-orm";
 import type { BotContext } from "./context";
 import { armRound } from "./flows";
+import { rewindMention } from "./handlers/rewind";
 import { renderWelcome } from "./render/guide";
 import { route } from "./router";
 
-/** A Discord client wired to the engine. Only the Guilds intent: no message content is read. */
+/**
+ * A Discord client wired to the engine. Guilds, plus guild messages so a mention of the bot in the DM room
+ * (a rewind request) reaches it. Not the Message Content intent: Discord shares a message's text with a bot
+ * only when the message mentions it, and those are the only messages read.
+ */
 export function createClient(): Client {
-  return new Client({ intents: [GatewayIntentBits.Guilds], partials: [Partials.Channel] });
+  return new Client({
+    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
+    partials: [Partials.Channel],
+  });
 }
 
 /** Lets the setup page show which servers the bot is in. Returns true when the bot has just arrived. */
@@ -74,6 +82,11 @@ async function welcome(ctx: BotContext, guild: Guild) {
 export function wire(ctx: BotContext) {
   ctx.client.on(Events.InteractionCreate, (i) => {
     void route(ctx, i);
+  });
+  ctx.client.on(Events.MessageCreate, (m) => {
+    void rewindMention(ctx, m).catch((e: Error) =>
+      ctx.log.warn("rewind mention failed", { channelId: m.channelId, error: e.message }),
+    );
   });
   ctx.client.once(Events.ClientReady, async (c) => {
     ctx.log.info(`Logged in as ${c.user.tag} in ${c.guilds.cache.size} servers`);

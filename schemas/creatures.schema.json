@@ -85,6 +85,10 @@
         "minimum": 5,
         "maximum": 25
       },
+      "defense": {
+        "type": "string",
+        "enum": ["agile", "hide", "armor", "ward"]
+      },
       "hp": {
         "type": "string",
         "pattern": "^[0-9dkhl+\\- ]+$"

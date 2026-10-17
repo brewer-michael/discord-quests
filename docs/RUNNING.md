@@ -177,6 +177,30 @@ bot opens a private **DM screen** thread that only the DM is added to.
   safe for later. `/loom plant` adds a deed by hand. `/loom mode` switches the hidden hand off if the DM would
   rather handle it themselves.
 
+### Rewinding turns
+
+When a turn goes wrong (a bug, a fight that should never have happened), the host, a DM or a guardian can put
+the game back as it was. This works **only in the DM room** (or a DM screen thread inside it), so nothing shows at
+the table until it's done, and it works in AI-DM campaigns too.
+
+Mention the bot there and say what you need, for example `@Discord Quests rewind 2 turns, the wolf fight was
+bugged`. The bot replies with a card:
+
+- **Go back to…** lists the last ten turns the story can return to, with each hero's hit points at that moment.
+  Pick one and confirm. If your message said how many turns, it goes straight to the confirm step. If you run more
+  than one campaign, name it in the message.
+- A rewind restores each hero's hit points, conditions, spell slots, level and gold, their packs, quests,
+  promises, the people and places they know, the scene they were in, and the choices in front of them. The undone
+  turns stay in the history, marked as rewound, and the storyteller forgets them. The table gets a short note
+  and the scene again.
+- **Mend the party** puts everyone back to full health, clears conditions and rests their spells. **Rebuild this
+  fight** draws the fight in progress again, balanced for the party as it stands. Both work at any time, including
+  in campaigns from before restore points existed: restore points are saved from the first turn played after the
+  update that added them.
+
+The bot reads only messages that mention it. It needs no extra permissions or intents switched on in the
+Developer Portal.
+
 ## Deploying with Docker Compose
 
 `docker-compose.prod.yml` runs the whole thing on one server: Postgres, the bot, the setup page and, optionally,
