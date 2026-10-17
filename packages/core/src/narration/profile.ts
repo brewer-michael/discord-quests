@@ -1,3 +1,5 @@
+import { LENGTH_SCENES, STORY_LENGTHS, type StoryLength } from "../story/living";
+
 /**
  * A campaign's story settings, chosen when it's created ("Shape your adventure") and changed with
  * /campaign story: how dark it gets, how it's told, what the pictures look like, and what the table wants in
@@ -26,6 +28,8 @@ export interface StoryProfile {
   lines: string[];
   /** Topics that may happen but are never shown. */
   veils: string[];
+  /** How long the story runs: the director paces its threats and decisive moments to it. */
+  length: StoryLength;
 }
 
 export const PROFILE_LIMITS = { premise: 500, artCustom: 200, topic: 60, topics: 10 } as const;
@@ -84,6 +88,12 @@ export const HUMOR_INFO: Record<Humor, { label: string; prompt: string }> = {
   },
 };
 
+export const LENGTH_INFO: Record<StoryLength, { label: string; blurb: string }> = {
+  short: { label: "Short", blurb: `An evening or two, about ${LENGTH_SCENES.short} scenes` },
+  standard: { label: "Standard", blurb: `A few weeks of play, about ${LENGTH_SCENES.standard} scenes` },
+  long: { label: "Long", blurb: `A long campaign, about ${LENGTH_SCENES.long} scenes` },
+};
+
 export const ART_INFO: Record<Exclude<ArtStyle, "custom">, { label: string; prompt: string }> & {
   custom: { label: string };
 } = {
@@ -114,6 +124,7 @@ export const DEFAULT_PROFILE: StoryProfile = {
   premise: "",
   lines: [],
   veils: [],
+  length: "standard",
 };
 
 /** How campaigns made before story settings existed were told, so they keep their feel until changed. */
@@ -125,6 +136,7 @@ const LEGACY_PROFILE: Omit<StoryProfile, "intensity"> = {
   premise: "",
   lines: [],
   veils: [],
+  length: "standard",
 };
 
 const oneOf = <T extends string>(list: readonly T[], v: unknown): T | undefined =>
@@ -173,6 +185,7 @@ export function parseProfile(
     premise: text(r?.premise, PROFILE_LIMITS.premise),
     lines: parseTopics(r?.lines),
     veils: parseTopics(r?.veils),
+    length: oneOf(STORY_LENGTHS, r?.length) ?? fallback.length,
   };
 }
 
@@ -188,10 +201,10 @@ export function effectiveIntensity(
   return chosen === "epic" && audience === "family" && !hasGuardian ? "classic" : chosen;
 }
 
-/** "Classic (like The Hobbit) · Classic storybook voice · some humor" */
+/** "Classic (like The Hobbit) · Classic storybook voice · some humor · standard story" */
 export function describeProfile(p: StoryProfile, told?: Intensity): string {
   const i = INTENSITY_INFO[told ?? p.intensity];
   const capped =
     told && told !== p.intensity ? ` (${INTENSITY_INFO[p.intensity].label} needs a guardian)` : "";
-  return `${i.label}, like ${i.like}${capped} · ${VOICE_INFO[p.voice].label} voice · ${HUMOR_INFO[p.humor].label.toLowerCase()} humor`;
+  return `${i.label}, like ${i.like}${capped} · ${VOICE_INFO[p.voice].label} voice · ${HUMOR_INFO[p.humor].label.toLowerCase()} humor · ${LENGTH_INFO[p.length].label.toLowerCase()} story`;
 }

@@ -14,7 +14,7 @@ import {
   resolveCombatRound,
   weakSpotWords,
 } from "@dq/core/combat";
-import { type DeltaContext, type DeltaProposal, validateDeltas } from "@dq/core/deltas";
+import type { TableRules } from "@dq/core/combat/bestiary";
 import {
   compileEpilogue,
   type DeedCandidate,
@@ -66,7 +66,14 @@ import {
   successProbability,
 } from "@dq/core/rules";
 import { bannedTermsFor, checkPlayerText, isMetaProbe, pickDeflection } from "@dq/core/safety";
-import { chapterComplete, clockKey, cruxDc, storyProgress, tickClock } from "@dq/core/story";
+import {
+  type ChangeContext,
+  cruxDc,
+  type StoryChange,
+  type StoryPlan,
+  storyProgress,
+  validateChanges,
+} from "@dq/core/story";
 import type { WorldIndex } from "@dq/core/world";
 import {
   approvalRequests,
@@ -97,16 +104,41 @@ import {
   heroesFor,
   listFoes,
   rollViewsFrom,
+  startFight,
   syncEntities,
   withEncounter,
 } from "./combat";
 import { type EngineDeps, GameError, realDice, silentLogger } from "./deps";
-import { nextSceneSpec, type SceneEntityState, type SceneSpec } from "./director";
+import {
+  authoredPlan,
+  type DirectorHero,
+  frameNextScene,
+  MAX_SCENE_LOG,
+  normalizeSpec,
+  pickSeed,
+  provisionalScene,
+  type SceneEntityState,
+  type SceneSpec,
+  sceneSpecView,
+  seedStory,
+  whereItCouldGo,
+} from "./director";
 import { clearPendingLoom, loadLoom, loadPendingLoom, saveLoom, savePendingLoom } from "./loom-store";
 import { type NarrationResult, narrate } from "./narrator";
-import { applyPlan, latestPlan, planChapter } from "./planner";
 import { applyRestorePoint, loadRestorePoint, restorePointSeqs, saveRestorePoint } from "./restore-points";
-import { campaignStory } from "./story-profile";
+import {
+  castFromWorld,
+  castMember,
+  heroHook,
+  loadPlan,
+  loomMoments,
+  normalizeLoom,
+  personAnchor,
+  savePlan,
+  slug,
+  troubles,
+} from "./story-plan";
+import { type CampaignStory, campaignStory, profileOf } from "./story-profile";
 import { asStory, isRewound, type StoryState } from "./story-state";
 import type {
   DmDraft,
@@ -114,6 +146,7 @@ import type {
   PreparedTurn,
   ResolveResult,
   RollView,
+  SceneBrief,
   SubmitResult,
   TurnView,
 } from "./views";
@@ -165,6 +198,24 @@ export function campaignSettings(c: CampaignRow) {
   };
 }
 
+/** The table's rules for fights: how dark the story gets, what it leaves out, and the fight rules. */
+function tableRules(c: CampaignRow, told: CampaignStory): TableRules {
+  return {
+    intensity: told.story.intensity,
+    avoid: told.story.lines,
+    combat: campaignSettings(c).combatRules,
+  };
+}
+
+/** A person's note to the storyteller, from the DM room. */
+function dmNote(guidance: string): NarrativeDirective {
+  return {
+    kind: "dm_note",
+    text: `The DM's note for this turn: ${guidance.trim().slice(0, 500)}`,
+    mustNot: [],
+  };
+}
+
 export class TurnService {
   constructor(private readonly deps: EngineDeps) {}
 
@@ -179,9 +230,9 @@ export class TurnService {
   // ------------------------------------------------------------ opening
 
   /**
-   * Starts the adventure: plans the first scene and has the AI storyteller tell the opening. If it can't, the
-   * opening goes to a person in the DM room with everything they need, and the adventure starts when they've
-   * told it.
+   * Starts the adventure: the director makes the campaign's own story from a seed and the heroes, with its first
+   * scene, and the storyteller tells the opening. If either can't, the opening goes to a person in the DM room
+   * with everything they need, and the adventure starts when they've told it.
    */
   async startCampaign(campaignId: string, userId: string): Promise<ResolveResult> {
     const db = this.deps.db;
@@ -193,62 +244,90 @@ export class TurnService {
     const party = await this.party(campaignId);
     if (party.length === 0)
       throw new GameError("no heroes", "At least one hero needs to be ready before the adventure can begin.");
+    const opening = await this.tellOpening(c, party);
+    if (opening.handoff) return { kind: "draft", draft: await this.handOffOpening(c, opening) };
+    return { kind: "turn", view: await this.commitOpening(opening) };
+  }
 
+  /** The director's story and first scene, and the storyteller's opening: or why they couldn't. Writes nothing. */
+  private async tellOpening(c: CampaignRow, party: CharacterRow[], guidance = ""): Promise<OpeningDraft> {
+    const db = this.deps.db;
     const { index } = this.deps.worlds.get(c.worldId);
-    const loom = await loadLoom(db, campaignId);
-    const story = asStory(c.story);
-    const planned = nextSceneSpec(index, story, loom.state);
-    if (!planned) throw new GameError("empty world", "This world has no story to tell yet.");
+    const loom = await loadLoom(db, c.id);
+    const told = await campaignStory(db, c);
+    const seed = pickSeed(index, told.story.premise, loom.masterSeed);
+    if (!seed) throw new GameError("empty world", "This world has no stories to tell yet.");
     const seq = c.turnSeq + 1;
-    const told = await campaignStory(this.deps.db, c);
-    const spec = withEncounter(
-      index,
-      planned,
-      party,
-      heroesFor(index, party, await this.inventoryFor(party)),
-      this.dice(loom.masterSeed, seq, "encounter"),
-      { intensity: told.story.intensity, avoid: told.story.lines, combat: campaignSettings(c).combatRules },
-    );
-
-    const view = this.publicView({
-      index,
-      mode: "opening",
-      story: told.story,
-      spec,
-      nextSpec: null,
-      party,
-      actions: [],
-      rolls: [],
-      crux: null,
-      epilogue: [],
-      recent: [],
-      quests: [],
-      canon: [],
-    });
-    const narration = await narrate({
+    const rules = tableRules(c, told);
+    const scope = { guildId: c.guildId, campaignId: c.id };
+    const seeded = await seedStory({
       llm: this.deps.llm,
-      world: index.world,
-      view,
-      directives: [],
-      scope: { guildId: c.guildId, campaignId },
       log: this.log,
-      choicesFor: view.scene,
+      scope,
+      index,
+      telling: told.story,
+      seed,
+      length: told.profile.length,
+      heroes: this.directorHeroes(index, party),
+      loom: loom.state,
+      rules,
+      masterSeed: loom.masterSeed,
     });
-    if (!narration.ok) {
-      const opening: OpeningDraft = {
-        opening: true,
-        campaignId,
-        seq,
-        mode: "opening",
+    const base = { opening: true as const, campaignId: c.id, seq, mode: "opening" as const };
+    if (!seeded.ok) {
+      // A person starts the story from the seed as written; the director frames the next scene properly.
+      const plan = authoredPlan(index, seed, told.profile.length);
+      const regionId = seed.startRegions[0] as string;
+      const spec = provisionalScene(index, plan, { regionId, poiId: null, chapter: 1 }, "");
+      const view = await this.publicView({ c, index, plan, mode: "opening", story: told.story, spec, party });
+      const where = seed.startRegions.map((id) => index.regions.get(id)?.name ?? id).join(", ");
+      return {
+        ...base,
+        framed: false,
+        plan,
         spec,
         view,
         choicesFor: view.scene,
         narration: blankNarration(),
-        handoff: narration.reasons,
+        handoff: seeded.reasons,
+        options: [
+          ...seed.openings.map((o) => `It could begin: ${o.replace(/\s+/g, " ").trim()}`),
+          `Where it can begin: ${where}.`,
+          `Stakes: ${plan.stakes}`,
+          ...plan.cast.map((m) => `${m.name}, ${m.role}.`),
+        ],
       };
-      return { kind: "draft", draft: await this.handOffOpening(c, opening) };
     }
-    return { kind: "turn", view: await this.commitOpening(campaignId, spec, narration.output) };
+    const { plan } = seeded.value;
+    const spec = withEncounter(
+      index,
+      seeded.value.opening,
+      party,
+      heroesFor(index, party, await this.inventoryFor(party)),
+      this.dice(loom.masterSeed, seq, "encounter"),
+      rules,
+    );
+    const view = await this.publicView({ c, index, plan, mode: "opening", story: told.story, spec, party });
+    const narration = await narrate({
+      llm: this.deps.llm,
+      world: index.world,
+      view,
+      directives: guidance ? [dmNote(guidance)] : [],
+      scope,
+      log: this.log,
+      choicesFor: view.scene,
+    });
+    return {
+      ...base,
+      framed: true,
+      plan,
+      spec,
+      view,
+      choicesFor: view.scene,
+      narration: narration.ok ? narration.output : blankNarration(),
+      handoff: narration.ok ? null : narration.reasons,
+      options: [],
+    };
   }
 
   /** Starts the adventure and returns its opening, for callers that only go on once it's been told. */
@@ -299,17 +378,71 @@ export class TurnService {
     return this.draftFor(approvalId, opening, null);
   }
 
-  /** Commits the opening scene and its first round, with the opening as told. */
-  private async commitOpening(campaignId: string, spec: SceneSpec, out: NarratorOutput): Promise<TurnView> {
+  /** Commits the opening scene and its first round, with the story plan and the opening as told. */
+  private async commitOpening(opening: OpeningDraft): Promise<TurnView> {
     const db = this.deps.db;
+    const out = opening.narration;
     return db.transaction(async (tx) => {
-      const [locked] = await tx.select().from(campaigns).where(eq(campaigns.id, campaignId)).for("update");
+      const [locked] = await tx
+        .select()
+        .from(campaigns)
+        .where(eq(campaigns.id, opening.campaignId))
+        .for("update");
       if (locked?.status !== "setup")
         throw new GameError("already started", "This campaign has already started.");
+      const campaignId = locked.id;
       const { index } = this.deps.worlds.get(locked.worldId);
-      const story = asStory(locked.story);
+      const plan = structuredClone(opening.plan);
+      // A scene a person opened is what they told.
+      let spec: SceneSpec = opening.framed
+        ? opening.spec
+        : { ...opening.spec, summary: out.narration.slice(0, 700) };
       const party = await this.partyTx(tx, campaignId);
       const seq = locked.turnSeq + 1;
+      const neighbors = index.regions.get(spec.regionId)?.edges.map((e) => e.to) ?? [];
+      const story: StoryState = {
+        ...asStory(locked.story),
+        regionId: spec.regionId,
+        poiId: spec.poiId,
+        momentId: spec.momentId,
+        sceneKind: spec.kind,
+        roundsInScene: 0,
+        closeNextRound: false,
+        chapter: plan.chapter.number,
+        discoveredRegions: [
+          ...new Set([...asStory(locked.story).discoveredRegions, spec.regionId, ...neighbors]),
+        ],
+      };
+      // The story may begin somewhere other than where the campaign was set up to.
+      const before = asStory(locked.story).regionId;
+      if (before && before !== spec.regionId)
+        await tx
+          .update(campaignRegions)
+          .set({ state: "rumored" })
+          .where(and(eq(campaignRegions.campaignId, campaignId), eq(campaignRegions.regionId, before)));
+      await this.visit(tx, campaignId, spec.regionId, neighbors);
+      const applied = await this.applyChanges(tx, {
+        index,
+        c: locked,
+        plan,
+        scenes: [spec],
+        party,
+        changes: out.changes,
+        seq,
+        story,
+      });
+      spec = applied.scenes[0] as SceneSpec;
+      if (out.happened) spec = { ...spec, log: [out.happened] };
+      const loom = await loadLoom(tx, campaignId);
+      if (applied.fight)
+        spec = startFight(
+          index,
+          spec,
+          applied.fight,
+          heroesFor(index, party, await this.inventoryForTx(tx, party)),
+          this.dice(loom.masterSeed, seq, "fight"),
+          tableRules(locked, await campaignStory(tx, locked)),
+        );
       const sceneId = await this.insertScene(tx, campaignId, spec, seq);
       const fightStarts = spec.combat?.phase === "fighting";
       const roundId = await this.insertRound(
@@ -320,31 +453,8 @@ export class TurnService {
         fightStarts ? [] : out.choices,
         fightStarts ? "combat" : "exploration",
       );
-      const nextStory: StoryState = {
-        ...story,
-        sceneId,
-        sceneKind: spec.kind,
-        beatId: spec.beatId,
-        poiId: spec.poiId,
-        roundsInScene: 0,
-        closeNextRound: false,
-      };
-      const opened = await this.applyNarratorDeltas(
-        tx,
-        index,
-        locked,
-        nextStory,
-        party,
-        out.proposedDeltas,
-        new Map(),
-        seq,
-        spec,
-      );
-      if (opened.entitiesChanged)
-        await tx
-          .update(scenes)
-          .set({ state: spec as unknown as Record<string, unknown> })
-          .where(eq(scenes.id, sceneId));
+      story.sceneId = sceneId;
+      await savePlan(tx, campaignId, plan, "the story begins", "seed");
       const turnData = { mode: "opening", narration: out } as unknown as Record<string, unknown>;
       const [draftRow] = await tx
         .select()
@@ -364,15 +474,18 @@ export class TurnService {
           data: turnData,
           committedAt: new Date(),
         });
-      await tx
-        .insert(events)
-        .values({ campaignId, turnSeq: seq, type: "campaign_started", payload: { sceneId } });
+      await tx.insert(events).values({
+        campaignId,
+        turnSeq: seq,
+        type: "campaign_started",
+        payload: { sceneId, seed: plan.seedId },
+      });
       await tx
         .update(campaigns)
         .set({
           status: "active",
           turnSeq: seq,
-          story: nextStory as unknown as Record<string, unknown>,
+          story: story as unknown as Record<string, unknown>,
           updatedAt: new Date(),
         })
         .where(eq(campaigns.id, campaignId));
@@ -380,6 +493,7 @@ export class TurnService {
       return this.turnView({
         c: locked,
         index,
+        plan,
         seq,
         spec,
         out,
@@ -392,6 +506,38 @@ export class TurnService {
         ...(fightStarts ? { choices: [] } : {}),
       });
     });
+  }
+
+  /** Marks a region visited and its neighbors heard of. */
+  private async visit(tx: Tx, campaignId: string, regionId: string, neighbors: string[]) {
+    await tx
+      .insert(campaignRegions)
+      .values({ campaignId, regionId, state: "visited" })
+      .onConflictDoUpdate({
+        target: [campaignRegions.campaignId, campaignRegions.regionId],
+        set: { state: "visited" },
+      });
+    for (const id of neighbors)
+      await tx
+        .insert(campaignRegions)
+        .values({ campaignId, regionId: id, state: "rumored" })
+        .onConflictDoNothing();
+  }
+
+  /** The heroes as the director builds the story around them. */
+  private directorHeroes(index: WorldIndex, party: CharacterRow[]): DirectorHero[] {
+    return party.map((p) => ({
+      id: p.id,
+      name: p.name,
+      species: (p.speciesId && index.species.get(p.speciesId)?.name) || "",
+      className: (p.classId && index.classes.get(p.classId)?.name) || "hero",
+      background: (p.backgroundId && index.backgrounds.get(p.backgroundId)?.name) || "wanderer",
+      keepsake:
+        index.world.items.keepsakes.find((k) => k.id === p.keepsakeId)?.name.toLowerCase() ??
+        "nothing special",
+      path: index.world.paths.find((x) => x.id === p.pathId)?.name ?? "their own road",
+      look: p.look ?? "",
+    }));
   }
 
   async currentRound(campaignId: string) {
@@ -467,7 +613,8 @@ export class TurnService {
         const rng = deriveRng(input.interactionId ?? text, "flavor", 0);
         return { ok: true, deflection: pickDeflection(index.world, rng) };
       }
-      {
+      // The word checks above run at every intensity; the AI's own read of what was typed, at Light.
+      if (told.story.intensity === "light") {
         const verdict = await this.deps.llm.structured(
           {
             task: "safety",
@@ -602,7 +749,7 @@ export class TurnService {
     }
   }
 
-  /** Everything up to (not including) the commit: intents, dice, loom, narration. Writes nothing. */
+  /** Everything up to (not including) the commit: intents, dice, loom, the next scene, narration. Writes nothing. */
   private async prepare(
     round: typeof rounds.$inferSelect,
   ): Promise<{ turn: PreparedTurn; loom: LoomResult; inputHash: string }> {
@@ -611,22 +758,33 @@ export class TurnService {
     if (!c) throw new GameError("no campaign", "That campaign doesn't exist.");
     const [sceneRow] = await db.select().from(scenes).where(eq(scenes.id, round.sceneId));
     if (!sceneRow) throw new Error("scene missing");
-    const spec = sceneRow.state as unknown as SceneSpec;
+    const spec = normalizeSpec(sceneRow.state);
     const { index } = this.deps.worlds.get(c.worldId);
     const world = index.world;
     const story = asStory(c.story);
     const party = await this.party(c.id);
     const acted = await db.select().from(pendingActions).where(eq(pendingActions.roundId, round.id));
     const loom = await loadLoom(db, c.id);
+    const plan = await loadPlan(db, c.id);
     const seq = c.turnSeq + 1;
     const settings = campaignSettings(c);
     const told = await campaignStory(this.deps.db, c);
-    const ctx = loomContext(index);
-
+    const rules = tableRules(c, told);
+    const moments = loomMoments(index, plan);
+    const ctx = loomContext(index, moments);
+    const loomState = normalizeLoom(loom.state, new Set(moments.map((m) => m.id)));
     const inventory = await this.inventoryFor(party);
 
     // 1. Intents.
-    const actions = await this.resolveIntents(c, index, spec, party, acted, round.choices as StoredChoice[]);
+    const actions = await this.resolveIntents(
+      c,
+      index,
+      plan,
+      spec,
+      party,
+      acted,
+      round.choices as StoredChoice[],
+    );
 
     // 2. Dice: a round of a fight, or checks.
     const fight =
@@ -644,38 +802,49 @@ export class TurnService {
           )
         : null;
     const sceneSpec = fight ? syncEntities(spec, fight.result.state) : spec;
-    // A scene ends when its story does: when the storyteller judged it over last turn and the heroes have
-    // now made their move, when a crux is decided, or when a fight is. Never on a count of turns.
+    // A scene ends when its story does: when the storyteller judged its question answered last turn and the
+    // heroes have now made their move, when a decisive moment is decided, or when a fight is. A scene a person
+    // opened closes at once, so the director can frame the next one properly. Never on a count of turns.
     const closing = fight
       ? fight.result.state.phase === "over"
-      : spec.isCrux || story.closeNextRound || spec.combat?.phase === "aftermath";
+      : Boolean(spec.momentId) ||
+        Boolean(spec.provisional) ||
+        story.closeNextRound ||
+        spec.combat?.phase === "aftermath";
+    const moment = spec.momentId
+      ? plan?.moments.find((m) => m.id === spec.momentId && m.state === "ahead")
+      : undefined;
+    const portentsCome = moment ? (plan?.fronts.find((f) => f.id === moment.frontId)?.stage ?? 0) : 0;
     const { rollViews, failures, crux } = fight
       ? { rollViews: fight.rolls, failures: [], crux: null }
-      : this.rollDice(index, loom.masterSeed, seq, spec, story, party, actions, loom.state, closing);
+      : this.rollDice(
+          index,
+          loom.masterSeed,
+          seq,
+          moment ?? null,
+          portentsCome,
+          party,
+          actions,
+          loomState,
+          closing,
+        );
     const partyDown = fight?.result.state.outcome === "party_down";
 
-    // 3. The loom (unless the DM has switched it off).
-    const completedAfter =
-      closing && spec.beatId ? [...story.completedBeats, spec.beatId] : story.completedBeats;
-    const chapterRef = spec.beatId ? index.beats.get(spec.beatId) : undefined;
-    const chapterEnded = Boolean(
-      closing && chapterRef && chapterComplete(index, chapterRef.chapter.id, new Set(completedAfter)),
-    );
+    // 3. The hidden hand (unless the DM has switched it off).
     const promisesKept = await this.promisesKeptBy(c.id, actions);
     const input: LoomInput = {
       story: {
         turn: seq,
-        progress: storyProgress(index, story.completedBeats),
-        chapterNumber: spec.chapterNumber,
-        actNumber: spec.actNumber,
-        completedBeats: story.completedBeats,
+        progress: storyProgress(story.scenesDone, story.milestones),
+        chapterNumber: story.chapter,
+        doneMoments: plan?.moments.filter((m) => m.state === "done").map((m) => m.id) ?? [],
         sceneChanged: story.roundsInScene === 0,
-        chapterEnded,
+        chapterEnded: Boolean(story.chapterEnded),
       },
       scene: {
         id: sceneRow.id,
         kind: spec.kind,
-        beatId: spec.beatId,
+        momentId: spec.momentId,
         regionId: spec.regionId,
         terrain: index.regions.get(spec.regionId)?.terrain ?? [],
         // A foe spared this round was at the heroes' mercy when they chose.
@@ -691,10 +860,10 @@ export class TurnService {
       promisesKept,
       check: partyDown
         ? { kind: "failure", stakes: "high", margin: -5, characterIds: party.map((p) => p.id) }
-        : crux
+        : crux && moment
           ? {
               kind: "crux",
-              beatId: spec.beatId as string,
+              momentId: moment.id,
               success: crux.check.success,
               margin: crux.check.margin,
               pSuccess: crux.p,
@@ -713,58 +882,83 @@ export class TurnService {
     const loomOff = (c.settings as Record<string, unknown>).loomMode === "off";
     const loomResult: LoomResult = loomOff
       ? {
-          state: loom.state,
+          state: loomState,
           directives: [],
           constraints: [],
           effects: [],
           crux: null,
           audit: [{ step: "off", detail: "loom switched off by the DM" }],
         }
-      : evaluateLoom(loom.state, input, ctx, deriveRng(loom.masterSeed, "loom", seq));
+      : evaluateLoom(loomState, input, ctx, deriveRng(loom.masterSeed, "loom", seq));
 
-    // 4. What comes next. A failed crux may open a branch of the story.
-    const cruxRef = crux && spec.beatId ? index.beats.get(spec.beatId)?.beat.crux : undefined;
-    const failedForward = Boolean(
-      crux && !crux.check.success && (!loomResult.crux || loomResult.crux.outcome === "fail_forward"),
-    );
-    const branchesAfter =
-      failedForward && cruxRef?.onFailForward.beat
-        ? [...new Set([...(story.branches ?? []), cruxRef.onFailForward.beat])]
-        : (story.branches ?? []);
-    let storyAfter: StoryState = { ...story, completedBeats: completedAfter, branches: branchesAfter };
-    if (closing && spec.kind === "travel")
-      storyAfter = { ...storyAfter, regionId: spec.regionId, poiId: null };
-    const arcNext = closing ? nextSceneSpec(index, storyAfter, loomResult.state) : null;
-    const plannedNext = arcNext ? applyPlan(index, arcNext, await latestPlan(db, c.id)) : null;
-    const nextSpec = plannedNext
-      ? withEncounter(
+    // 4. What comes next: the decisive moment settled, and the next scene, from where the heroes chose to go.
+    let planAfter = plan ? structuredClone(plan) : null;
+    const played = moment && planAfter ? planAfter.moments.find((m) => m.id === moment.id) : undefined;
+    if (played && crux) {
+      played.state = "done";
+      played.outcome = loomResult.crux?.outcome ?? (crux.check.success ? "success" : "fail_forward");
+    }
+    const finale = Boolean(closing && played?.finale);
+    // How the scene's fight went, whether it ended this round or the heroes were deciding what came after.
+    const endedLog = [
+      ...sceneSpec.log,
+      ...outcomeLines((fight?.result.state ?? spec.combat)?.outcome ?? null, played),
+    ];
+    const heading = actions
+      .filter((a) => !a.passed)
+      .map((a) => {
+        const roll = rollViews.find((r) => r.characterName === a.name && !r.foe);
+        return `${a.name} ${a.summary}${roll ? ` (${roll.label}: ${roll.success ? "it worked" : "it didn't work"})` : ""}`;
+      });
+    let nextSpec: SceneSpec | null = null;
+    let milestone = false;
+    let chapterTitle: string | null = null;
+    let unframed: string[] | null = null;
+    if (closing && !finale) {
+      const framed = await this.frame({
+        c,
+        index,
+        telling: told.story,
+        plan: planAfter,
+        story,
+        seq,
+        ended: sceneSpec,
+        endedLog,
+        heading,
+        party,
+        loom: loomResult,
+        rules,
+        masterSeed: loom.masterSeed,
+      });
+      if (framed.ok) {
+        planAfter = framed.value.plan;
+        milestone = framed.value.milestone;
+        chapterTitle = framed.value.chapterTitle;
+        nextSpec = withEncounter(
           index,
-          plannedNext,
+          framed.value.next,
           party,
           heroesFor(index, party, inventory),
           this.dice(loom.masterSeed, seq, "encounter"),
-          { intensity: told.story.intensity, avoid: told.story.lines, combat: settings.combatRules },
+          rules,
+        );
+      } else unframed = framed.reasons;
+    }
+    const mode: NarrationMode = !closing ? "continue" : finale ? "finale" : "close_and_open";
+    const epilogue = finale
+      ? compileEpilogue(
+          loomResult.state,
+          world,
+          settings.epilogueStyle,
+          deriveRng(loom.masterSeed, "flavor", seq),
         )
-      : null;
-    const mode: NarrationMode = !closing ? "continue" : nextSpec ? "close_and_open" : "finale";
-    const epilogue =
-      mode === "finale"
-        ? compileEpilogue(
-            loomResult.state,
-            world,
-            settings.epilogueStyle,
-            deriveRng(loom.masterSeed, "flavor", seq),
-          )
-        : [];
+      : [];
 
     // 5. Narration.
-    const [questRows, canonRows] = await Promise.all([
-      db.select().from(quests).where(eq(quests.campaignId, c.id)),
-      db.select().from(canonEntities).where(eq(canonEntities.campaignId, c.id)).limit(30),
-    ]);
-    const [recent, recaps] = await Promise.all([this.recentNarration(c.id, 3), chapterRecaps(db, c.id, 3)]);
-    const view = this.publicView({
+    const view = await this.publicView({
+      c,
       index,
+      plan: planAfter,
       mode,
       story: told.story,
       spec: sceneSpec,
@@ -774,11 +968,7 @@ export class TurnService {
       rolls: rollViews,
       crux: crux ? { label: crux.label, success: crux.check.success } : null,
       epilogue,
-      recent,
-      quests: questRows,
-      canon: canonRows,
       steerAway: Boolean(story.steerAway),
-      summaries: recaps.map((r) => `Chapter ${r.chapter}: ${r.text}`),
       ...(fight
         ? {
             battle: {
@@ -796,11 +986,12 @@ export class TurnService {
           }
         : {}),
     });
-    const choicesFor = nextSpec ? this.sceneSpecView(index, nextSpec) : view.scene;
+    const choicesFor = nextSpec ? sceneSpecView(index, planAfter, nextSpec) : view.scene;
     // What a player typed but the reader couldn't make sense of is never guessed at: the turn goes to a person.
     const unread = actions.filter((a) => a.unread);
-    const narration: NarrationResult =
-      unread.length > 0
+    const narration: NarrationResult = unframed
+      ? { ok: false, reasons: unframed }
+      : unread.length > 0
         ? {
             ok: false,
             reasons: [
@@ -838,10 +1029,17 @@ export class TurnService {
         rolls: rollViews,
         cruxLabel: crux?.label ?? null,
         cruxSuccess: crux ? crux.check.success : null,
-        chapterEnded,
-        completedAfter,
-        branchesAfter,
         promisesKept,
+        plan: planAfter,
+        milestone,
+        chapterTitle,
+        endedChapter:
+          plan && (chapterTitle || finale)
+            ? { number: plan.chapter.number, title: plan.chapter.title }
+            : null,
+        heading,
+        endedLog,
+        options: unframed ? whereItCouldGo(index, planAfter, sceneSpec.regionId) : [],
         view,
         choicesFor,
         narration: narration.ok ? narration.output : blankNarration(),
@@ -866,9 +1064,96 @@ export class TurnService {
     };
   }
 
-  /** Work that follows a committed turn: at a chapter's end, its recap for the journal. */
+  /**
+   * The next scene, from the director. A campaign begun before the living story gets its own story first, grown
+   * from what has happened so far.
+   */
+  private async frame(args: {
+    c: CampaignRow;
+    index: WorldIndex;
+    telling: NarrationStory;
+    plan: StoryPlan | null;
+    story: StoryState;
+    seq: number;
+    ended: SceneSpec;
+    endedLog: string[];
+    heading: string[];
+    party: CharacterRow[];
+    loom: LoomResult;
+    rules: TableRules;
+    masterSeed: string;
+  }) {
+    const { c, index, story } = args;
+    const scope = { guildId: c.guildId, campaignId: c.id };
+    const heroes = this.directorHeroes(index, args.party);
+    const lastNarration = (await this.recentNarration(c.id, 1))[0] ?? "";
+    if (args.plan)
+      return frameNextScene({
+        llm: this.deps.llm,
+        log: this.log,
+        scope,
+        index,
+        telling: args.telling,
+        plan: args.plan,
+        story,
+        seq: args.seq,
+        ended: args.ended,
+        endedLog: args.endedLog,
+        lastNarration,
+        heading: args.heading,
+        heroes,
+        loom: args.loom.state,
+        tempt: args.loom.constraints.some((k) => k.kind === "tempt"),
+        rules: args.rules,
+        masterSeed: args.masterSeed,
+      });
+    const seed = pickSeed(index, args.telling.premise, args.masterSeed);
+    if (!seed)
+      return {
+        ok: false as const,
+        reasons: ["This world has no story seeds to grow this campaign's story from."],
+      };
+    const [recaps, recent] = await Promise.all([
+      chapterRecaps(this.deps.db, c.id, 8),
+      this.recentNarration(c.id, 4),
+    ]);
+    const seeded = await seedStory({
+      llm: this.deps.llm,
+      log: this.log,
+      scope,
+      index,
+      telling: args.telling,
+      seed,
+      length: profileLength(c),
+      heroes,
+      loom: args.loom.state,
+      rules: args.rules,
+      masterSeed: args.masterSeed,
+      underway: {
+        history: [...recaps.map((r) => `Chapter ${r.chapter}: ${r.text}`), ...recent],
+        heading: args.heading,
+        regionId: args.ended.regionId || story.regionId,
+        scenesDone: story.scenesDone,
+        chapter: story.chapter,
+      },
+    });
+    if (!seeded.ok) return seeded;
+    const plan = seeded.value.plan;
+    plan.scenes.push({
+      seq: args.seq,
+      chapter: story.chapter,
+      title: args.ended.title,
+      summary: args.ended.summary.slice(0, 300),
+    });
+    return {
+      ok: true as const,
+      value: { plan, next: seeded.value.opening, milestone: false, chapterTitle: null },
+    };
+  }
+
+  /** Work that follows a committed turn: at a chapter's end, or the story's, its recap for the journal. */
   private async afterCommit(turn: PreparedTurn) {
-    if (!turn.chapterEnded) return;
+    if (!turn.endedChapter) return;
     try {
       const [c] = await this.deps.db.select().from(campaigns).where(eq(campaigns.id, turn.campaignId));
       if (!c) return;
@@ -881,32 +1166,11 @@ export class TurnService {
         log: this.log,
         campaignId: c.id,
         guildId: c.guildId,
-        chapterNumber: turn.spec.chapterNumber,
+        chapterNumber: turn.endedChapter.number,
+        chapterTitle: turn.endedChapter.title,
+        plan: await loadPlan(this.deps.db, c.id),
         telling,
       });
-      // Tailor the next chapter to what the heroes did, starting with the scene that just opened.
-      const story = asStory(c.story);
-      if (story.ended || !story.sceneId) return;
-      const [sceneRow] = await this.deps.db.select().from(scenes).where(eq(scenes.id, story.sceneId));
-      const current = sceneRow?.state as unknown as SceneSpec | undefined;
-      if (!current || current.chapterNumber <= turn.spec.chapterNumber) return;
-      const plan = await planChapter({
-        db: this.deps.db,
-        llm: this.deps.llm,
-        index,
-        log: this.log,
-        campaignId: c.id,
-        guildId: c.guildId,
-        chapter: current.chapterNumber,
-        story,
-        telling,
-      });
-      const tailored = applyPlan(index, current, plan);
-      if (tailored !== current)
-        await this.deps.db
-          .update(scenes)
-          .set({ state: tailored as unknown as Record<string, unknown> })
-          .where(eq(scenes.id, story.sceneId));
     } catch (e) {
       this.log.warn("chapter recap failed", { error: (e as Error).message });
     }
@@ -1032,8 +1296,12 @@ export class TurnService {
   }
 
   private async inventoryFor(party: readonly CharacterRow[]) {
+    return this.inventoryForTx(this.deps.db, party);
+  }
+
+  private async inventoryForTx(tx: Tx | EngineDeps["db"], party: readonly CharacterRow[]) {
     if (party.length === 0) return [];
-    return this.deps.db
+    return tx
       .select()
       .from(inventoryItems)
       .where(
@@ -1089,8 +1357,8 @@ export class TurnService {
   /** Commits a prepared turn in one transaction and returns what to show the players. */
   private async commit(prepared: PreparedTurn, loomResult: LoomResult, inputHash: string): Promise<TurnView> {
     const db = this.deps.db;
-    const { seq, spec, nextSpec, closing, mode } = prepared;
-    const narration = { output: prepared.narration };
+    const { seq, closing, mode } = prepared;
+    const out = prepared.narration;
     const ruledHp = new Map<string, number>();
     return db.transaction(async (tx) => {
       const [locked] = await tx
@@ -1104,46 +1372,60 @@ export class TurnService {
       const { index } = this.deps.worlds.get(c.worldId);
       const world = index.world;
       const story = asStory(c.story);
+      const told = await campaignStory(tx, c);
+      const rules = tableRules(c, told);
+      const { masterSeed } = await loadLoom(tx, c.id);
+      const plan = prepared.plan ? structuredClone(prepared.plan) : null;
+      // The story's length as the table set it now, even if they changed it while this turn was being told.
+      if (plan) plan.length = told.profile.length;
       let party = await this.partyTx(tx, c.id);
 
       const levelUps: TurnView["levelUps"] = [];
       let storyAfter: StoryState = {
         ...story,
-        completedBeats: prepared.completedAfter,
-        branches: prepared.branchesAfter,
         roundsInScene: story.roundsInScene + 1,
-        // Only the dice end a fight, never the narrator.
-        closeNextRound: !closing && !prepared.combat && !spec.combat && narration.output.sceneOver,
+        // Only the dice end a fight, never the storyteller.
+        closeNextRound: !closing && !prepared.combat && !prepared.spec.combat && out.sceneOver,
         steerAway: false,
+        chapterEnded: false,
       };
-      if (closing && spec.kind === "travel")
-        storyAfter = { ...storyAfter, regionId: spec.regionId, poiId: null };
       if (prepared.combat) {
         await this.applyFight(tx, prepared.combat, party, ruledHp);
         party = await this.partyTx(tx, c.id);
       }
       await this.applyLoomEffects(tx, loomResult, party, storyAfter);
-      const applied = await this.applyNarratorDeltas(
-        tx,
+
+      // A next scene the director couldn't frame is where the person who told this turn took the heroes.
+      const opened =
+        prepared.nextSpec ??
+        (closing && mode === "close_and_open"
+          ? provisionalScene(
+              index,
+              plan,
+              {
+                regionId: prepared.spec.regionId,
+                poiId: prepared.spec.poiId,
+                chapter: plan?.chapter.number ?? story.chapter,
+              },
+              out.narration,
+            )
+          : null);
+      const applied = await this.applyChanges(tx, {
         index,
         c,
-        storyAfter,
+        plan,
+        scenes: opened ? [prepared.spec, opened] : [prepared.spec],
         party,
-        narration.output.proposedDeltas,
-        ruledHp,
+        changes: out.changes,
         seq,
-        spec,
-      );
-      if ((applied.entitiesChanged || prepared.combat) && !closing) {
-        await tx
-          .update(scenes)
-          .set({ state: spec as unknown as Record<string, unknown> })
-          .where(eq(scenes.id, prepared.sceneId));
-      }
+        story: storyAfter,
+      });
+      let spec = applied.scenes[0] as SceneSpec;
+      let nextSpec = opened ? (applied.scenes[1] as SceneSpec) : null;
       for (const a of prepared.actions) {
         if (
           a.makesPromiseTo &&
-          (index.namedNpcs.has(a.makesPromiseTo) || spec.entities.some((e) => e.ref.id === a.makesPromiseTo))
+          spec.entities.some((e) => e.kind === "npc" && e.ref.id === a.makesPromiseTo)
         ) {
           await tx
             .insert(promises)
@@ -1159,6 +1441,11 @@ export class TurnService {
           );
       }
       await saveLoom(tx, c.id, seq, inputHash, loomResult);
+      // This turn in a sentence, for the scene's memory.
+      if (out.happened) spec = { ...spec, log: [...spec.log, out.happened].slice(-MAX_SCENE_LOG) };
+      party = await this.partyTx(tx, c.id);
+      const fightRng = () => this.dice(masterSeed, seq, "fight");
+      const heroesNow = async () => heroesFor(index, party, await this.inventoryForTx(tx, party));
 
       let roundId: string | null = null;
       let ended = false;
@@ -1167,40 +1454,13 @@ export class TurnService {
           .update(scenes)
           .set({ endedTurn: seq, state: spec as unknown as Record<string, unknown> })
           .where(eq(scenes.id, prepared.sceneId));
-        // Beaten heroes are rescued and wake up safe; arriving somewhere new (or a rest) is a good night's sleep.
+        // Beaten heroes are rescued and wake up safe; a journey's end or a rest is a good night's sleep.
         if (prepared.combat?.outcome === "party_down") await this.rescue(tx, party);
         else if (spec.kind === "travel" || spec.kind === "rest") await this.longRest(tx, party);
-        if (spec.kind === "travel") {
-          await tx
-            .insert(campaignRegions)
-            .values({ campaignId: c.id, regionId: spec.regionId, state: "visited" })
-            .onConflictDoUpdate({
-              target: [campaignRegions.campaignId, campaignRegions.regionId],
-              set: { state: "visited" },
-            });
-          const neighbors = index.regions.get(spec.regionId)?.edges.map((e) => e.to) ?? [];
-          storyAfter.discoveredRegions = [
-            ...new Set([...storyAfter.discoveredRegions, spec.regionId, ...neighbors]),
-          ];
-        }
-        if (prepared.cruxLabel && spec.beatId) {
-          const cruxSpec = index.beats.get(spec.beatId)?.beat.crux;
-          if (loomResult.crux?.outcome === "fail_forward" && cruxSpec?.clock) {
-            storyAfter.clocks = tickClock(
-              index,
-              storyAfter.clocks,
-              clockKey(cruxSpec.clock.faction, cruxSpec.clock.clock),
-              1,
-            );
-          }
-        }
-        if (prepared.chapterEnded) {
-          storyAfter.clocks = tickClock(index, storyAfter.clocks, clockKey("gloam-host", "long-night"), 1);
-          if (spec.actNumber >= 2)
-            storyAfter.clocks = tickClock(index, storyAfter.clocks, clockKey("gloam-host", "ember-dims"), 1);
-        }
-        const beat = spec.beatId ? index.beats.get(spec.beatId)?.beat : undefined;
-        if (beat?.milestone) {
+        storyAfter.scenesDone += 1;
+        if (prepared.milestone) {
+          storyAfter.milestones += 1;
+          storyAfter.lastMilestoneAt = storyAfter.scenesDone;
           for (const p of party) {
             if (p.level + (p.resources.pendingLevels ?? 0) >= world.meta.maxLevel) continue;
             await tx
@@ -1215,18 +1475,13 @@ export class TurnService {
             });
           }
         }
-        if (beat?.quest) {
-          await tx
-            .insert(quests)
-            .values({
-              campaignId: c.id,
-              questId: beat.quest.id,
-              title: beat.quest.title,
-              objective: beat.quest.objective,
-            })
-            .onConflictDoNothing();
+        if (plan && plan.chapter.number !== story.chapter) {
+          storyAfter.chapter = plan.chapter.number;
+          storyAfter.chapterEnded = true;
         }
         if (nextSpec) {
+          if (applied.fight)
+            nextSpec = startFight(index, nextSpec, applied.fight, await heroesNow(), fightRng(), rules);
           const sceneId = await this.insertScene(tx, c.id, nextSpec, seq);
           const fightStarts = nextSpec.combat?.phase === "fighting";
           roundId = await this.insertRound(
@@ -1234,34 +1489,58 @@ export class TurnService {
             c.id,
             sceneId,
             1,
-            fightStarts ? [] : narration.output.choices,
+            fightStarts ? [] : out.choices,
             fightStarts ? "combat" : "exploration",
           );
+          if (nextSpec.regionId !== story.regionId) {
+            const neighbors = index.regions.get(nextSpec.regionId)?.edges.map((e) => e.to) ?? [];
+            await this.visit(tx, c.id, nextSpec.regionId, neighbors);
+            storyAfter.discoveredRegions = [
+              ...new Set([...storyAfter.discoveredRegions, nextSpec.regionId, ...neighbors]),
+            ];
+          }
           storyAfter = {
             ...storyAfter,
             sceneId,
             sceneKind: nextSpec.kind,
-            beatId: nextSpec.beatId,
+            momentId: nextSpec.momentId,
+            regionId: nextSpec.regionId,
             poiId: nextSpec.poiId,
             roundsInScene: 0,
             closeNextRound: false,
           };
         } else {
           ended = true;
-          storyAfter = { ...storyAfter, ended: true, sceneId: null };
+          storyAfter = { ...storyAfter, ended: true, sceneId: null, momentId: null };
+          // The last scene, for the last chapter's recap.
+          if (plan && out.happened)
+            plan.scenes.push({ seq, chapter: plan.chapter.number, title: spec.title, summary: out.happened });
         }
       } else {
+        if (applied.fight)
+          spec = startFight(index, spec, applied.fight, await heroesNow(), fightRng(), rules);
         const fightOn = spec.combat?.phase === "fighting";
         const mercyNow = prepared.combat && spec.combat?.phase === "aftermath";
+        await tx
+          .update(scenes)
+          .set({ state: spec as unknown as Record<string, unknown> })
+          .where(eq(scenes.id, prepared.sceneId));
         roundId = await this.insertRound(
           tx,
           c.id,
           prepared.sceneId,
           prepared.roundN + 1,
-          fightOn ? [] : mercyNow && spec.combat ? aftermathChoices(spec.combat) : narration.output.choices,
+          fightOn ? [] : mercyNow && spec.combat ? aftermathChoices(spec.combat) : out.choices,
           fightOn ? "combat" : "exploration",
         );
       }
+      if (plan && (closing || applied.planChanged))
+        await savePlan(
+          tx,
+          c.id,
+          plan,
+          closing ? `scene ${storyAfter.scenesDone} ended (turn ${seq})` : `turn ${seq}`,
+        );
 
       await tx.update(rounds).set({ status: "resolved" }).where(eq(rounds.id, prepared.roundId));
       const turnData = {
@@ -1272,7 +1551,7 @@ export class TurnService {
           passed: a.passed,
         })),
         rolls: prepared.rolls,
-        narration: narration.output,
+        narration: out,
       } as unknown as Record<string, unknown>;
       const [draftRow] = await tx
         .select()
@@ -1300,7 +1579,7 @@ export class TurnService {
         type: closing ? "scene_closed" : "round_resolved",
         payload: {
           sceneId: prepared.sceneId,
-          beatId: spec.beatId,
+          momentId: spec.momentId,
           cruxOutcome: prepared.cruxSuccess === null ? null : prepared.cruxSuccess ? "success" : "failure",
         },
       });
@@ -1318,12 +1597,14 @@ export class TurnService {
       const shown = nextSpec ?? spec;
       const partyNow = await this.partyTx(tx, c.id);
       const mercyNow = Boolean(!closing && prepared.combat && spec.combat?.phase === "aftermath");
+      const fightStartedNow = Boolean(applied.fight && shown.combat?.phase === "fighting");
       return this.turnView({
         c: locked,
         index,
+        plan,
         seq,
         spec: shown,
-        out: narration.output,
+        out,
         rolls: prepared.rolls,
         roundId,
         sceneChanged: Boolean(nextSpec),
@@ -1331,7 +1612,11 @@ export class TurnService {
         ended,
         combat:
           shown.combat && !ended
-            ? combatView(shown.combat, partyNow, nextSpec ? [] : (prepared.combat?.log ?? []))
+            ? combatView(
+                shown.combat,
+                partyNow,
+                nextSpec || fightStartedNow ? [] : (prepared.combat?.log ?? []),
+              )
             : null,
         ...(shown.combat?.phase === "fighting" && roundId
           ? { choices: [] }
@@ -1565,7 +1850,7 @@ export class TurnService {
     let view: TurnView;
     if (isOpening(turn)) {
       const final = edited ? this.applyDmEdits(turn, edits) : turn;
-      view = await this.commitOpening(turn.campaignId, turn.spec, final.narration);
+      view = await this.commitOpening(final);
     } else {
       if (!pending) throw new GameError("stale", "That draft is out of date.");
       const final = edited ? this.applyDmEdits(turn, edits) : turn;
@@ -1581,47 +1866,101 @@ export class TurnService {
   }
 
   /**
-   * Asks the AI storyteller to write the turn again, with the DM's guidance. Dice and the hidden hand stay as they
-   * were. If it still can't, the draft says why and stays with the person.
+   * Asks the AI to tell the turn again, with the DM's guidance: the director too, when it was the director that
+   * couldn't answer. Dice and the hidden hand stay as they were. If it still can't, the draft says why and stays
+   * with the person.
    */
   async regenerateDraft(approvalId: string, userId: string, guidance: string): Promise<DmDraft> {
     const { req, turn, pending } = await this.loadDraft(approvalId, userId);
     const [c] = await this.deps.db.select().from(campaigns).where(eq(campaigns.id, req.campaignId));
     if (!c) throw new GameError("no campaign", "That campaign doesn't exist.");
     const { index } = this.deps.worlds.get(c.worldId);
-    const directives = pending?.result.directives ?? [];
-    const guided: NarrativeDirective[] = guidance.trim()
-      ? [
-          ...directives,
-          {
-            kind: "dm_note",
-            text: `The DM's note for this turn: ${guidance.trim().slice(0, 500)}`,
-            mustNot: [],
-          },
-        ]
-      : directives;
-    const unread = isOpening(turn) ? [] : (turn.handoff ?? []).filter((r) => r.startsWith(NOT_READ));
-    // An action nobody could read still can't be narrated by the AI: that stays with the person.
-    const narration: NarrationResult =
-      unread.length > 0
-        ? { ok: false, reasons: turn.handoff ?? [] }
-        : await narrate({
-            llm: this.deps.llm,
-            world: index.world,
-            view: turn.view as PublicSceneView,
-            directives: guided,
-            scope: { guildId: c.guildId, campaignId: c.id },
-            log: this.log,
-            choicesFor: turn.choicesFor,
-          });
-    const next = narration.ok
-      ? { ...turn, narration: narration.output, handoff: null }
-      : { ...turn, handoff: narration.reasons };
+    let next: PreparedTurn | OpeningDraft;
+    if (isOpening(turn) && !turn.framed) {
+      next = await this.tellOpening(c, await this.party(c.id), guidance);
+    } else {
+      let base = turn;
+      // The director couldn't frame the next scene: ask it again first.
+      if (!isOpening(turn) && turn.closing && turn.mode === "close_and_open" && !turn.nextSpec && pending) {
+        const told = await campaignStory(this.deps.db, c);
+        const rules = tableRules(c, told);
+        const party = await this.party(c.id);
+        const { masterSeed } = await loadLoom(this.deps.db, c.id);
+        const framed = await this.frame({
+          c,
+          index,
+          telling: told.story,
+          plan: turn.plan,
+          story: asStory(c.story),
+          seq: turn.seq,
+          ended: turn.spec,
+          endedLog: turn.endedLog,
+          heading: turn.heading,
+          party,
+          loom: pending.result,
+          rules,
+          masterSeed,
+        });
+        if (!framed.ok) {
+          const stuck = { ...turn, handoff: framed.reasons };
+          await this.saveDraftData(req.turnId, stuck);
+          return this.draftFor(approvalId, stuck, pending.result);
+        }
+        const nextSpec = withEncounter(
+          index,
+          framed.value.next,
+          party,
+          heroesFor(index, party, await this.inventoryFor(party)),
+          this.dice(masterSeed, turn.seq, "encounter"),
+          rules,
+        );
+        const nextScene = sceneSpecView(index, framed.value.plan, nextSpec);
+        base = {
+          ...turn,
+          nextSpec,
+          plan: framed.value.plan,
+          milestone: framed.value.milestone,
+          chapterTitle: framed.value.chapterTitle,
+          endedChapter:
+            turn.plan && framed.value.chapterTitle
+              ? { number: turn.plan.chapter.number, title: turn.plan.chapter.title }
+              : null,
+          view: { ...turn.view, nextScene, storySoFar: framed.value.plan.storySoFar },
+          choicesFor: nextScene,
+          options: [],
+        };
+      }
+      const directives = [
+        ...(pending?.result.directives ?? []),
+        ...(guidance.trim() ? [dmNote(guidance)] : []),
+      ];
+      const unread = isOpening(base) ? [] : (base.handoff ?? []).filter((r) => r.startsWith(NOT_READ));
+      // An action nobody could read still can't be narrated by the AI: that stays with the person.
+      const narration: NarrationResult =
+        unread.length > 0
+          ? { ok: false, reasons: base.handoff ?? [] }
+          : await narrate({
+              llm: this.deps.llm,
+              world: index.world,
+              view: base.view as PublicSceneView,
+              directives,
+              scope: { guildId: c.guildId, campaignId: c.id },
+              log: this.log,
+              choicesFor: base.choicesFor,
+            });
+      next = narration.ok
+        ? { ...base, narration: narration.output, handoff: null }
+        : { ...base, handoff: narration.reasons };
+    }
+    await this.saveDraftData(req.turnId, next);
+    return this.draftFor(approvalId, next, pending?.result ?? null);
+  }
+
+  private async saveDraftData(turnId: string, data: PreparedTurn | OpeningDraft) {
     await this.deps.db
       .update(turns)
-      .set({ data: next as unknown as Record<string, unknown> })
-      .where(eq(turns.id, req.turnId));
-    return this.draftFor(approvalId, next, pending?.result ?? null);
+      .set({ data: data as unknown as Record<string, unknown> })
+      .where(eq(turns.id, turnId));
   }
 
   private applyDmEdits<T extends PreparedTurn | OpeningDraft>(
@@ -1667,6 +2006,7 @@ export class TurnService {
   private async resolveIntents(
     c: CampaignRow,
     index: WorldIndex,
+    plan: StoryPlan | null,
     spec: SceneSpec,
     party: CharacterRow[],
     acted: Array<typeof pendingActions.$inferSelect>,
@@ -1682,7 +2022,7 @@ export class TurnService {
           task: "intent",
           system: intentSystem(index.world),
           user: intentUser(
-            this.sceneSpecView(index, spec),
+            sceneSpecView(index, plan, spec),
             party.map((p) => ({ ref: p.id, name: p.name })),
             freeform.map((a) => ({ characterRef: a.characterId, text: String(a.payload.text ?? "") })),
             { fight: spec.combat?.phase === "fighting" && campaignSettings(c).combatRules.defenseMix },
@@ -1703,7 +2043,9 @@ export class TurnService {
 
     const entityAnchor = (ref: string | null) => {
       if (!ref) return null;
-      return spec.entities.find((e) => e.ref.id === ref)?.ref ?? null;
+      const here = spec.entities.find((e) => e.ref.id === ref)?.ref;
+      if (here) return here;
+      return castMember(plan, ref) || index.namedNpcs.has(ref) ? personAnchor(index, plan, ref) : null;
     };
 
     return party.map((p): ResolvedAction => {
@@ -1819,8 +2161,8 @@ export class TurnService {
     index: WorldIndex,
     seed: string,
     seq: number,
-    spec: SceneSpec,
-    story: StoryState,
+    moment: StoryPlan["moments"][number] | null,
+    portentsCome: number,
     party: CharacterRow[],
     actions: ResolvedAction[],
     loomState: Parameters<typeof snarePressure>[0],
@@ -1843,34 +2185,33 @@ export class TurnService {
     };
     const conds = (p: CharacterRow): Condition[] => p.conditions.filter(isCondition);
 
-    if (spec.isCrux && closing && spec.beatId) {
-      const cruxSpec = index.beats.get(spec.beatId)?.beat.crux;
-      if (cruxSpec) {
-        const skill = (cruxSpec.check.skill as Skill | undefined) ?? null;
-        const ability = cruxSpec.check.ability;
-        const lead = [...party].sort(
-          (a, b) => modifierFor(b, skill, ability) - modifierFor(a, skill, ability),
-        )[0];
-        if (lead) {
-          const others = actions.filter((a) => a.characterId !== lead.id && !a.passed).length;
-          const disadvantage = (lead.resources.disadvantageNext ?? 0) > 0;
-          const mode: RollMode = combineMode(others > 0, disadvantage);
-          const mod = modifierFor(lead, skill, ability);
-          const dc = cruxDc(cruxSpec, story.clocks, snarePressure(loomState));
-          const check = resolveCheck(
-            {
-              modifier: mod,
-              dc,
-              mode: checkRollMode(conds(lead), {
-                advantage: mode === "advantage",
-                disadvantage: mode === "disadvantage",
-              }),
-            },
-            this.dice(seed, seq, `crux:${lead.id}`),
-          );
-          crux = { label: cruxSpec.check.label, check, p: successProbability(mod, dc, check.mode) };
-          rollViews.push(rollView(lead.name, cruxSpec.check.label, check));
-        }
+    // A decisive moment: the hero best suited to it leads, and everyone else who acts helps.
+    if (moment && closing) {
+      const cruxSpec = moment.crux;
+      const skill = (cruxSpec.check.skill as Skill | undefined) ?? null;
+      const ability = cruxSpec.check.ability;
+      const lead = [...party].sort(
+        (a, b) => modifierFor(b, skill, ability) - modifierFor(a, skill, ability),
+      )[0];
+      if (lead) {
+        const others = actions.filter((a) => a.characterId !== lead.id && !a.passed).length;
+        const disadvantage = (lead.resources.disadvantageNext ?? 0) > 0;
+        const mode: RollMode = combineMode(others > 0, disadvantage);
+        const mod = modifierFor(lead, skill, ability);
+        const dc = cruxDc(cruxSpec, portentsCome, snarePressure(loomState));
+        const check = resolveCheck(
+          {
+            modifier: mod,
+            dc,
+            mode: checkRollMode(conds(lead), {
+              advantage: mode === "advantage",
+              disadvantage: mode === "disadvantage",
+            }),
+          },
+          this.dice(seed, seq, `crux:${lead.id}`),
+        );
+        crux = { label: cruxSpec.check.label, check, p: successProbability(mod, dc, check.mode) };
+        rollViews.push(rollView(lead.name, cruxSpec.check.label, check));
       }
       return { rollViews, failures, crux };
     }
@@ -1959,197 +2300,301 @@ export class TurnService {
     }
   }
 
-  private async applyNarratorDeltas(
+  /**
+   * Applies what the storyteller says changed, once the rules have checked it: only the people present change how
+   * they feel or where they go, only this scene's clues and loot can be found, and a fight breaks out only with
+   * foes the scene allows. The scenes come back with their people as the changes leave them; the plan is changed
+   * in place.
+   */
+  private async applyChanges(
     tx: Tx,
-    index: WorldIndex,
-    c: CampaignRow,
-    story: StoryState,
-    party: CharacterRow[],
-    proposed: DeltaProposal[],
-    ruledHp: Map<string, number>,
-    seq: number,
-    spec: SceneSpec,
-  ): Promise<{ entitiesChanged: boolean }> {
-    let entitiesChanged = false;
-    if (proposed.length === 0) return { entitiesChanged };
-    const invRows = party.length
-      ? await tx
-          .select()
-          .from(inventoryItems)
-          .where(
-            sql`${inventoryItems.characterId} in (${sql.join(
-              party.map((p) => sql`${p.id}`),
-              sql`, `,
-            )})`,
-          )
-      : [];
-    const [questRows, promiseRows, canonRows, npcRows] = await Promise.all([
+    args: {
+      index: WorldIndex;
+      c: CampaignRow;
+      plan: StoryPlan | null;
+      /** The scene this turn is in, and the one it opens if it changes scene. */
+      scenes: SceneSpec[];
+      party: CharacterRow[];
+      changes: StoryChange[];
+      seq: number;
+      /** Changed in place: what the heroes have found out. */
+      story: StoryState;
+    },
+  ): Promise<{ scenes: SceneSpec[]; fight: string[] | null; planChanged: boolean }> {
+    const { index, c, plan, party, seq, story } = args;
+    const scenesOut = args.scenes.map((s) => ({ ...s, entities: s.entities.map((e) => ({ ...e })) }));
+    const result = { scenes: scenesOut, fight: null as string[] | null, planChanged: false };
+    if (args.changes.length === 0) return result;
+    const continuing = scenesOut.at(-1) as SceneSpec;
+    const invRows = await this.inventoryForTx(tx, party);
+    const [questRows, promiseRows, canonRows] = await Promise.all([
       tx.select().from(quests).where(eq(quests.campaignId, c.id)),
       tx.select().from(promises).where(eq(promises.campaignId, c.id)),
       tx.select().from(canonEntities).where(eq(canonEntities.campaignId, c.id)),
-      tx.select().from(npcs).where(eq(npcs.campaignId, c.id)),
     ]);
-    const loot = new Set<string>();
-    const region = index.regions.get(spec.regionId);
-    const table = region?.lootTable
-      ? index.world.items.lootTables.find((t) => t.id === region.lootTable)
-      : undefined;
-    for (const e of table?.entries ?? []) loot.add(e.item);
     const loomRec = await loadLoom(tx, c.id);
-    const protectedNpcs = new Set(loomRec.state.bearers.filter((b) => b.mustSurvive).map((b) => b.npcId));
-    const ctx: DeltaContext = {
+    const guarded = new Set(loomRec.state.bearers.filter((b) => b.mustSurvive).map((b) => b.npcId));
+    const present = new Set(
+      scenesOut.flatMap((s) => s.entities.filter((e) => e.kind === "npc" && e.present).map((e) => e.ref.id)),
+    );
+    const found = new Set(
+      plan?.mysteries.flatMap((m) => m.clues.filter((cl) => cl.found).map((cl) => cl.id)) ?? [],
+    );
+    const told = await campaignStory(tx, c);
+    const ctx: ChangeContext = {
       index,
-      partyRegionId: story.regionId,
-      characters: new Map(
+      heroes: new Map(
         party.map((p) => [
           p.id,
           {
             level: p.level,
-            hp: p.hp,
-            hpMax: p.hpMax,
             gold: p.gold,
             inventory: new Map(invRows.filter((i) => i.characterId === p.id).map((i) => [i.itemId, i.qty])),
           },
         ]),
       ),
-      ruledHpChanges: ruledHp,
-      allowedLoot: loot,
-      milestoneBeats: new Set(),
-      sceneHasHazard: false,
-      npcs: new Map([
-        ...spec.entities.map((e) => [e.ref.id, { protected: protectedNpcs.has(e.ref.id) }] as const),
-        ...npcRows.map((n) => [n.id, { protected: protectedNpcs.has(n.id) }] as const),
-      ]),
-      quests: new Set([
-        ...questRows.map((q) => q.questId),
-        ...index.beatOrder.flatMap((b) => (b.beat.quest ? [b.beat.quest.id] : [])),
-      ]),
-      promises: new Set(promiseRows.map((p) => p.id)),
-      knownEntityNames: new Set([
-        ...canonRows.map((r) => r.name.toLowerCase()),
-        ...index.world.npcs.named.map((n) => n.name.toLowerCase()),
-        ...party.map((p) => p.name.toLowerCase()),
-      ]),
-      bannedTerms: bannedTermsFor(index.world, (await campaignStory(tx, c)).story.intensity),
+      cast: new Map([...present].map((id) => [id, { protected: guarded.has(id) }])),
+      present,
+      clues: new Set(scenesOut.flatMap((s) => s.clues).filter((id) => !found.has(id))),
+      allowedLoot: new Set(scenesOut.flatMap((s) => lootFor(index, s.regionId).map((l) => l.id))),
+      foes: new Set(continuing.foes.map((f) => f.creature)),
+      fighting: continuing.combat?.phase === "fighting",
+      promises: new Set(promiseRows.filter((p) => p.status === "pending").map((p) => p.id)),
+      goals: new Set(questRows.filter((q) => q.status === "active").map((q) => q.questId)),
+      knownNames: new Set(
+        [
+          ...canonRows.map((r) => r.name),
+          ...index.world.npcs.named.map((n) => n.name),
+          ...party.map((p) => p.name),
+          ...(plan?.cast.map((m) => m.name) ?? []),
+        ].map((n) => n.toLowerCase()),
+      ),
+      bannedTerms: bannedTermsFor(index.world, told.story.intensity),
+      sceneHasHazard: scenesOut.some((s) => s.dangerous),
     };
-    const { accepted } = validateDeltas(proposed, ctx);
+    const { accepted, rejected } = validateChanges(args.changes, ctx);
+    if (rejected.length > 0)
+      this.log.info("story changes turned back", {
+        rejected: rejected.map((r) => `${r.change.kind}: ${r.reason}`),
+      });
+
+    const member = (id: string) => {
+      if (!plan) return null;
+      const known = castMember(plan, id);
+      if (known) return known;
+      const fromWorld = castFromWorld(index, id);
+      if (fromWorld) plan.cast.push(fromWorld);
+      return fromWorld;
+    };
+    const nameOf = (id: string) =>
+      castMember(plan, id)?.name ??
+      index.namedNpcs.get(id)?.name ??
+      scenesOut.flatMap((s) => s.entities).find((e) => e.ref.id === id)?.ref.name ??
+      id;
+    const meet = async (id: string, set: { status?: string; disposition?: number }) => {
+      const npc = index.namedNpcs.get(id);
+      await tx
+        .insert(npcs)
+        .values({
+          campaignId: c.id,
+          id,
+          name: nameOf(id),
+          status: set.status ?? "active",
+          disposition: set.disposition ?? 0,
+          factionId: npc?.faction ?? castMember(plan, id)?.faction ?? null,
+          tags: npc?.tags ?? [],
+          firstMetTurn: seq,
+        })
+        .onConflictDoUpdate({
+          target: [npcs.campaignId, npcs.id],
+          set:
+            set.status !== undefined
+              ? { status: set.status }
+              : { disposition: sql`${npcs.disposition} + ${set.disposition ?? 0}` },
+        });
+    };
+
     for (const d of accepted) {
       switch (d.kind) {
-        case "item_grant":
+        case "attitude": {
+          const m = member(d.who);
+          if (m) {
+            m.attitude = Math.max(-3, Math.min(3, m.attitude + d.by));
+            result.planChanged = true;
+          }
+          await meet(d.who, { disposition: d.by });
+          break;
+        }
+        case "whereabouts": {
+          const m = member(d.who);
+          if (m) {
+            m.status = d.status;
+            if (d.status !== "with_heroes") m.regionId = continuing.regionId;
+            result.planChanged = true;
+          }
+          for (const sc of scenesOut)
+            for (const e of sc.entities.filter((x) => x.ref.id === d.who)) {
+              e.present = d.status === "active" || d.status === "with_heroes";
+              e.status =
+                d.status === "with_heroes"
+                  ? "befriended"
+                  : d.status === "captured"
+                    ? "captured"
+                    : d.status === "away"
+                      ? "away"
+                      : d.status === "active"
+                        ? e.status
+                        : "fled";
+            }
+          await meet(d.who, { status: d.status });
+          break;
+        }
+        case "clue": {
+          const mystery = plan?.mysteries.find((m) => m.clues.some((cl) => cl.id === d.clue));
+          const clue = mystery?.clues.find((cl) => cl.id === d.clue);
+          if (mystery && clue) {
+            clue.found = true;
+            mystery.solved = mystery.clues.filter((cl) => cl.found).length >= 2;
+            story.discoveries = [...story.discoveries, clue.text].slice(-30);
+            result.planChanged = true;
+          }
+          break;
+        }
+        case "promise":
+          await tx
+            .insert(promises)
+            .values({ campaignId: c.id, npcId: d.who, text: d.text.trim(), madeTurn: seq });
+          break;
+        case "promise_settled":
+          await tx
+            .update(promises)
+            .set({ status: d.kept ? "kept" : "broken" })
+            .where(and(eq(promises.campaignId, c.id), eq(promises.id, d.promise)));
+          break;
+        case "item":
           await tx
             .insert(inventoryItems)
-            .values({ characterId: d.characterId, itemId: d.itemId, qty: d.qty })
+            .values({ characterId: d.hero, itemId: d.item, qty: 1 })
             .onConflictDoUpdate({
               target: [inventoryItems.characterId, inventoryItems.itemId],
-              set: { qty: sql`${inventoryItems.qty} + ${d.qty}` },
+              set: { qty: sql`${inventoryItems.qty} + 1` },
             });
           break;
-        case "item_remove":
+        case "item_used":
           await tx
             .update(inventoryItems)
-            .set({ qty: sql`${inventoryItems.qty} - ${d.qty}` })
-            .where(and(eq(inventoryItems.characterId, d.characterId), eq(inventoryItems.itemId, d.itemId)));
+            .set({ qty: sql`${inventoryItems.qty} - 1` })
+            .where(and(eq(inventoryItems.characterId, d.hero), eq(inventoryItems.itemId, d.item)));
           await tx
             .delete(inventoryItems)
-            .where(and(eq(inventoryItems.characterId, d.characterId), sql`${inventoryItems.qty} <= 0`));
+            .where(and(eq(inventoryItems.characterId, d.hero), sql`${inventoryItems.qty} <= 0`));
           break;
         case "gold":
           await tx
             .update(characters)
-            .set({ gold: sql`${characters.gold} + ${d.amount}` })
-            .where(eq(characters.id, d.characterId));
+            .set({ gold: sql`greatest(0, ${characters.gold} + ${d.amount})` })
+            .where(eq(characters.id, d.hero));
           break;
-        case "condition": {
-          const p = party.find((x) => x.id === d.characterId);
-          if (!p) break;
-          const next =
-            d.action === "add"
-              ? [...new Set([...p.conditions, d.condition])]
-              : p.conditions.filter((x) => x !== d.condition);
-          await tx.update(characters).set({ conditions: next }).where(eq(characters.id, p.id));
-          break;
-        }
-        case "hp_change": {
-          const p = party.find((x) => x.id === d.characterId);
-          if (p)
-            await tx
-              .update(characters)
-              .set({ hp: Math.max(0, Math.min(p.hpMax, p.hp + d.amount)) })
-              .where(eq(characters.id, p.id));
-          break;
-        }
-        case "npc_status":
-        case "npc_disposition": {
-          const named = index.namedNpcs.get(d.npcId);
-          const entity = spec.entities.find((e) => e.ref.id === d.npcId);
-          const name = named?.name ?? entity?.ref.name ?? d.npcId;
-          await tx
-            .insert(npcs)
-            .values({
-              campaignId: c.id,
-              id: d.npcId,
-              name,
-              status: d.kind === "npc_status" ? d.status : "active",
-              disposition: d.kind === "npc_disposition" ? d.delta : 0,
-              factionId: named?.faction ?? null,
-              tags: named?.tags ?? [],
-              firstMetTurn: seq,
-            })
-            .onConflictDoUpdate({
-              target: [npcs.campaignId, npcs.id],
-              set:
-                d.kind === "npc_status"
-                  ? { status: d.status }
-                  : { disposition: sql`${npcs.disposition} + ${d.delta}` },
-            });
-          if (entity && d.kind === "npc_status") {
-            entity.status = d.status === "defeated" ? "fled" : d.status === "active" ? "neutral" : d.status;
-            entitiesChanged = true;
-          }
-          break;
-        }
-        case "reveal_region":
-          await tx
-            .insert(campaignRegions)
-            .values({ campaignId: c.id, regionId: d.regionId, state: "discovered" })
-            .onConflictDoNothing();
-          story.discoveredRegions = [...new Set([...story.discoveredRegions, d.regionId])];
-          break;
-        case "quest_update":
-          await tx
-            .update(quests)
-            .set({ status: d.status })
-            .where(and(eq(quests.campaignId, c.id), eq(quests.questId, d.questId)));
-          break;
-        case "promise_made":
-          await tx.insert(promises).values({ campaignId: c.id, npcId: d.npcId, text: d.text, madeTurn: seq });
-          break;
-        case "promise_resolved":
-          await tx
-            .update(promises)
-            .set({ status: d.kept ? "kept" : "broken" })
-            .where(eq(promises.id, d.promiseId));
-          break;
-        case "introduce_entity":
+        case "new_person": {
           await tx
             .insert(canonEntities)
             .values({
               campaignId: c.id,
-              kind: d.entityKind,
+              kind: "npc",
               name: d.name,
               description: d.description,
-              tags: d.tags,
+              tags: [],
+              introducedTurn: seq,
+            })
+            .onConflictDoNothing();
+          if (plan) {
+            let id = `cast-${slug(d.name)}`;
+            while (plan.cast.some((m) => m.id === id)) id = `${id}-2`;
+            plan.cast.push({
+              id,
+              name: d.name,
+              role: d.description.slice(0, 120),
+              agenda: "",
+              voice: "",
+              secret: null,
+              attitude: 0,
+              status: "active",
+              regionId: continuing.regionId,
+              faction: null,
+              tags: [],
+            });
+            continuing.entities.push({
+              ref: { kind: "npc", id, name: d.name, tags: [] },
+              kind: "npc",
+              status: "neutral",
+              lowly: false,
+              present: true,
+            });
+            result.planChanged = true;
+          }
+          break;
+        }
+        case "new_place":
+        case "new_thing":
+          await tx
+            .insert(canonEntities)
+            .values({
+              campaignId: c.id,
+              kind: d.kind === "new_place" ? "place" : "item",
+              name: d.name,
+              description: d.description,
+              tags: [],
               introducedTurn: seq,
             })
             .onConflictDoNothing();
           break;
-        case "move_party":
-        case "xp_milestone":
-        case "flag":
+        case "goal": {
+          let id = `goal-${slug(d.title)}`;
+          while (questRows.some((q) => q.questId === id)) id = `${id}-2`;
+          questRows.push({
+            campaignId: c.id,
+            questId: id,
+            title: d.title,
+            objective: d.objective,
+            status: "active",
+          });
+          await tx
+            .insert(quests)
+            .values({ campaignId: c.id, questId: id, title: d.title.trim(), objective: d.objective.trim() })
+            .onConflictDoNothing();
           break;
+        }
+        case "goal_done":
+          await tx
+            .update(quests)
+            .set({ status: d.done ? "completed" : "failed" })
+            .where(and(eq(quests.campaignId, c.id), eq(quests.questId, d.goal)));
+          break;
+        case "fight":
+          result.fight = d.foes;
+          break;
+        case "hazard": {
+          // A scald or a fall hurts, but only a fight knocks a hero out.
+          const p = party.find((x) => x.id === d.hero);
+          if (p)
+            await tx
+              .update(characters)
+              .set({ hp: Math.max(Math.min(p.hp, 1), p.hp - d.amount) })
+              .where(eq(characters.id, p.id));
+          break;
+        }
+        case "condition": {
+          const p = party.find((x) => x.id === d.hero);
+          if (!p) break;
+          const next = d.add
+            ? [...new Set([...p.conditions, d.condition])]
+            : p.conditions.filter((x) => x !== d.condition);
+          await tx.update(characters).set({ conditions: next }).where(eq(characters.id, p.id));
+          break;
+        }
       }
     }
-    return { entitiesChanged };
+    return result;
   }
 
   // ------------------------------------------------------------ table tools
@@ -2350,7 +2795,8 @@ export class TurnService {
       await saveRestorePoint(tx, campaignId, seq, roundId);
 
       const { index } = this.deps.worlds.get(locked.worldId);
-      const spec = point.scene.state as unknown as SceneSpec;
+      const spec = normalizeSpec(point.scene.state);
+      const plan = await loadPlan(tx, campaignId);
       const [told] = await tx
         .select()
         .from(turns)
@@ -2361,6 +2807,7 @@ export class TurnService {
       const view = this.turnView({
         c: locked,
         index,
+        plan,
         seq,
         spec,
         out: said ?? quietNarration(`The story returns to ${spec.title}.`),
@@ -2380,7 +2827,7 @@ export class TurnService {
     const sceneId = asStory(c.story).sceneId;
     if (!sceneId) return null;
     const [row] = await this.deps.db.select().from(scenes).where(eq(scenes.id, sceneId));
-    const spec = row?.state as unknown as SceneSpec | undefined;
+    const spec = row ? normalizeSpec(row.state) : undefined;
     return row && spec?.combat?.phase === "fighting" ? { row, spec } : null;
   }
 
@@ -2439,7 +2886,7 @@ export class TurnService {
     const bare: SceneSpec = {
       ...old,
       kind: "combat",
-      beatId: old.kind === "combat" ? old.beatId : null,
+      foes: old.kind === "combat" ? old.foes : [],
       entities: old.entities.filter((e) => !oldFoes.has(e.ref.id)),
     };
     delete bare.combat;
@@ -2449,13 +2896,13 @@ export class TurnService {
       party,
       heroesFor(index, party, await this.inventoryFor(party)),
       this.dice(loom.masterSeed, c.turnSeq + 1, "rebuild"),
-      { intensity: told.story.intensity, avoid: told.story.lines, combat: campaignSettings(c).combatRules },
+      tableRules(c, told),
     );
     if (!built.combat)
       throw new GameError("no foes", "I couldn't find foes that fit here. Try a rewind instead.");
     // A stun or a web from the old foes still wears off on time.
     const combat = { ...built.combat, heroConditionRounds: old.combat?.heroConditionRounds ?? {} };
-    const spec: SceneSpec = { ...built, combat, kind: old.kind, beatId: old.beatId };
+    const spec: SceneSpec = { ...built, combat, kind: old.kind, foes: old.foes };
     return this.deps.db.transaction(async (tx) => {
       const [open] = await tx
         .select()
@@ -2479,6 +2926,7 @@ export class TurnService {
       await saveRestorePoint(tx, campaignId, c.turnSeq, roundId);
       const partyNow = await this.partyTx(tx, c.id);
       return this.turnView({
+        plan: await loadPlan(tx, c.id),
         c,
         index,
         seq: c.turnSeq,
@@ -2504,7 +2952,7 @@ export class TurnService {
       .insert(scenes)
       .values({
         campaignId,
-        beatId: spec.beatId,
+        momentId: spec.momentId,
         kind: spec.kind,
         regionId: spec.regionId,
         poiId: spec.poiId,
@@ -2550,54 +2998,53 @@ export class TurnService {
       .map((t) => (t.length > 400 ? `${t.slice(0, 399)}…` : t));
   }
 
-  sceneSpecView(index: WorldIndex, spec: SceneSpec): SceneSpecView {
-    const region = index.regions.get(spec.regionId);
-    const poi = spec.poiId ? index.pois.get(spec.poiId)?.poi : undefined;
-    return {
-      title: spec.title,
-      kind: spec.kind,
-      locationName: poi?.name ?? region?.name ?? spec.regionId,
-      regionName: region?.name ?? spec.regionId,
-      summary: spec.summary,
-      goals: spec.goals,
-      entities: spec.entities
-        .filter((e) => e.present)
-        .map((e) => ({
-          ref: e.ref.id,
-          name: e.ref.name ?? e.ref.id,
-          kind: e.kind,
-          status: e.status,
-          ...(e.note ? { note: e.note } : {}),
-        })),
-      opportunities: spec.opportunities,
-      ...(spec.directorNote ? { directorNote: spec.directorNote } : {}),
-    };
-  }
-
-  private publicView(args: {
+  /**
+   * What the storyteller is given: the heroes, where the story stands in a few sentences, the scene in front of
+   * them with only the people present and the clues there, this scene so far, and this turn. Never the whole
+   * world, and never the hidden hand.
+   */
+  private async publicView(args: {
+    c: CampaignRow;
     index: WorldIndex;
+    plan: StoryPlan | null;
     mode: NarrationMode;
     story: NarrationStory;
     spec: SceneSpec;
-    nextSpec: SceneSpec | null;
+    nextSpec?: SceneSpec | null;
     party: CharacterRow[];
-    actions: ResolvedAction[];
-    rolls: RollView[];
-    crux: { label: string; success: boolean } | null;
-    epilogue: string[];
-    recent: string[];
-    quests: Array<typeof quests.$inferSelect>;
-    canon: Array<typeof canonEntities.$inferSelect>;
+    actions?: ResolvedAction[];
+    rolls?: RollView[];
+    crux?: { label: string; success: boolean } | null;
+    epilogue?: string[];
     steerAway?: boolean;
-    summaries?: string[];
     battle?: PublicSceneData["battle"];
-  }) {
-    const { index } = args;
+  }): Promise<PublicSceneView> {
+    const { c, index, plan } = args;
+    const db = this.deps.db;
+    const [questRows, promiseRows, recent, recaps] = await Promise.all([
+      db
+        .select()
+        .from(quests)
+        .where(and(eq(quests.campaignId, c.id), eq(quests.status, "active"))),
+      db
+        .select()
+        .from(promises)
+        .where(and(eq(promises.campaignId, c.id), eq(promises.status, "pending"))),
+      this.recentNarration(c.id, 1),
+      plan ? Promise.resolve([]) : chapterRecaps(db, c.id, 3),
+    ]);
+    const story = asStory(c.story);
+    const nameOf = (id: string) => castMember(plan, id)?.name ?? index.namedNpcs.get(id)?.name ?? id;
+    const loot = new Map(
+      [args.spec, ...(args.nextSpec ? [args.nextSpec] : [])].flatMap((s) =>
+        lootFor(index, s.regionId).map((l) => [l.id, l] as const),
+      ),
+    );
     const data: PublicSceneData = {
       mode: args.mode,
       story: args.story,
-      scene: this.sceneSpecView(index, args.spec),
-      nextScene: args.nextSpec ? this.sceneSpecView(index, args.nextSpec) : null,
+      scene: sceneSpecView(index, plan, args.spec),
+      nextScene: args.nextSpec ? sceneSpecView(index, plan, args.nextSpec) : null,
       party: args.party.map((p) => ({
         ref: p.id,
         name: p.name,
@@ -2609,21 +3056,26 @@ export class TurnService {
           index.world.items.keepsakes.find((k) => k.id === p.keepsakeId)?.name.toLowerCase() ??
           "nothing special",
         look: p.look ?? "",
+        hook: heroHook(plan, p.id),
         level: p.level,
         hp: p.hp,
         hpMax: p.hpMax,
         conditions: p.conditions,
       })),
-      chapterSummaries: args.summaries ?? [],
-      recentTurns: args.recent,
-      canon: args.canon.map((c) => ({ name: c.name, kind: c.kind, description: c.description })),
-      quests: args.quests.map((q) => ({ title: q.title, objective: q.objective, status: q.status })),
-      actions: args.actions.map((a) => ({
+      // Before the living story, the chapter recaps were the story's memory.
+      storySoFar: plan?.storySoFar || recaps.map((r) => `Chapter ${r.chapter}: ${r.text}`).join(" "),
+      discoveries: story.discoveries,
+      goals: questRows.map((q) => ({ id: q.questId, title: q.title, objective: q.objective })),
+      promises: promiseRows.map((p) => ({ id: p.id, to: nameOf(p.npcId), text: p.text })),
+      troubles: troubles(plan),
+      sceneLog: args.spec.log,
+      lastNarration: recent[0] ?? "",
+      actions: (args.actions ?? []).map((a) => ({
         characterRef: a.characterId,
         characterName: a.name,
         summary: a.summary,
       })),
-      rolls: args.rolls.map((r) => ({
+      rolls: (args.rolls ?? []).map((r) => ({
         characterName: r.characterName,
         label: r.label,
         total: r.total,
@@ -2632,18 +3084,9 @@ export class TurnService {
         natural: r.natural,
         ...(r.damage ? { damage: r.damage } : {}),
       })),
-      crux: args.crux,
-      allowedLoot: (() => {
-        const region = index.regions.get(args.spec.regionId);
-        const table = region?.lootTable
-          ? index.world.items.lootTables.find((t) => t.id === region.lootTable)
-          : undefined;
-        return (table?.entries ?? []).map((e) => ({
-          id: e.item,
-          name: index.items.get(e.item)?.name ?? e.item,
-        }));
-      })(),
-      epilogue: args.epilogue,
+      crux: args.crux ?? null,
+      allowedLoot: [...loot.values()],
+      epilogue: args.epilogue ?? [],
       steerAway: args.steerAway ?? false,
       ...(args.battle ? { battle: args.battle } : {}),
     };
@@ -2653,6 +3096,7 @@ export class TurnService {
   private turnView(args: {
     c: CampaignRow;
     index: WorldIndex;
+    plan: StoryPlan | null;
     seq: number;
     spec: SceneSpec;
     out: NarratorOutput;
@@ -2665,9 +3109,10 @@ export class TurnService {
     /** Overrides the narrator's choices (battle rounds have none; the mercy moment has its own). */
     choices?: Array<{ label: string }>;
   }): TurnView {
-    const v = this.sceneSpecView(args.index, args.spec);
+    const v = sceneSpecView(args.index, args.plan, args.spec);
     const nameOf = (ref: string) =>
       args.spec.entities.find((e) => e.ref.id === ref)?.ref.name ??
+      castMember(args.plan, ref)?.name ??
       args.index.namedNpcs.get(ref)?.name ??
       ref;
     return {
@@ -2689,6 +3134,40 @@ export class TurnService {
       combat: args.combat ?? null,
     };
   }
+}
+
+/** What can be found in a region, by its loot table. */
+function lootFor(index: WorldIndex, regionId: string): Array<{ id: string; name: string }> {
+  const region = index.regions.get(regionId);
+  const table = region?.lootTable
+    ? index.world.items.lootTables.find((t) => t.id === region.lootTable)
+    : undefined;
+  return (table?.entries ?? []).map((e) => ({ id: e.item, name: index.items.get(e.item)?.name ?? e.item }));
+}
+
+/** How a scene ended, for the director: the fight, or the decisive moment and what came of it. */
+function outcomeLines(
+  fight: "ongoing" | "victory" | "party_down" | null,
+  played: StoryPlan["moments"][number] | undefined,
+): string[] {
+  const out: string[] = [];
+  if (fight === "victory") out.push("The heroes won the fight.");
+  if (fight === "party_down")
+    out.push("The heroes were overwhelmed and knocked out of the fight; they wake up safe.");
+  if (played?.outcome) {
+    const said =
+      played.outcome === "fail_forward"
+        ? played.crux.onFailForward
+        : played.outcome === "costly_success"
+          ? played.crux.onCostlySuccess
+          : played.crux.onSuccess;
+    out.push(`Decisive moment, ${played.title}: ${said.replace(/\s+/g, " ").trim()}`);
+  }
+  return out;
+}
+
+function profileLength(c: CampaignRow) {
+  return profileOf(c).length;
 }
 
 function lowerFirst(s: string): string {
@@ -2731,25 +3210,30 @@ function quietNarration(narration: string): NarratorOutput {
   return {
     narration,
     npcLines: [],
-    proposedDeltas: [],
     choices: [],
     sceneOver: false,
+    happened: "",
+    changes: [],
     imageBrief: null,
-    significance: "minor",
   };
 }
 
-/** An opening the AI couldn't tell, waiting for a person in the DM room. */
+/** An opening waiting for a person in the DM room, because the AI couldn't make or tell it. */
 interface OpeningDraft {
   opening: true;
   campaignId: string;
   seq: number;
   mode: "opening";
+  /** The director built this story and scene. When it couldn't, the seed's own plan and a scene a person opens. */
+  framed: boolean;
+  plan: StoryPlan;
   spec: SceneSpec;
   view: PublicSceneData;
   choicesFor: SceneSpecView;
   narration: NarratorOutput;
   handoff: string[] | null;
+  /** When the director couldn't make the story: how the seed can begin, for the person starting it. */
+  options: string[];
 }
 
 function isOpening(turn: PreparedTurn | OpeningDraft): turn is OpeningDraft {
@@ -2761,30 +3245,40 @@ const NOT_READ = "Not read: ";
 
 /** What a handed-over turn carries until a person tells it. */
 function blankNarration(): NarratorOutput {
-  return {
-    narration: "",
-    npcLines: [],
-    proposedDeltas: [],
-    choices: [],
-    sceneOver: false,
-    imageBrief: null,
-    significance: "minor",
-  };
+  return quietNarration("");
 }
 
-const sceneBrief = (s: SceneSpec) => ({ title: s.title, summary: s.summary, goals: s.goals });
+const sceneBrief = (s: SceneSpec): SceneBrief => ({
+  title: s.title,
+  summary: s.summary,
+  question: s.question,
+});
 
 /** Everything a person needs to tell a turn the AI couldn't, besides the actions and dice already on the draft. */
 function handoffFor(turn: PreparedTurn | OpeningDraft, reasons: string[]): DraftHandoff {
   const decisions: string[] = [];
   if (isOpening(turn)) {
+    if (!turn.framed)
+      return {
+        reasons,
+        scene: { title: turn.plan.title, summary: turn.plan.pitch, question: "How does the story begin?" },
+        next: null,
+        decisions: [
+          "This is the start of the adventure: introduce the heroes and begin the story where it suits you. The story director takes it from there next turn.",
+        ],
+        options: turn.options,
+      };
     decisions.push("This is the start of the adventure: introduce the heroes and set the first scene.");
     if (turn.spec.combat?.phase === "fighting")
       decisions.push(`A fight starts at once: ${listFoes(turn.spec.combat)}.`);
-    return { reasons, scene: sceneBrief(turn.spec), next: null, decisions };
+    return { reasons, scene: sceneBrief(turn.spec), next: null, decisions, options: [] };
   }
   if (turn.mode === "finale") decisions.push("This turn ends the adventure.");
   else if (turn.nextSpec) decisions.push("This turn closes the scene; the story moves on to the next scene.");
+  else if (turn.closing)
+    decisions.push(
+      "This turn closes the scene, and the story director couldn't frame the next one: tell where the heroes go. The director takes it from there next turn.",
+    );
   else decisions.push("The heroes stay in this scene.");
   if (turn.cruxLabel)
     decisions.push(
@@ -2805,5 +3299,6 @@ function handoffFor(turn: PreparedTurn | OpeningDraft, reasons: string[]): Draft
     scene: sceneBrief(turn.spec),
     next: turn.nextSpec ? sceneBrief(turn.nextSpec) : null,
     decisions,
+    options: turn.options,
   };
 }

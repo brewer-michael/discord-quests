@@ -40,8 +40,8 @@ export function summarize(policy: Policy, runs: SimRun[]): PolicySummary {
   const cruxes: PolicySummary["cruxes"] = {};
   for (const r of runs) {
     for (const c of r.cruxes) {
-      cruxes[c.beatId] ??= {};
-      const row = cruxes[c.beatId] as Record<string, number>;
+      cruxes[c.momentId] ??= {};
+      const row = cruxes[c.momentId] as Record<string, number>;
       row[c.outcome] = (row[c.outcome] ?? 0) + 1 / n;
     }
   }
@@ -88,8 +88,11 @@ export function formatReport(summaries: PolicySummary[], index: WorldIndex): str
       "| Crux | Won unaided | Carried by the hidden hand | Costly | Fail forward |",
       "|---|---|---|---|---|",
     );
-    for (const [beatId, row] of Object.entries(s.cruxes)) {
-      const title = index.beats.get(beatId)?.beat.title ?? beatId;
+    const titles = new Map(
+      [...index.seeds.values()].flatMap((seed) => seed.moments.map((m) => [m.id, m.title])),
+    );
+    for (const [momentId, row] of Object.entries(s.cruxes)) {
+      const title = titles.get(momentId) ?? momentId;
       lines.push(`| ${title} | ${outcomes.map((o) => pct(row[o] ?? 0)).join(" | ")} |`);
     }
     lines.push("");

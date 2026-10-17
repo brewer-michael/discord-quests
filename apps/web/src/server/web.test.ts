@@ -418,6 +418,7 @@ describe.skipIf(!TEST_DATABASE_URL)("setup page data", () => {
         pace: "post",
         pingPlayers: "on",
         intensity: "epic",
+        length: "short",
         voice: "cinematic",
         humor: "rare",
         art: "painterly",
@@ -434,6 +435,7 @@ describe.skipIf(!TEST_DATABASE_URL)("setup page data", () => {
       pace: "post",
       pingPlayers: true,
       intensity: "epic",
+      length: "short",
       voice: "cinematic",
       humor: "rare",
       art: "painterly",
@@ -443,6 +445,7 @@ describe.skipIf(!TEST_DATABASE_URL)("setup page data", () => {
     const [g] = await db.db.select().from(guilds).where(eq(guilds.id, guild.id));
     expect(serverStoryDefaults(g?.settings as Record<string, unknown>)).toMatchObject({
       intensity: "epic",
+      length: "short",
       voice: "cinematic",
       humor: "rare",
       art: "painterly",

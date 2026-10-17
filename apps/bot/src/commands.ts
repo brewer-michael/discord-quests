@@ -1,4 +1,13 @@
-import { HUMOR_INFO, HUMORS, INTENSITIES, INTENSITY_INFO, VOICE_INFO, VOICES } from "@dq/core/narration";
+import {
+  HUMOR_INFO,
+  HUMORS,
+  INTENSITIES,
+  INTENSITY_INFO,
+  LENGTH_INFO,
+  VOICE_INFO,
+  VOICES,
+} from "@dq/core/narration";
+import { STORY_LENGTHS } from "@dq/core/story";
 import { TIMER_CHOICES } from "@dq/engine";
 import { ChannelType, InteractionContextType, PermissionFlagsBits, SlashCommandBuilder } from "discord.js";
 
@@ -88,7 +97,9 @@ export const COMMANDS = [
     .addSubcommand((s) =>
       s
         .setName("story")
-        .setDescription("See or change how the story is told: how dark, the voice, humor and pictures")
+        .setDescription(
+          "See or change how the story is told: how dark, how long, the voice, humor and pictures",
+        )
         .addStringOption((o) =>
           o
             .setName("intensity")
@@ -97,6 +108,17 @@ export const COMMANDS = [
               ...INTENSITIES.map((i) => ({
                 name: `${INTENSITY_INFO[i].label}: like ${INTENSITY_INFO[i].like}`,
                 value: i,
+              })),
+            ),
+        )
+        .addStringOption((o) =>
+          o
+            .setName("length")
+            .setDescription("How long the story runs")
+            .addChoices(
+              ...STORY_LENGTHS.map((l) => ({
+                name: `${LENGTH_INFO[l].label}: ${LENGTH_INFO[l].blurb}`,
+                value: l,
               })),
             ),
         )

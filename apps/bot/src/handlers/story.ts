@@ -51,7 +51,9 @@ export async function storyCommand(ctx: BotContext, i: ChatInputCommandInteracti
   const intensity = i.options.getString("intensity");
   const voice = i.options.getString("voice");
   const humor = i.options.getString("humor");
+  const length = i.options.getString("length");
   if (intensity) patch.intensity = intensity as StoryProfile["intensity"];
+  if (length) patch.length = length as StoryProfile["length"];
   if (voice) patch.voice = voice as StoryProfile["voice"];
   if (humor) patch.humor = humor as StoryProfile["humor"];
   const premise = i.options.getString("premise");

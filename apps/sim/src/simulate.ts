@@ -6,6 +6,7 @@ import {
   emptyLoomState,
   evaluateLoom,
   type LoomInput,
+  type LoomMoment,
   type LoomTuning,
   loomContext,
   type SceneEntity,
@@ -13,8 +14,18 @@ import {
 } from "@dq/core/loom";
 import { deriveRng } from "@dq/core/rng";
 import { proficiencyBonus, rollD20, successProbability } from "@dq/core/rules";
-import { type ClockState, chapterComplete, clockKey, cruxDc, storyProgress, tickClock } from "@dq/core/story";
-import type { BeatRef, WorldIndex } from "@dq/core/world";
+import {
+  cruxDc,
+  expectedProgress,
+  finaleAllowed,
+  planFromSeed,
+  type StoryLength,
+  storyProgress,
+} from "@dq/core/story";
+import type { SeedDef, SituationDef, WorldIndex } from "@dq/core/world";
+
+/** The story the simulator plays unless told otherwise: the one the hidden hand's world data was tuned on. */
+export const DEFAULT_SEED = "the-dimming";
 
 export const POLICIES = ["merciful", "mixed", "shortcut", "random"] as const;
 export type Policy = (typeof POLICIES)[number];
@@ -28,7 +39,7 @@ const STYLE: Record<Policy, { virtue: number; shortcut: number }> = {
 };
 
 export interface CruxRecord {
-  beatId: string;
+  momentId: string;
   dc: number;
   pSuccess: number;
   outcome: string;
@@ -55,6 +66,9 @@ export interface SimRun {
 export interface SimOptions {
   policy: Policy;
   seed: string;
+  /** Which of the world's story seeds to play. */
+  seedId?: string;
+  length?: StoryLength;
   tuning?: Partial<LoomTuning>;
   transcript?: boolean;
 }
@@ -84,8 +98,29 @@ function abilityModAt(level: number): number {
   return 3;
 }
 
+/**
+ * Plays a campaign the way the living story does, without an AI: the seed's set pieces as scenes (each once),
+ * a journey whenever the heroes change region, and each decisive moment when the story has come far enough for
+ * it, the finale last. Threats move on with time and with every decisive moment that goes badly.
+ */
 export function simulateCampaign(index: WorldIndex, opts: SimOptions): SimRun {
-  const ctx = loomContext(index, opts.tuning ?? {});
+  const seed = index.seeds.get(opts.seedId ?? DEFAULT_SEED) ?? ([...index.seeds.values()][0] as SeedDef);
+  const plan = planFromSeed(seed, opts.length ?? "standard");
+  const at = expectedProgress(plan);
+  const moments: LoomMoment[] = plan.moments.map((m) => ({
+    id: m.id,
+    title: m.title,
+    placeName: index.regions.get(m.regionId ?? "")?.name ?? "the place ahead",
+    sockets: m.crux.sockets,
+    requiredGrace: m.crux.requiredGrace,
+    onSuccess: m.crux.onSuccess,
+    onCostlySuccess: m.crux.onCostlySuccess,
+    onFailForward: m.crux.onFailForward,
+    finale: m.finale,
+    at: at.get(m.id) ?? 0,
+    done: false,
+  }));
+  const ctx = loomContext(index, moments, opts.tuning ?? {});
   const style = STYLE[opts.policy];
   const log: string[] = [];
   const say = (line: string) => {
@@ -93,18 +128,23 @@ export function simulateCampaign(index: WorldIndex, opts: SimOptions): SimRun {
   };
 
   let state = emptyLoomState();
-  let clocks: ClockState = {};
-  const completed: string[] = [];
+  const done: string[] = [];
   let turn = 0;
+  let scenesDone = 0;
+  let milestones = 0;
+  let chapter = 1;
   let level = index.world.meta.startingLevel;
-  let regionId = index.world.meta.startRegion;
+  let regionId = seed.startRegions[0] ?? index.world.meta.startRegion;
   const cruxes: CruxRecord[] = [];
   const optionalTurns: number[] = [];
   let snibbetPresentAtFinale = false;
-  const finaleId = [...index.beatOrder].reverse().find((b) => b.beat.decisive)?.beat.id;
+  const front = plan.fronts.find((f) => f.central) ?? plan.fronts[0];
+  const queue: SituationDef[] = [
+    ...seed.situations.flatMap((id) => index.situations.get(id) ?? []),
+    ...[...index.situations.values()].filter((x) => !seed.situations.includes(x.id)),
+  ];
 
   const step = (
-    ref: BeatRef | null,
     scene: LoomInput["scene"],
     deeds: DeedCandidate[],
     extra: Partial<LoomInput>,
@@ -114,10 +154,9 @@ export function simulateCampaign(index: WorldIndex, opts: SimOptions): SimRun {
     const input: LoomInput = {
       story: {
         turn,
-        progress: storyProgress(index, completed),
-        chapterNumber: ref?.chapter.number ?? 1,
-        actNumber: ref?.act.number ?? 1,
-        completedBeats: [...completed],
+        progress: storyProgress(scenesDone, milestones),
+        chapterNumber: chapter,
+        doneMoments: [...done],
         sceneChanged: true,
         chapterEnded,
       },
@@ -137,37 +176,41 @@ export function simulateCampaign(index: WorldIndex, opts: SimOptions): SimRun {
     return out;
   };
 
-  const branches = new Set<string>();
-  for (const ref of index.beatOrder) {
-    const beat = ref.beat;
-    if (beat.branch && !branches.has(beat.id)) continue;
-    const region = index.regions.get(beat.region);
+  // Journeys are scenes of their own, where quiet-hand detours can happen.
+  const travelTo = (to: string) => {
+    if (to === regionId) return;
+    const region = index.regions.get(to);
+    say(`  ~ travel from ${index.regions.get(regionId)?.name} to ${region?.name}`);
+    step(
+      {
+        id: `travel-${turn}`,
+        kind: "travel",
+        momentId: null,
+        regionId: to,
+        terrain: region?.terrain ?? [],
+        entities: [],
+        offeredShortcuts: [],
+        lieBenefit: false,
+      },
+      [],
+      {},
+      false,
+    );
+    scenesDone += 1;
+    regionId = to;
+  };
 
-    // Traveling to a new region is its own scene, where quiet-hand detours can happen.
-    if (beat.region !== regionId) {
-      say(`  ~ travel from ${index.regions.get(regionId)?.name} to ${region?.name}`);
-      step(
-        ref,
-        {
-          id: `travel-${turn}`,
-          kind: "travel",
-          beatId: null,
-          regionId: beat.region,
-          terrain: region?.terrain ?? [],
-          entities: [],
-          offeredShortcuts: [],
-          lieBenefit: false,
-        },
-        [],
-        {},
-        false,
-      );
-      regionId = beat.region;
-    }
-
+  while (done.length < plan.moments.length && turn < 400) {
+    const progress = storyProgress(scenesDone, milestones);
+    const moment = plan.moments.find((m) => !done.includes(m.id));
+    const due =
+      moment &&
+      (moment.finale
+        ? finaleAllowed(scenesDone, plan.length) && progress >= (at.get(moment.id) ?? 0) - 2
+        : progress >= (at.get(moment.id) ?? 0));
+    const situation = due ? undefined : queue.shift();
     const rules = deriveRng(opts.seed, "rules", turn + 1);
     const choices = deriveRng(opts.seed, "story", turn + 1);
-    say(`${ref.chapter.number}. ${beat.title} (${beat.kind})`);
 
     // Who is in the scene.
     const entities: SceneEntity[] = [];
@@ -180,16 +223,67 @@ export function simulateCampaign(index: WorldIndex, opts: SimOptions): SimRun {
       }
       entities.push({ ref: a, status, lowly: (a.tags ?? []).includes("lowly"), present: true });
     };
-    for (const id of beat.introduces) add(id, "neutral");
-    for (const v of beat.virtueOpportunities)
+
+    if (moment && (due || !situation)) {
+      // A decisive moment: the heroes' own effort, and whatever their earlier deeds bring to it.
+      travelTo(moment.regionId ?? regionId);
+      say(`${chapter}. ${moment.title} (decisive)`);
+      for (const id of bearersForScene(state, moment.id)) add(id, "neutral");
+      if (moment.finale) snibbetPresentAtFinale = entities.some((e) => e.ref.id === "snibbet");
+      const mod =
+        abilityModAt(level) +
+        (moment.crux.check.skill ? proficiencyBonus(level) : Math.floor(proficiencyBonus(level) / 2));
+      const dc = cruxDc(moment.crux, front?.stage ?? 0, snarePressure(state));
+      const pSuccess = successProbability(mod, dc, "advantage");
+      const roll = rollD20(rules, "advantage");
+      const total = roll.natural + mod;
+      say(`  * crux ${moment.crux.check.label}: rolled ${total} vs ${dc} (p=${pSuccess.toFixed(2)})`);
+      const out = step(
+        {
+          id: `moment-${moment.id}`,
+          kind: "crux",
+          momentId: moment.id,
+          regionId,
+          terrain: index.regions.get(regionId)?.terrain ?? [],
+          entities,
+          offeredShortcuts: [],
+          lieBenefit: false,
+        },
+        [],
+        { check: { kind: "crux", momentId: moment.id, success: total >= dc, margin: total - dc, pSuccess } },
+        true,
+      );
+      if (out.crux) {
+        cruxes.push({
+          momentId: moment.id,
+          dc,
+          pSuccess,
+          outcome: out.crux.outcome,
+          socket: out.crux.socket,
+          withheld: out.crux.withheldSockets,
+        });
+        say(`  => ${out.crux.outcome}${out.crux.socket ? ` via ${out.crux.socket}` : ""}`);
+        if (out.crux.outcome === "fail_forward" && front) front.stage += 1;
+      }
+      done.push(moment.id);
+      scenesDone += 1;
+      milestones += 1;
+      chapter += 1;
+      level = Math.min(index.world.meta.maxLevel, level + 1);
+      continue;
+    }
+    if (!situation) break;
+
+    travelTo(situation.region);
+    say(`${chapter}. ${situation.title} (${situation.kind})`);
+    for (const id of situation.introduces) add(id, "neutral");
+    for (const v of situation.virtueOpportunities)
       if (v.target) add(v.target, v.tag === "mercy" ? "at_mercy" : "neutral");
-    if (beat.decisive) for (const id of bearersForScene(state, beat.id)) add(id, "neutral");
-    if (beat.id === finaleId) snibbetPresentAtFinale = entities.some((e) => e.ref.id === "snibbet");
 
     // What the players choose.
     const deeds: DeedCandidate[] = [];
     const promisesKept: string[] = [];
-    for (const v of beat.virtueOpportunities) {
+    for (const v of situation.virtueOpportunities) {
       if (!choices.chance(style.virtue)) continue;
       const anchor = v.target ? anchorFor(index, v.target) : null;
       if (v.tag === "promise_kept" && anchor) promisesKept.push(anchor.id);
@@ -201,7 +295,7 @@ export function simulateCampaign(index: WorldIndex, opts: SimOptions): SimRun {
           v.tag === "mercy"
             ? { forgoneBenefit: 2 }
             : v.tag === "kindness_to_lowly"
-              ? { forgoneBenefit: 1, daysLost: beat.offersShortcuts.length > 0 ? 1 : 0 }
+              ? { forgoneBenefit: 1, daysLost: situation.offersShortcuts.length > 0 ? 1 : 0 }
               : v.tag === "self_sacrifice"
                 ? { hpSpent: 3 }
                 : { forgoneBenefit: 1 },
@@ -210,39 +304,37 @@ export function simulateCampaign(index: WorldIndex, opts: SimOptions): SimRun {
         summary: firstClause(v.note),
       });
     }
+    const offered = situation.offersShortcuts.filter(
+      (sid) => (index.shortcuts.get(sid)?.minChapter ?? 1) <= chapter,
+    );
     let tookShortcut = false;
-    for (const sid of beat.offersShortcuts) {
+    for (const sid of offered) {
       const def = index.shortcuts.get(sid);
-      if (!def || (def.minChapter ?? 1) > ref.chapter.number) continue;
-      if (choices.chance(style.shortcut)) {
-        tookShortcut = true;
-        deeds.push({
-          tag: def.tag,
-          actorIds: [choices.pick(PARTY)],
-          anchor: def.offeredBy.kind === "npc" ? anchorFor(index, def.offeredBy.id) : null,
-          evidence: {},
-          source: "choice",
-          confidence: 1,
-          summary: `took ${def.name}`,
-          shortcutId: sid,
-        });
-        say(`  - took the shortcut: ${def.name}`);
-      }
+      if (!def || !choices.chance(style.shortcut)) continue;
+      tookShortcut = true;
+      deeds.push({
+        tag: def.tag,
+        actorIds: [choices.pick(PARTY)],
+        anchor: def.offeredBy.kind === "npc" ? anchorFor(index, def.offeredBy.id) : null,
+        evidence: {},
+        source: "choice",
+        confidence: 1,
+        summary: `took ${def.name}`,
+        shortcutId: sid,
+      });
+      say(`  - took the shortcut: ${def.name}`);
     }
-    if (!tookShortcut && beat.offersShortcuts.length > 0) {
-      const declined = beat.offersShortcuts[0] as string;
-      if (!deeds.some((d) => d.tag === "patience")) {
-        deeds.push({
-          tag: "patience",
-          actorIds: PARTY,
-          anchor: null,
-          evidence: { shortcutDeclined: declined, daysLost: 1 },
-          source: "choice",
-          confidence: 1,
-          summary: "chose the long way instead of the quick one",
-        });
-      }
-      if (beat.offersShortcuts.some((s) => index.shortcuts.get(s)?.price.kind === "keepsake")) {
+    if (!tookShortcut && offered.length > 0) {
+      deeds.push({
+        tag: "patience",
+        actorIds: PARTY,
+        anchor: null,
+        evidence: { shortcutDeclined: offered[0] as string, daysLost: 1 },
+        source: "choice",
+        confidence: 1,
+        summary: "chose the long way instead of the quick one",
+      });
+      if (offered.some((sid) => index.shortcuts.get(sid)?.price.kind === "keepsake"))
         deeds.push({
           tag: "keepsake_kept",
           actorIds: PARTY,
@@ -252,7 +344,6 @@ export function simulateCampaign(index: WorldIndex, opts: SimOptions): SimRun {
           confidence: 1,
           summary: "kept a keepsake from home instead of trading it away",
         });
-      }
     }
     const printed = new Set<string>();
     for (const d of deeds) {
@@ -261,74 +352,28 @@ export function simulateCampaign(index: WorldIndex, opts: SimOptions): SimRun {
       say(`  - ${d.tag}: ${d.summary}`);
     }
 
-    // Rolls.
-    let check: LoomInput["check"] = null;
-    let heroesDowned: string[] = [];
-    let dc = 0;
-    let pSuccess = 1;
-    if (beat.crux) {
-      const mod =
-        abilityModAt(level) +
-        (beat.crux.check.skill ? proficiencyBonus(level) : Math.floor(proficiencyBonus(level) / 2));
-      dc = cruxDc(beat.crux, clocks, snarePressure(state));
-      pSuccess = successProbability(mod, dc, "advantage");
-      const roll = rollD20(rules, "advantage");
-      const total = roll.natural + mod;
-      check = { kind: "crux", beatId: beat.id, success: total >= dc, margin: total - dc, pSuccess };
-      say(`  * crux ${beat.crux.check.label}: rolled ${total} vs ${dc} (p=${pSuccess.toFixed(2)})`);
-    } else if (rules.chance(0.25)) {
-      check = {
-        kind: "failure",
-        stakes: "moderate",
-        margin: -rules.int(1, 5),
-        characterIds: [rules.pick(PARTY)],
-      };
-    }
-    if (beat.kind === "combat" && rules.chance(0.2)) heroesDowned = [rules.pick(PARTY)];
-
-    const done = new Set([...completed, beat.id]);
-    const chapterEnded = chapterComplete(index, ref.chapter.id, done);
-    const sceneEntities = entities;
-    const out = step(
-      ref,
+    const check: LoomInput["check"] = rules.chance(0.25)
+      ? { kind: "failure", stakes: "moderate", margin: -rules.int(1, 5), characterIds: [rules.pick(PARTY)] }
+      : null;
+    const heroesDowned = situation.kind === "combat" && rules.chance(0.2) ? [rules.pick(PARTY)] : [];
+    step(
       {
-        id: `beat-${beat.id}`,
-        kind: beat.kind,
-        beatId: beat.id,
-        regionId: beat.region,
-        terrain: region?.terrain ?? [],
-        entities: sceneEntities,
-        offeredShortcuts: beat.offersShortcuts,
+        id: `scene-${situation.id}`,
+        kind: situation.kind,
+        momentId: null,
+        regionId: situation.region,
+        terrain: index.regions.get(situation.region)?.terrain ?? [],
+        entities,
+        offeredShortcuts: offered,
         lieBenefit: false,
       },
       deeds,
       { check, heroesDowned, promisesKept },
-      chapterEnded,
+      false,
     );
-
-    if (out.crux && beat.crux) {
-      cruxes.push({
-        beatId: beat.id,
-        dc,
-        pSuccess,
-        outcome: out.crux.outcome,
-        socket: out.crux.socket,
-        withheld: out.crux.withheldSockets,
-      });
-      say(`  => ${out.crux.outcome}${out.crux.socket ? ` via ${out.crux.socket}` : ""}`);
-      if (out.crux.outcome === "fail_forward" && beat.crux.clock) {
-        clocks = tickClock(index, clocks, clockKey(beat.crux.clock.faction, beat.crux.clock.clock), 1);
-      }
-      if (out.crux.outcome === "fail_forward" && beat.crux.onFailForward.beat)
-        branches.add(beat.crux.onFailForward.beat);
-    }
-
-    completed.push(beat.id);
-    if (beat.milestone) level = Math.min(index.world.meta.maxLevel, level + 1);
-    if (chapterEnded) {
-      clocks = tickClock(index, clocks, clockKey("gloam-host", "long-night"), 1);
-      if (ref.act.number >= 2) clocks = tickClock(index, clocks, clockKey("gloam-host", "ember-dims"), 1);
-    }
+    scenesDone += 1;
+    // Threats move on with time.
+    if (front && scenesDone % 4 === 0 && front.stage < front.portents.length) front.stage += 1;
   }
 
   let maxOptionalIn10 = 0;

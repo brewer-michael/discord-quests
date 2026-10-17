@@ -21,6 +21,7 @@ import { chapterRecaps } from "./chronicle";
 import { type EngineDeps, GameError } from "./deps";
 import { createLoom } from "./loom-store";
 import { PACES, type Pace, type PaceSettings, paceOf, timerFitsPace, validTimer } from "./pace";
+import { castMember, loadPlan, savePlan } from "./story-plan";
 import { audienceOf, type CampaignStory, campaignStory, profileOf } from "./story-profile";
 import { asStory, initialStoryState, isRewound } from "./story-state";
 import { DEFAULT_WORLD_ID } from "./world-cache";
@@ -66,10 +67,16 @@ export function serverGameDefaults(
   return out;
 }
 
-/** The server's default story settings for new campaigns (intensity, voice, humor, art), from the setup page. */
+/** The server's default story settings for new campaigns (intensity, length, voice, humor, art), from the setup page. */
 export function serverStoryDefaults(guildSettings: Record<string, unknown> | undefined): StoryProfile {
   const d = (guildSettings?.gameDefaults ?? {}) as Record<string, unknown>;
-  return parseProfile({ intensity: d.intensity, voice: d.voice, humor: d.humor, art: d.art });
+  return parseProfile({
+    intensity: d.intensity,
+    length: d.length,
+    voice: d.voice,
+    humor: d.humor,
+    art: d.art,
+  });
 }
 
 export const DEFAULT_SETTINGS: CampaignSettings = {
@@ -227,6 +234,18 @@ export class CampaignService {
       if (findPersonalInfo(topic).length > 0)
         throw new GameError("unsafe story text", "Let's keep real-life details out of the story settings.");
     await this.updateSettings(campaignId, { story: next });
+    // A story under way is paced to its new length from the next scene on.
+    if (next.length !== current.length) {
+      const plan = await loadPlan(this.deps.db, campaignId);
+      if (plan)
+        await savePlan(
+          this.deps.db,
+          campaignId,
+          { ...plan, length: next.length },
+          `length: ${next.length}`,
+          "dm",
+        );
+    }
     return campaignStory(this.deps.db, { id: c.id, settings: { ...(c.settings as object), story: next } });
   }
 
@@ -433,12 +452,13 @@ export class CampaignService {
       .from(characters)
       .where(and(eq(characters.campaignId, campaignId), inArray(characters.status, ["active", "draft"])));
     const questRows = await this.deps.db.select().from(quests).where(eq(quests.campaignId, campaignId));
-    const beat = story.beatId ? index.beats.get(story.beatId) : undefined;
+    // Chapter titles are the players' to see; nothing else of the hidden plan is.
+    const plan = c.status === "setup" ? null : await loadPlan(this.deps.db, campaignId);
     return {
       campaign: c,
       worldName: index.world.meta.name,
       regionName: index.regions.get(story.regionId)?.name ?? story.regionId,
-      chapter: beat ? `Chapter ${beat.chapter.number}: ${beat.chapter.title}` : null,
+      chapter: plan ? `Chapter ${plan.chapter.number}: ${plan.chapter.title}` : null,
       party: party.map((p) => ({
         name: p.name || "(unnamed hero)",
         userId: p.userId,
@@ -475,10 +495,13 @@ export class CampaignService {
         .then((rows) => rows.filter((r) => !isRewound(c.story, r.seq)).slice(0, 3)),
       chapterRecaps(this.deps.db, campaignId, 8),
     ]);
-    const npcName = (id: string) => index.namedNpcs.get(id)?.name ?? id;
+    // Names of the people the heroes made promises to: they've met them, so only the name comes from the plan.
+    const plan = promiseRows.length > 0 ? await loadPlan(this.deps.db, campaignId) : null;
+    const npcName = (id: string) => castMember(plan, id)?.name ?? index.namedNpcs.get(id)?.name ?? id;
     return {
       quests: questRows.map((q) => ({ title: q.title, objective: q.objective, status: q.status })),
       promises: promiseRows.map((p) => ({ to: npcName(p.npcId), text: p.text, status: p.status })),
+      discoveries: asStory(c.story).discoveries,
       chapters,
       recent: recent
         .reverse()
@@ -557,7 +580,7 @@ export class CampaignService {
           title: s.title,
           kind: s.kind,
           locationName: poi?.name ?? region?.name ?? s.regionId,
-          chapter: index.beatOrder.find((b) => b.beat.id === s.beatId)?.chapter.number ?? null,
+          chapter: typeof s.state.chapter === "number" ? s.state.chapter : null,
           imageAssetId: s.imageAssetId,
           brief: briefs.get(s.startedTurn) ?? placeBrief(index, s),
         };

@@ -84,7 +84,7 @@ const rollLine = (r: DmDraft["rolls"][number]) =>
   `${r.foe ? "👾" : "🎲"} ${esc(r.characterName)}: ${r.label} ${r.total} vs ${r.difficulty} ${r.success ? "✅" : "❌"}${r.difficulty.startsWith("defense ") && r.natural === 20 ? " 💥 critical" : ""}${r.damage ? ` ${r.damage} damage` : ""}`;
 
 const brief = (s: NonNullable<DmDraft["handoff"]>["scene"]) =>
-  `**${esc(s.title)}**: ${esc(s.summary)}${s.goals.length > 0 ? `\n-# Goals: ${esc(s.goals.join(" "))}` : ""}`;
+  `**${esc(s.title)}**: ${esc(s.summary)}${s.question ? `\n-# It turns on: ${esc(s.question)}` : ""}`;
 
 /** A turn the storyteller couldn't tell: why, the scene, the heroes, the dice, what's settled, where it goes. */
 function renderHandoff(d: DmDraft, h: NonNullable<DmDraft["handoff"]>) {
@@ -115,6 +115,12 @@ function renderHandoff(d: DmDraft, h: NonNullable<DmDraft["handoff"]>) {
       700,
     ),
     take(h.next ? `**Then the story moves to:** ${brief(h.next)}` : "", 600),
+    take(
+      h.options.length > 0
+        ? `**Where the story could go:**\n${h.options.map((x) => `- ${esc(x)}`).join("\n")}`
+        : "",
+      700,
+    ),
     take(
       d.dmNotes.length > 0
         ? `**🕯️ The hidden hand (only you can see this)**\n${d.dmNotes.map((n) => `- ${n}`).join("\n")}`

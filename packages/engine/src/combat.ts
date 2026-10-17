@@ -11,7 +11,6 @@ import {
   type HeroCombatant,
   heroCombatant,
   isDownHero,
-  rollFoes,
 } from "@dq/core/combat";
 import { balanceEncounter, type Difficulty } from "@dq/core/combat/balance";
 import { creatureAllowed, pickWild, type TableRules } from "@dq/core/combat/bestiary";
@@ -84,12 +83,10 @@ export function heroesFor(
 }
 
 /**
- * Adds a fight to a scene when it needs one: every combat beat, and now and
- * then an ambush on the road (the destination region's encounter chance).
- * The world says which creatures; the balance decides how many and how tough
- * for this party's levels and size (an ambush is a low fight, a story fight a
- * moderate one, a boss a high one). Foes join the scene's cast, so the story
- * and the loom can see them.
+ * Adds a fight to a scene when it needs one: a fight scene starts with one, and now and then the road brings an
+ * ambush (the destination region's encounter chance). The scene says which creatures; the balance decides how
+ * many and how tough for this party's levels and size (an ambush is a low fight, a story fight a moderate one, a
+ * boss a high one). Foes join the scene's cast, so the story and the hidden hand can see them.
  */
 export function withEncounter(
   index: WorldIndex,
@@ -101,40 +98,77 @@ export function withEncounter(
 ): SceneSpec {
   if (spec.combat || party.length === 0 || heroes.length === 0) return spec;
   const region = index.regions.get(spec.regionId);
-  const allowed = (c: CreatureDef) => creatureAllowed(c, rules);
   const levels = heroes.map((h) => h.level);
   const wild = (difficulty: Difficulty) =>
     region ? pickWild({ creatures: index.creatures, region, levels, difficulty, rules, rng }) : [];
-  let wanted: Array<{ creature: CreatureDef; count: number }> = [];
   if (spec.kind === "combat") {
-    // The story's own foes, unless the table left them out; then whatever lives here.
-    const beat = spec.beatId ? index.beats.get(spec.beatId)?.beat : undefined;
-    if (beat?.foes?.length)
-      wanted = rollFoes(beat.foes, party.length, rng, "all").flatMap((t) => {
-        const creature = index.creatures.get(t.creature);
-        return creature && allowed(creature) ? [{ creature, count: t.count }] : [];
-      });
-    if (wanted.length === 0) wanted = wild("moderate");
-  } else if (spec.kind === "travel" && region && rng.chance(region.encounters.chance)) {
-    wanted = wild("low");
+    // The scene's own foes, unless the table left them out; then whatever lives here.
+    const own = sceneFoes(index, spec, null, rules);
+    return fight(index, spec, own.length > 0 ? own : wild("moderate"), heroes, rng, rules, "moderate");
   }
+  if (spec.kind === "travel" && region && rng.chance(region.encounters.chance)) {
+    const ambushed = fight(index, spec, wild("low"), heroes, rng, rules, "low");
+    if (!ambushed.combat) return ambushed;
+    return {
+      ...ambushed,
+      summary: `${spec.summary} On the way, ${listFoes(ambushed.combat)} ${ambushed.combat.foes.length === 1 ? "leaps" : "leap"} out to block the path!`,
+      foes: [...spec.foes, ...ambushed.combat.foes.map((f) => ({ creature: f.creatureId, count: 1 }))],
+    };
+  }
+  return spec;
+}
+
+/** A fight breaking out mid-scene, with the scene's foes the storyteller named. It starts next round. */
+export function startFight(
+  index: WorldIndex,
+  spec: SceneSpec,
+  creatureIds: readonly string[],
+  heroes: readonly HeroCombatant[],
+  rng: import("@dq/core/rng").Rng,
+  rules: TableRules = { intensity: "classic", avoid: [] },
+): SceneSpec {
+  if (spec.combat?.phase === "fighting" || heroes.length === 0) return spec;
+  const wanted = sceneFoes(index, spec, new Set(creatureIds), rules);
+  const { combat: _over, ...rest } = spec;
+  return fight(index, rest, wanted, heroes, rng, rules, "moderate");
+}
+
+function sceneFoes(
+  index: WorldIndex,
+  spec: SceneSpec,
+  only: ReadonlySet<string> | null,
+  rules: TableRules,
+): Array<{ creature: CreatureDef; count: number }> {
+  return spec.foes.flatMap((f) => {
+    const creature = index.creatures.get(f.creature);
+    return creature && creatureAllowed(creature, rules) && (!only || only.has(f.creature))
+      ? [{ creature, count: f.count }]
+      : [];
+  });
+}
+
+function fight(
+  index: WorldIndex,
+  spec: SceneSpec,
+  wanted: Array<{ creature: CreatureDef; count: number }>,
+  heroes: readonly HeroCombatant[],
+  rng: import("@dq/core/rng").Rng,
+  rules: TableRules,
+  usual: Difficulty,
+): SceneSpec {
   if (wanted.length === 0) return spec;
-  const difficulty: Difficulty = wanted.some((w) => w.creature.tags.includes("boss"))
-    ? "high"
-    : spec.kind === "travel"
-      ? "low"
-      : "moderate";
+  const difficulty: Difficulty = wanted.some((w) => w.creature.tags.includes("boss")) ? "high" : usual;
   const { foes } = balanceEncounter({
     foes: wanted,
     heroes,
     difficulty,
     creatures: index.creatures,
-    allowed,
+    allowed: (c: CreatureDef) => creatureAllowed(c, rules),
     ...(rules.combat ? { rules: rules.combat } : {}),
   });
   const combat = buildEncounter({ foes, heroes, rng });
   const entities: SceneEntityState[] = [
-    ...spec.entities,
+    ...spec.entities.filter((e) => e.kind !== "creature"),
     ...combat.foes.map((f) => {
       const c = index.creatures.get(f.creatureId);
       return {
@@ -153,18 +187,7 @@ export function withEncounter(
       };
     }),
   ];
-  const ambush = spec.kind === "travel";
-  return {
-    ...spec,
-    entities,
-    combat,
-    ...(ambush
-      ? {
-          summary: `${spec.summary} On the way, ${listFoes(combat)} ${combat.foes.length === 1 ? "leaps" : "leap"} out to block the path!`,
-          goals: [...spec.goals, "Get past the creatures blocking the road."],
-        }
-      : {}),
-  };
+  return { ...spec, entities, combat };
 }
 
 export function listFoes(combat: CombatState): string {

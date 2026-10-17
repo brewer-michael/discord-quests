@@ -68,6 +68,7 @@ describe("story settings card", () => {
       premise: "p".repeat(500),
       lines: Array.from({ length: 10 }, (_, i) => `topic number ${i} ${"x".repeat(40)}`),
       veils: Array.from({ length: 10 }, (_, i) => `veil number ${i} ${"y".repeat(40)}`),
+      length: "long" as const,
     };
     for (const audience of ["family", "teen"] as const) {
       const info = {
@@ -392,7 +393,7 @@ describe("renderers stay within Discord's limits", () => {
     const scene = {
       title: "The Lost River Child",
       summary: "s".repeat(600),
-      goals: ["Help Tumble, one way or another."],
+      question: "Will Tumble get home before the mist closes in?",
     };
     const handed: DmDraft = {
       approvalId: UUID,
@@ -419,6 +420,7 @@ describe("renderers stay within Discord's limits", () => {
           "This turn closes the scene; the story moves on to the next scene.",
           ...Array.from({ length: 8 }, () => "d".repeat(150)),
         ],
+        options: Array.from({ length: 6 }, () => "o".repeat(200)),
       },
     };
     const json = JSON.stringify(checkLimits(renderDraft(handed)));
@@ -426,7 +428,7 @@ describe("renderers stay within Discord's limits", () => {
       "Over to you",
       "The storyteller service returned an error.",
       "The Lost River Child",
-      "Help Tumble",
+      "Will Tumble get home",
       "takes Tumble by the hand",
       "The dice (already rolled)",
       "Already settled",
@@ -860,7 +862,6 @@ describe.skipIf(!TEST_DATABASE_URL)("a whole campaign renders cleanly", () => {
       narrator: () => ({
         narration: "The heroes gather in the square as the last lanterns gutter out one by one.",
         npcLines: [],
-        proposedDeltas: [],
         choices: ["Look around", "Find Hattie"].map((label) => ({
           label,
           intent: {
@@ -873,8 +874,9 @@ describe.skipIf(!TEST_DATABASE_URL)("a whole campaign renders cleanly", () => {
           },
         })),
         sceneOver: false,
+        happened: "The heroes gathered in the square.",
+        changes: [],
         imageBrief: null,
-        significance: "minor",
       }),
     });
     const engine = createEngine({ db: db.db, worlds, llm });

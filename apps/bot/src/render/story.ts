@@ -12,11 +12,13 @@ import {
   INTENSITIES,
   INTENSITY_INFO,
   type Intensity,
+  LENGTH_INFO,
   PROFILE_LIMITS,
   type StoryProfile,
   VOICE_INFO,
   VOICES,
 } from "@dq/core/narration";
+import { STORY_LENGTHS } from "@dq/core/story";
 import {
   ActionRowBuilder,
   ButtonBuilder,
@@ -87,6 +89,15 @@ export function renderStoryCard(info: StoryCardInfo) {
               : INTENSITY_INFO[i].blurb,
             profile.intensity === i,
           ),
+        ),
+      ),
+    ),
+  );
+  c.addActionRowComponents(
+    new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+      select(campaignId, "length", "How long a story").addOptions(
+        STORY_LENGTHS.map((l) =>
+          option(l, `Length: ${LENGTH_INFO[l].label}`, LENGTH_INFO[l].blurb, profile.length === l),
         ),
       ),
     ),

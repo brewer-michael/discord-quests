@@ -1,0 +1,367 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "pitch": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000
+    },
+    "startRegions": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9-]*$"
+      }
+    },
+    "openings": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4000
+      }
+    },
+    "stakes": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000
+    },
+    "fronts": {
+      "minItems": 1,
+      "maxItems": 4,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "faction": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "goal": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "portents": {
+            "minItems": 3,
+            "maxItems": 8,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4000
+            }
+          },
+          "doom": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "central": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "required": ["id", "name", "goal", "portents", "doom"],
+        "additionalProperties": false
+      }
+    },
+    "cast": {
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9-]*$"
+      }
+    },
+    "mysteries": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "question": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "truth": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "clues": {
+            "minItems": 3,
+            "maxItems": 8,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4000
+            }
+          }
+        },
+        "required": ["id", "question", "truth", "clues"],
+        "additionalProperties": false
+      }
+    },
+    "moments": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "front": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "when": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "region": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "poi": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "question": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "crux": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["overwhelming_odds", "race_against_clock", "hold_the_line", "last_step"]
+              },
+              "check": {
+                "type": "object",
+                "properties": {
+                  "ability": {
+                    "type": "string",
+                    "enum": ["str", "dex", "con", "int", "wis", "cha"]
+                  },
+                  "skill": {
+                    "type": "string",
+                    "enum": [
+                      "acrobatics",
+                      "animalHandling",
+                      "arcana",
+                      "athletics",
+                      "deception",
+                      "history",
+                      "insight",
+                      "intimidation",
+                      "investigation",
+                      "medicine",
+                      "nature",
+                      "perception",
+                      "performance",
+                      "persuasion",
+                      "religion",
+                      "sleightOfHand",
+                      "stealth",
+                      "survival"
+                    ]
+                  },
+                  "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "dc": {
+                    "type": "object",
+                    "properties": {
+                      "base": {
+                        "type": "integer",
+                        "minimum": 5,
+                        "maximum": 30
+                      },
+                      "perPortent": {
+                        "default": 0,
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 3
+                      },
+                      "perSnareSeverity": {
+                        "default": 0,
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 3
+                      },
+                      "max": {
+                        "default": 30,
+                        "type": "integer",
+                        "minimum": 10,
+                        "maximum": 35
+                      }
+                    },
+                    "required": ["base"],
+                    "additionalProperties": false
+                  }
+                },
+                "required": ["ability", "label", "dc"],
+                "additionalProperties": false
+              },
+              "sockets": {
+                "minItems": 2,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "spared_one_acts",
+                        "ally_arrives",
+                        "knowledge_given",
+                        "trusted_at_need",
+                        "hidden_way",
+                        "object_reveals",
+                        "enemy_blunder",
+                        "ambush_avoided"
+                      ]
+                    },
+                    "accepts": {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "mercy",
+                          "honesty_at_cost",
+                          "patience",
+                          "promise_kept",
+                          "kindness_to_lowly",
+                          "self_sacrifice",
+                          "keepsake_kept",
+                          "amends"
+                        ]
+                      }
+                    },
+                    "anchorTag": {
+                      "type": "string",
+                      "pattern": "^[a-z0-9][a-z0-9-]*$"
+                    },
+                    "faction": {
+                      "type": "string",
+                      "pattern": "^[a-z0-9][a-z0-9-]*$"
+                    },
+                    "hint": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 4000
+                    }
+                  },
+                  "required": ["type", "accepts", "hint"],
+                  "additionalProperties": false
+                }
+              },
+              "requiredGrace": {
+                "type": "number",
+                "minimum": 0.1,
+                "maximum": 5
+              },
+              "onSuccess": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4000
+              },
+              "onCostlySuccess": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4000
+              },
+              "onFailForward": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4000
+              }
+            },
+            "required": [
+              "type",
+              "check",
+              "sockets",
+              "requiredGrace",
+              "onSuccess",
+              "onCostlySuccess",
+              "onFailForward"
+            ],
+            "additionalProperties": false
+          },
+          "finale": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "required": ["id", "title", "front", "when", "summary", "question", "crux"],
+        "additionalProperties": false
+      }
+    },
+    "situations": {
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9-]*$"
+      }
+    }
+  },
+  "required": [
+    "id",
+    "title",
+    "pitch",
+    "startRegions",
+    "openings",
+    "stakes",
+    "fronts",
+    "mysteries",
+    "moments"
+  ],
+  "additionalProperties": false
+}

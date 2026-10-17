@@ -5,7 +5,6 @@
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import {
-  ActDef,
   BackgroundDef,
   ClassDef,
   ContentRules,
@@ -21,7 +20,9 @@ import {
   PathDef,
   PayoffsFile,
   RegionDef,
+  SeedDef,
   ShortcutDef,
+  SituationDef,
   SpeciesDef,
   WorldMeta,
 } from "@dq/core/world";
@@ -42,7 +43,8 @@ const schemas: Record<string, z.ZodType> = {
   region: RegionDef,
   faction: FactionDef,
   npcs: NpcsFile,
-  act: ActDef,
+  seed: SeedDef,
+  situations: z.array(SituationDef),
   detours: z.array(DetourDef),
   payoffs: PayoffsFile,
   "epilogue-lines": EpilogueLines,

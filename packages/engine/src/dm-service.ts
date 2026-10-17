@@ -15,8 +15,8 @@ import { approvalRequests, campaigns } from "@dq/db";
 import { campaignLoom, evaluations } from "@dq/db/loom";
 import { and, eq } from "drizzle-orm";
 import { type EngineDeps, GameError } from "./deps";
-import { npcAnchor } from "./director";
 import { dmLoomView } from "./loom-store";
+import { castMember, loadPlan, loomMoments, normalizeLoom, personAnchor } from "./story-plan";
 import { asStory } from "./story-state";
 
 const SIZE_WEIGHT = { small: 0.5, medium: 0.9, large: 1.3 } as const;
@@ -62,20 +62,25 @@ export class DmService {
     if (!(VIRTUE_TAGS as readonly string[]).includes(input.tag))
       throw new GameError("bad tag", "Choose one of the listed kinds of deed.");
     const { index } = this.deps.worlds.get(c.worldId);
-    if (input.npcId && !index.namedNpcs.has(input.npcId))
-      throw new GameError("bad npc", "That character isn't in this world.");
+    const plan = await loadPlan(this.deps.db, campaignId);
+    if (input.npcId && !index.namedNpcs.has(input.npcId) && !castMember(plan, input.npcId))
+      throw new GameError("bad npc", "That character isn't in this story.");
     const story = asStory(c.story);
-    const ctx = loomContext(index);
-    const progress = storyProgress(index, story.completedBeats);
+    const moments = loomMoments(index, plan);
+    const ctx = loomContext(index, moments);
+    const progress = storyProgress(story.scenesDone, story.milestones);
     return this.deps.db.transaction(async (tx) => {
       const [row] = await tx
         .select()
         .from(campaignLoom)
         .where(eq(campaignLoom.campaignId, campaignId))
         .for("update");
-      const state = structuredClone((row?.state as unknown as LoomState) ?? emptyLoomState());
+      const state = normalizeLoom(
+        structuredClone((row?.state as unknown as LoomState) ?? emptyLoomState()),
+        new Set(moments.map((m) => m.id)),
+      );
       const tag = input.tag as VirtueTag;
-      const anchor = input.npcId ? npcAnchor(index, input.npcId) : null;
+      const anchor = input.npcId ? personAnchor(index, plan, input.npcId) : null;
       const thread: Thread = {
         id: nextId(state, "t"),
         deedId: nextId(state, "d"),

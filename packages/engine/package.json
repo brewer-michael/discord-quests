@@ -9,6 +9,7 @@
     "./guide": "./src/guide.ts",
     "./loom-store": "./src/loom-store.ts",
     "./pace": "./src/pace.ts",
+    "./story-plan": "./src/story-plan.ts",
     "./testing": "./src/testing.ts"
   },
   "scripts": {

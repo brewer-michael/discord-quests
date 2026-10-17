@@ -4,7 +4,7 @@
  *
  * Saved: the story position, every hero's sheet (hit points, conditions, spell slots, level and gold), their
  * packs, quests, promises, people met, places found, canon, the scene they were in and the choices before
- * them, the loom, and the chapter plan. Not saved: names, looks and pictures, which players may have changed
+ * them, the loom, and the story plan. Not saved: names, looks and pictures, which players may have changed
  * since and which a rewind shouldn't take away.
  */
 import type { DbOrTx } from "@dq/db";

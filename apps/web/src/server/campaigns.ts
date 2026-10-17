@@ -1,5 +1,6 @@
 import { auditLog, campaignMembers, campaigns, characters, type DbOrTx, turns } from "@dq/db";
 import { dmLoomView } from "@dq/engine/loom-store";
+import { dmStoryView } from "@dq/engine/story-plan";
 import { and, asc, desc, eq, gte, sql } from "drizzle-orm";
 import { audit } from "./audit";
 
@@ -163,5 +164,5 @@ export async function grantSpoilerConsent(
 export async function loomForWeb(db: DbOrTx, guildId: string, userId: string, campaignId: string) {
   const c = await owned(db, guildId, campaignId);
   if (!c || !(await hasSpoilerConsent(db, userId, campaignId))) return null;
-  return { campaign: c, loom: await dmLoomView(db, campaignId) };
+  return { campaign: c, loom: await dmLoomView(db, campaignId), story: await dmStoryView(db, campaignId) };
 }

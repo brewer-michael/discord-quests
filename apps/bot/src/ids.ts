@@ -26,7 +26,7 @@ export type CustomId =
   /** A page of the picture gallery. The search words ride along (see pictureSearchWords). */
   | { kind: "gallery"; campaignId: string; index: number; words: string[] }
   | { kind: "gallery-share"; campaignId: string; sceneId: string }
-  /** The story settings card: a select (intensity, voice, humor, art) or a button (wishes, done). */
+  /** The story settings card: a select (intensity, length, voice, humor, art) or a button (wishes, done). */
   | { kind: "story"; campaignId: string; action: StoryAction }
   | { kind: "story-modal"; campaignId: string }
   /** The DM room's card: pick a turn to rewind to and confirm, mend the party, rebuild the fight, or switch partial hits. */
@@ -44,8 +44,8 @@ const REWIND_ACTIONS: readonly string[] = [
   "graze-off",
 ];
 
-export type StoryAction = "intensity" | "voice" | "humor" | "art" | "wishes" | "done";
-const STORY_ACTIONS: readonly string[] = ["intensity", "voice", "humor", "art", "wishes", "done"];
+export type StoryAction = "intensity" | "length" | "voice" | "humor" | "art" | "wishes" | "done";
+const STORY_ACTIONS: readonly string[] = ["intensity", "length", "voice", "humor", "art", "wishes", "done"];
 
 /** The battle buttons. Picks carry a spell or item id when a second choice is needed. */
 export type BattleAction = "attack" | "magic" | "defend" | "help" | "potion" | "spare";

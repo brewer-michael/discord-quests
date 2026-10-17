@@ -18,9 +18,8 @@ for (const dir of targets) {
   }
   const errors = issues.filter((i) => i.severity === "error").length;
   if (world) {
-    const beats = world.acts.flatMap((a) => a.chapters.flatMap((c) => c.beats)).length;
     console.log(
-      `ok    ${dir}: ${world.meta.name} v${world.meta.version} - ${world.regions.length} regions, ${world.acts.length} acts, ${beats} beats, ${world.creatures.length} creatures`,
+      `ok    ${dir}: ${world.meta.name} v${world.meta.version} - ${world.regions.length} regions, ${world.seeds.length} story seeds, ${world.situations.length} set pieces, ${world.creatures.length} creatures`,
     );
   }
   if (errors > 0 || !world) failed = true;

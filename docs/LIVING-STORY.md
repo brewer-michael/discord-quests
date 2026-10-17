@@ -43,7 +43,11 @@ keepsakes, roads and looks):
 - the opening scene.
 
 The plan lives in the spoiler schema (`spoiler.story_plans`, a new version at every scene change). Players never
-see it; the DM can, behind the spoiler warning.
+see it; a DM can, on the setup page's hidden-hand page behind the spoiler warning: the threats and how far they've
+come, the decisive moments, the mysteries and their answers, and everyone's secrets.
+
+The seed is the one whose words best match the table's premise ("smugglers and an auction" picks The Ledger's
+Price), or one at random when the premise says nothing about it, so two tables rarely play the same trouble.
 
 ### Scenes are situations with a question
 
@@ -60,6 +64,21 @@ the fronts, the open mysteries and the people involved. At the same time it:
 - brings a decisive moment when the story has earned it, and the finale when the heroes go after the central
   trouble and the story is long enough;
 - marks a milestone (heroes level up) and a chapter break when something big was settled.
+
+### Milestones and chapters
+
+The director says when a scene settled something big. A decisive moment always counts; otherwise milestones are
+never two scenes running. Each milestone is a level-up for every hero. A new chapter begins with a milestone (or
+after a long stretch without one), and its recap for the journal is written from the director's own scene
+summaries once the turn is out.
+
+### What players can see
+
+The journal shows the goals the heroes took up, their promises, **what they've found out** (each clue as they
+found it), and the chapter recaps. Changes the storyteller describes reach the game only after the rules check
+them: only the people present change how they feel or where they go, a person the hidden hand needs flees rather
+than falls, only this scene's clues and loot can be found, a fight breaks out only with the foes the scene allows
+(it starts next round), and a hazard hurts but never knocks a hero out.
 
 ### Each call gets only what it needs
 
@@ -100,8 +119,22 @@ The loom keeps its rules (threads from kindness and mercy, snares from shortcuts
 at decisive moments) but works on the campaign's own decisive moments instead of fixed beats. Story progress is
 scenes finished, plus a bonus for each milestone.
 
+### Campaigns from before
+
+A campaign started on the fixed arc keeps playing its current scene. At its next scene change the director builds
+its story plan from what has already happened (the chapter recaps and the last few turns) and frames the next
+scene from where the heroes are heading. Hidden-hand threads kept for an old beat are freed, so the hand keeps
+them for the new finale.
+
 ### Length
 
 A campaign's story settings include a length: short (about 8 scenes, an evening or two), standard (about 20) or
 long (about 40). The director paces fronts and moments to it; the finale never comes before 60% of it, and only
-when the heroes go after the central trouble.
+when the heroes go after the central trouble. Changing it mid-campaign paces the story to the new length from the
+next scene on. The setup page sets the default for new campaigns.
+
+### Checking the hidden hand
+
+`pnpm sim` plays hundreds of campaigns the living-story way without an AI (a seed's set pieces as scenes, decisive
+moments when the story reaches them, threats moving with time) and reports how often kindness carries the finale,
+how often shortcuts come back around, and whether the people who matter are there when they're needed.

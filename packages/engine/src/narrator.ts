@@ -46,8 +46,8 @@ export async function narrate(opts: {
   const { llm, world, view, directives, scope, log } = opts;
   const system = narratorSystem(world, view.story);
   const user = narratorUser(view, directives);
-  // The reviewer reads turns where the hidden hand acts, and every turn once the story can get darker.
-  const review = view.story.intensity !== "light" || directives.some((d) => PROSE_DIRECTIVES.has(d.kind));
+  // The reviewer reads turns where the hidden hand acts, and every turn of a story told at Epic.
+  const review = view.story.intensity === "epic" || directives.some((d) => PROSE_DIRECTIVES.has(d.kind));
 
   let problems: string[] = [];
   let reasons: string[] = [];
@@ -128,6 +128,9 @@ const STOPPED: Record<string, string> = {
   max_tokens: "The storyteller ran out of room before finishing.",
 };
 
+/** More than this in one turn is the storyteller rewriting the world, not telling a turn. */
+const MAX_CHANGES = 12;
+
 function clip(s: string, n: number): string {
   const t = s.trim();
   return t.length <= n ? t : `${t.slice(0, n - 1).trimEnd()}…`;
@@ -139,7 +142,7 @@ export function tidy(
   scene: SceneSpecView,
   mode: PublicSceneView["mode"],
 ): NarratorOutput {
-  const refs = new Set(scene.entities.map((e) => e.ref));
+  const refs = new Set([...scene.people.map((p) => p.ref), ...scene.foes.map((f) => f.ref)]);
   const shortcuts = new Set(scene.opportunities.filter((o) => o.kind === "shortcut").map((o) => o.key));
   const virtueTags = new Set(scene.opportunities.filter((o) => o.kind === "virtue").map((o) => o.key));
   const choices =
@@ -169,6 +172,8 @@ export function tidy(
   return {
     ...out,
     narration: clip(out.narration, NARRATION_LIMITS.narration),
+    happened: clip(out.happened, NARRATION_LIMITS.happened),
+    changes: out.changes.slice(0, MAX_CHANGES),
     npcLines: out.npcLines
       .slice(0, NARRATION_LIMITS.maxNpcLines)
       .map((l) => ({ ...l, line: clip(l.line, NARRATION_LIMITS.npcLine) })),
@@ -178,9 +183,12 @@ export function tidy(
 
 function checkOutput(out: NarratorOutput, world: World, view: PublicSceneView): string[] {
   const problems: string[] = [];
-  const text = [out.narration, ...out.npcLines.map((l) => l.line), ...out.choices.map((c) => c.label)].join(
-    "\n",
-  );
+  const text = [
+    out.narration,
+    out.happened,
+    ...out.npcLines.map((l) => l.line),
+    ...out.choices.map((c) => c.label),
+  ].join("\n");
   const verdict = checkNarration(text, world, { intensity: view.story.intensity });
   for (const f of verdict.findings) {
     if (f.category === "banned_word")

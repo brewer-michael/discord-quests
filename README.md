@@ -4,6 +4,10 @@ A Discord bot that runs tabletop adventures in a brand-new world, for families a
 It can be the dungeon master itself (**AI-DM mode**) or help a human dungeon master run the table
 (**Assist mode**), chosen per campaign.
 
+- **A story of its own.** Each campaign grows its own story from one of the world's seeds and the heroes
+  themselves: threats that move when nobody stops them, people who want things and remember what the heroes did,
+  mysteries with more than one way in, and decisive moments that come when the story has earned them. The next
+  scene is wherever the heroes chose to go. Short, standard or long, chosen with the other story settings.
 - **Two roads.** Heroes on *The Long Road* do things the right way, even when it is slow and hard.
   Heroes who take *The Quick Way* grab fast advantages by cutting corners or striking bargains with a
   trickster fox. Shortcuts really do help at first.
@@ -14,8 +18,9 @@ It can be the dungeon master itself (**AI-DM mode**) or help a human dungeon mas
   [NOTICE.md](NOTICE.md)). Young players can choose *Guided* mode and pick story options instead of
   spending points by hand.
 - **Your story, your way.** When a campaign starts, the host chooses how dark it may get (*Light*, a fireside
-  tale; *Classic*, like The Hobbit; or *Epic*, like The Lord of the Rings), the storyteller's voice, humor and
-  picture style, plus an optional premise and topics to leave out. Every setting stays free of gore, anything
+  tale; *Classic*, like The Hobbit; or *Epic*, like The Lord of the Rings), how long it runs, the storyteller's
+  voice, humor and picture style, plus an optional premise (which also picks the kind of story) and topics to
+  leave out. Every setting stays free of gore, anything
   sexual, and dark magic shown in detail, and on family campaigns only a guardian can choose Epic.
 - **Battles that fit the story.** Turn-based fights with initiative, spells and potions, with every roll
   shown: yours, the foes', and the damage each one does. Dice are real random rolls. Foes come from the SRD's

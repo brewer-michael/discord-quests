@@ -1,4 +1,5 @@
 import { HUMORS, INTENSITIES, VOICES } from "@dq/core/narration";
+import { STORY_LENGTHS } from "@dq/core/story";
 import { type DbOrTx, guilds } from "@dq/db";
 import { timerFitsPace, validTimer } from "@dq/engine/pace";
 import { eq } from "drizzle-orm";
@@ -19,6 +20,7 @@ export const GameDefaults = z.object({
   pingPlayers: z.boolean().optional(),
   /** Story settings new campaigns start with; the host shapes each campaign's own when it's created. */
   intensity: z.enum(INTENSITIES),
+  length: z.enum(STORY_LENGTHS),
   voice: z.enum(VOICES),
   humor: z.enum(HUMORS),
   art: z.enum(["book", "painterly", "watercolor"]),
@@ -31,6 +33,7 @@ export const DEFAULT_GAME: GameDefaults = {
   loomMode: "auto",
   pace: "live",
   intensity: "classic",
+  length: "standard",
   voice: "classic",
   humor: "some",
   art: "book",
@@ -56,6 +59,7 @@ export const SettingsForm = z
     loomMode: GameDefaults.shape.loomMode,
     pace: GameDefaults.shape.pace,
     intensity: GameDefaults.shape.intensity.default(DEFAULT_GAME.intensity),
+    length: GameDefaults.shape.length.default(DEFAULT_GAME.length),
     voice: GameDefaults.shape.voice.default(DEFAULT_GAME.voice),
     humor: GameDefaults.shape.humor.default(DEFAULT_GAME.humor),
     art: GameDefaults.shape.art.default(DEFAULT_GAME.art),
@@ -126,6 +130,7 @@ export async function saveServerSettings(
         loomMode: v.loomMode,
         pace: v.pace,
         intensity: v.intensity,
+        length: v.length,
         voice: v.voice,
         humor: v.humor,
         art: v.art,

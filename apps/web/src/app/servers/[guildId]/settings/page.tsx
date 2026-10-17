@@ -4,9 +4,11 @@ import {
   HUMORS,
   INTENSITIES,
   INTENSITY_INFO,
+  LENGTH_INFO,
   VOICE_INFO,
   VOICES,
 } from "@dq/core/narration";
+import { STORY_LENGTHS } from "@dq/core/story";
 import { describeTimer, PACES, TIMER_CHOICES, timerFitsPace } from "@dq/engine/pace";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
 import { requireGuild } from "@/server/access";
@@ -97,6 +99,16 @@ export default async function Settings({ params }: { params: Promise<{ guildId: 
             <span className="hint">
               {INTENSITY_INFO[s.game.intensity].blurb} On family campaigns, Epic needs a guardian.
             </span>
+          </div>
+          <div className="field">
+            <label htmlFor="length">How long stories run</label>
+            <select id="length" name="length" defaultValue={s.game.length}>
+              {STORY_LENGTHS.map((l) => (
+                <option key={l} value={l}>
+                  {LENGTH_INFO[l].label}: {LENGTH_INFO[l].blurb.toLowerCase()}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="field">
             <label htmlFor="voice">Storyteller voice</label>

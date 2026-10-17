@@ -31,8 +31,9 @@ export default async function Loom({ params }: { params: Promise<{ guildId: stri
         {back}
         <h2>Spoilers ahead</h2>
         <p>
-          This shows what the hidden hand is holding in <strong>{campaign.name}</strong>: which good deeds are
-          waiting to matter, which shortcuts will come back around, and who is being kept safe for later.
+          This shows this campaign's story as only its director sees it (the threats, what's ahead, everyone's
+          secrets) and what the hidden hand is holding in <strong>{campaign.name}</strong>: which good deeds
+          are waiting to matter, which shortcuts will come back around, and who is being kept safe for later.
         </p>
         <p className="muted">
           If you're playing in this campaign, it will spoil the surprise. Looking is recorded in this server's
@@ -47,7 +48,7 @@ export default async function Loom({ params }: { params: Promise<{ guildId: stri
     );
   }
 
-  const { loom } = view;
+  const { loom, story } = view;
   return (
     <>
       <div className="card">
@@ -57,6 +58,105 @@ export default async function Loom({ params }: { params: Promise<{ guildId: stri
           Shown in words, not numbers, on purpose. This view closes after 15 minutes.
         </p>
       </div>
+      {story ? (
+        <>
+          <div className="card">
+            <h3>The story: {story.title}</h3>
+            <p className="hint">
+              Chapter {story.chapter.number}: {story.chapter.title} · {story.scenesPlayed} scenes played ·{" "}
+              {story.length} story
+            </p>
+            <p>{story.pitch}</p>
+            <p className="muted">Stakes: {story.stakes}</p>
+            {story.storySoFar ? <p>{story.storySoFar}</p> : null}
+            {story.hooks.length > 0 ? (
+              <ul className="thread-list">
+                {story.hooks.map((h) => (
+                  <li key={h.hero}>
+                    <span aria-hidden>🎒</span>
+                    <span>
+                      {h.hero} <span className="muted">· {h.hook}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+          <div className="grid">
+            <div className="card">
+              <h3>Threats</h3>
+              <p className="hint">What comes true, step by step, while nobody stops it.</p>
+              <ul className="thread-list">
+                {story.fronts.map((f) => (
+                  <li key={f.name}>
+                    <span aria-hidden>
+                      {f.state === "thwarted" ? "🛡️" : f.state === "doomed" ? "🌑" : "⏳"}
+                    </span>
+                    <span>
+                      {f.name}{" "}
+                      {f.central ? <span className="badge badge-accent">the central trouble</span> : null}{" "}
+                      <span className="badge">{f.state}</span>
+                      {f.come.length > 0 ? (
+                        <span className="muted"> · Has come true: {f.come.at(-1)}</span>
+                      ) : null}
+                      {f.next ? <span className="muted"> · Next: {f.next}</span> : null}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="card">
+              <h3>Decisive moments</h3>
+              <p className="hint">They come when the story has earned them, the finale last.</p>
+              <ul className="thread-list">
+                {story.moments.map((m) => (
+                  <li key={m.title}>
+                    <span aria-hidden>{m.state === "done" ? "✔️" : m.finale ? "🏔️" : "⚑"}</span>
+                    <span>
+                      {m.title} <span className="muted">· {m.when}</span>{" "}
+                      {m.outcome ? <span className="badge">{words(m.outcome)}</span> : null}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+          <div className="grid">
+            <div className="card">
+              <h3>Mysteries</h3>
+              <ul className="thread-list">
+                {story.mysteries.map((m) => (
+                  <li key={m.question}>
+                    <span aria-hidden>🔎</span>
+                    <span>
+                      {m.question}{" "}
+                      <span className="badge">
+                        {m.found} of {m.clues} clues
+                      </span>
+                      <span className="muted"> · {m.truth}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="card">
+              <h3>People</h3>
+              <ul className="thread-list">
+                {story.cast.map((p) => (
+                  <li key={p.name}>
+                    <span aria-hidden>👤</span>
+                    <span>
+                      {p.name} <span className="muted">· {p.role}</span>{" "}
+                      <span className="badge">{p.attitude}</span> <span className="badge">{p.status}</span>
+                      {p.secret ? <span className="muted"> · Secret: {p.secret}</span> : null}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </>
+      ) : null}
       <div className="card">
         <h3>Threads</h3>
         <p className="hint">Kindness, mercy and patience waiting to matter.</p>

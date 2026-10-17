@@ -1,9 +1,16 @@
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
-import { IntentOutput, JudgeOutput, NarratorOutput, SafetyOutput } from "@dq/core/narration";
+import {
+  FrameOutput,
+  IntentOutput,
+  JudgeOutput,
+  NarratorOutput,
+  SafetyOutput,
+  SeedOutput,
+} from "@dq/core/narration";
 import { describe, expect, it } from "vitest";
 import { strictJsonSchema } from "./json-schema";
 
-const ALL = { NarratorOutput, IntentOutput, SafetyOutput, JudgeOutput };
+const ALL = { NarratorOutput, IntentOutput, SafetyOutput, JudgeOutput, SeedOutput, FrameOutput };
 
 describe("engine output schemas", () => {
   it.each(Object.entries(ALL))("%s converts for Claude structured outputs", (_name, schema) => {
@@ -23,10 +30,10 @@ describe("engine output schemas", () => {
     const sample = {
       narration: "The lantern sputters.",
       npcLines: [{ npcRef: "hattie-wick", line: "Oh my stars." }],
-      proposedDeltas: [
-        { kind: "npc_status", npcId: "snibbet", status: "fled" },
-        { kind: "introduce_entity", entityKind: "npc", name: "Marigold", description: "A baker.", tags: [] },
-        { kind: "move_party", regionId: "whisperwood", poiId: null },
+      changes: [
+        { kind: "whereabouts", who: "snibbet", status: "fled" },
+        { kind: "new_person", name: "Marigold", description: "A baker." },
+        { kind: "clue", clue: "the-missing-coal-2" },
       ],
       choices: [
         {
@@ -42,9 +49,9 @@ describe("engine output schemas", () => {
         },
       ],
       sceneOver: false,
+      happened: "Snibbet fled into the night.",
       imageBrief: null,
-      significance: "minor",
     };
-    expect(NarratorOutput.parse(sample).proposedDeltas).toHaveLength(3);
+    expect(NarratorOutput.parse(sample).changes).toHaveLength(3);
   });
 });

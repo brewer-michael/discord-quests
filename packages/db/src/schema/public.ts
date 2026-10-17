@@ -351,7 +351,8 @@ export const scenes = pgTable(
     campaignId: uuid("campaign_id")
       .notNull()
       .references(() => campaigns.id, { onDelete: "cascade" }),
-    beatId: text("beat_id"),
+    /** The decisive moment the scene is, if it is one (the column dates from fixed story beats). */
+    momentId: text("beat_id"),
     kind: text("kind").notNull(),
     regionId: text("region_id").notNull(),
     poiId: text("poi_id"),

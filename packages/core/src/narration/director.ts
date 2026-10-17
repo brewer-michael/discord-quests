@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { PromptBlock } from "../llm/index";
+import { VIRTUE_TAGS } from "../loom/vocab";
 import { SCENE_KINDS } from "../story/vocab";
 import type { World } from "../world/types";
 import { audienceLine, contentRulesText, type NarrationStory, tableWishesText } from "./prompts";
@@ -37,6 +38,10 @@ export const SceneDraft = z.object({
   shortcuts: z.array(z.string()),
   /** Who could fight here (all of them, at once, in a fight scene). */
   foes: z.array(z.object({ creature: z.string(), count: z.number().int() })),
+  /** Chances here to do the right thing at a cost: who it would be toward (a ref, or null), and what it is. */
+  chances: z.array(z.object({ deed: z.enum(VIRTUE_TAGS), toward: z.string().nullable(), what: z.string() })),
+  /** Something here can hurt the heroes besides a fight: a fall, a flood, fire, a collapse. */
+  dangerous: z.boolean(),
   momentId: z.string().nullable(),
   situationId: z.string().nullable(),
   /** For the storyteller: how this scene grows out of what came before. */
@@ -94,6 +99,8 @@ export const DIRECTOR_LIMITS = {
   portent: 240,
   clue: 240,
   pitch: 900,
+  chance: 200,
+  chances: 3,
   newPeople: 3,
   present: 6,
   foes: 6,
@@ -117,6 +124,8 @@ export function directorSystem(world: World, story: NarrationStory): PromptBlock
     "- Bring back people from earlier when it makes sense. People travelling with the heroes come along. Only list people who are really there.",
     "- Put clues where the heroes go. If a way to the truth closes, open another: every truth has at least three ways in.",
     "- Offer a temptation (a shortcut) only where it fits naturally. Foes are creatures who could fight here; a fight scene needs them.",
+    "- chances: one to three chances in this scene to do the right thing when it costs something: mercy to someone at the heroes' mercy, honesty when a lie would help, kindness to someone overlooked, patience instead of a shortcut, keeping a promise, putting themselves at risk for someone, making amends. Concrete and natural to the situation, never a test with a right answer. The heroes may take them or not.",
+    "- dangerous: true when something here could hurt the heroes besides a fight (a fall, a flood, fire, a collapse).",
     "- Use a set piece when it fits where the heroes are and what they're doing; otherwise build the scene from the world's places, people and creatures.",
     "- Bring a decisive moment only when the story has earned it (its 'when' has come true). The finale only when the story is long enough and the heroes are going after the central trouble.",
     "- note: a sentence or two for the storyteller on how this scene grows out of what came before: who remembers what, what came of the heroes' choices.",
@@ -173,6 +182,8 @@ export interface SeedPromptInput {
   setPieces: Array<{ id: string; title: string; regionId: string; summary: string }>;
   /** A story already under way: what has happened so far, for a campaign moving onto a living story. */
   history?: string[];
+  /** For a story under way: where the heroes are heading now. */
+  heading?: string[];
 }
 
 export function seedUser(input: SeedPromptInput): PromptBlock[] {
@@ -233,8 +244,11 @@ export function seedUser(input: SeedPromptInput): PromptBlock[] {
     lines.push(
       "",
       "## The story so far",
-      "This campaign is already under way. Build its story from where things stand, keeping everything that has happened, and frame the opening as the scene the heroes are in now.",
+      "This campaign is already under way. Build its story from where things stand, keeping everything that has happened, and frame the opening as the next scene, from where the heroes are heading.",
       ...input.history.map((h) => `- ${h}`),
+      ...(input.heading?.length
+        ? ["Where the heroes are heading:", ...input.heading.map((h) => `- ${h}`)]
+        : []),
     );
   lines.push(
     "",
@@ -310,6 +324,8 @@ export interface FramePromptInput {
   };
   setPieces: Array<{ id: string; title: string; regionId: string; kind: string; summary: string }>;
   temptations: Array<{ id: string; name: string; offer: string }>;
+  /** The story is ready for a temptation: offer one in this scene if it fits. */
+  tempt?: boolean;
   creatures: Array<{ id: string; name: string }>;
 }
 
@@ -392,6 +408,9 @@ export function frameUser(input: FramePromptInput): PromptBlock[] {
       "",
       "## Temptations that could be on offer",
       ...input.temptations.map((t) => `- [shortcut: ${t.id}] ${t.name}: ${t.offer}`),
+      ...(input.tempt
+        ? ["The heroes haven't been tempted in a while: offer one of these in this scene if it fits."]
+        : []),
     );
   if (input.creatures.length > 0)
     turn.push(

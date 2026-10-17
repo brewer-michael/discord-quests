@@ -6,6 +6,7 @@ import {
   events,
   inventoryItems,
   safetyEvents,
+  scenes,
   storyPlans,
   turns,
 } from "@dq/db";
@@ -17,9 +18,9 @@ import { serverGameDefaults } from "./campaign-service";
 import { createEngine, createLogger, type Engine, seededDice } from "./index";
 import { loadLoom } from "./loom-store";
 import { describeTimer, paceOf, reminderAt, whenTimeIsUp } from "./pace";
-import { planChapter } from "./planner";
+import { loadPlan } from "./story-plan";
 import { asStory } from "./story-state";
-import { FakeLlm } from "./testing";
+import { FAKE_ANSWERS, FakeLlm } from "./testing";
 import { WorldCache } from "./world-cache";
 
 const worlds = new WorldCache();
@@ -295,7 +296,7 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
     ).rejects.toThrow();
   });
 
-  it("plays a whole campaign from opening to epilogue", async () => {
+  it("plays a whole campaign from opening to epilogue, a story of its own", async () => {
     const llm = new FakeLlm();
     const engine = createEngine({ db: db.db, worlds, llm });
     const c = await engine.campaigns.create({
@@ -311,13 +312,14 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
 
     let view = await engine.turns.openCampaign(c.id, "host");
     expect(view.choices.length).toBeGreaterThanOrEqual(2);
-    expect(view.sceneTitle).toBe("The Last Flame");
+    expect(view.sceneTitle).toBe("A Quiet Lane");
+    const started = await loadPlan(db.db, c.id);
+    expect(started?.seedId).toBeTruthy();
+    expect(started?.hooks).toHaveLength(2);
 
     let rounds = 0;
-    let sawSnibbetMercy = false;
     let fightRounds = 0;
-    let sawMercyChoice = false;
-    while (!view.campaignEnded && rounds < 160) {
+    while (!view.campaignEnded && rounds < 200) {
       rounds += 1;
       const roundId = view.roundId as string;
       const fighting = view.combat?.phase === "fighting";
@@ -326,7 +328,6 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
         expect(view.choices).toEqual([]);
         expect(view.combat?.foes.length).toBeGreaterThan(0);
       }
-      if (view.choices[0]?.label.startsWith("Let ")) sawMercyChoice = true;
       for (const user of ["host", "kid"]) {
         const options = fighting ? await engine.turns.combatOptions(roundId, user) : null;
         if (fighting) expect(options?.foes.length).toBeGreaterThan(0);
@@ -346,61 +347,80 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
       const next = await engine.turns.resolveRound(roundId);
       expect(next?.kind).toBe("turn");
       view = (next as { kind: "turn"; view: typeof view }).view;
-      if (!sawSnibbetMercy) {
-        const loom = await loadLoom(db.db, c.id);
-        sawSnibbetMercy = loom.state.threads.some((t) => t.anchor?.id === "snibbet" && t.tag === "mercy");
-      }
     }
     expect(view.campaignEnded).toBe(true);
-    expect(sawSnibbetMercy).toBe(true);
     expect(rounds).toBeGreaterThan(20);
-    // Both Act I fights were fought round by round, and HP never went out of bounds.
-    expect(fightRounds).toBeGreaterThanOrEqual(2);
+    expect(fightRounds).toBeGreaterThanOrEqual(1);
     for (const p of await db.db.select().from(characters).where(eq(characters.campaignId, c.id))) {
       expect(p.hp).toBeGreaterThanOrEqual(0);
       expect(p.hp).toBeLessThanOrEqual(p.hpMax);
+      // Milestones the story earned were level-ups.
+      expect(p.level + (p.resources.pendingLevels ?? 0)).toBeGreaterThan(1);
     }
-    void sawMercyChoice;
 
     const [final] = await db.db.select().from(campaigns).where(eq(campaigns.id, c.id));
     expect(final?.status).toBe("ended");
+    // The heroes found things out, the story moved through decisive moments to its finale.
+    expect(asStory(final?.story).discoveries.length).toBeGreaterThan(0);
+    const plan = await loadPlan(db.db, c.id);
+    expect(plan?.moments.filter((m) => m.state === "done").length).toBeGreaterThanOrEqual(2);
+    expect(plan?.moments.find((m) => m.finale)?.state).toBe("done");
+    expect(plan?.scenes.length).toBeGreaterThan(8);
+    expect(plan?.fronts.some((f) => f.stage > 0)).toBe(true);
+    const versions = await db.db.select().from(storyPlans).where(eq(storyPlans.campaignId, c.id));
+    expect(versions.length).toBeGreaterThan(8);
 
     // The hidden hand is never written into public history.
     const history = JSON.stringify(await db.db.select().from(turns).where(eq(turns.campaignId, c.id)));
-    for (const secret of ["reservedForBeat", "sincerity", "ripenSpan", "masterSeed", "Keep it small"]) {
+    for (const secret of ["reservedFor", "sincerity", "ripenSpan", "masterSeed", "Keep it small"]) {
       expect(history).not.toContain(secret);
     }
-    // Each new chapter is tailored by the planner, and the storyteller sees its notes.
-    const plans = await db.db.select().from(storyPlans).where(eq(storyPlans.campaignId, c.id));
-    expect(plans.length).toBeGreaterThanOrEqual(6);
-    expect(
-      llm.calls
-        .filter((x) => x.task === "director")
-        .every((x) => !/reservedForBeat|ripen|weight|thread/i.test(x.user)),
-    ).toBe(true);
-    expect(
-      llm.calls.some(
-        (x) => x.task === "narrator" && x.user.includes("Story notes (weave these in naturally)"),
-      ),
-    ).toBe(true);
-    // Every chapter gets a recap, which the storyteller and the journal both use.
+    // The director runs once to make the story and then only at scene changes, and never sees the hidden hand.
+    const directed = llm.calls.filter((x) => x.task === "director");
+    expect(directed.length).toBe(plan?.scenes.length);
+    expect(directed.filter((x) => x.user.includes("## The seed:"))).toHaveLength(1);
+    for (const call of directed) expect(call.user).not.toMatch(/reservedFor|ripen|sincerity|thread/i);
+    // The storyteller gets the scene in front of the heroes and its question, never the whole world or the hand.
+    const narrated = llm.calls.filter((x) => x.task === "narrator");
+    const { index } = worlds.get("lanternreach");
+    const farAway = index.world.regions.map((r) => r.description.trim().slice(0, 80));
+    for (const call of narrated) {
+      expect(call.user).toContain("The question this scene turns on:");
+      expect(call.user).not.toMatch(/reservedFor|sincerity|ripenSpan|grace/);
+      expect(farAway.filter((d) => call.user.includes(d)).length).toBeLessThanOrEqual(2);
+    }
+    expect(narrated.some((x) => x.user.includes("Their stake in this story:"))).toBe(true);
+    // Chapters get recaps for the journal.
     const recaps = await db.db.select().from(chapterSummaries).where(eq(chapterSummaries.campaignId, c.id));
-    expect(recaps.length).toBeGreaterThanOrEqual(7);
-    expect(llm.calls.some((x) => x.task === "narrator" && x.user.includes("## The story so far"))).toBe(true);
-    expect((await engine.campaigns.journal(c.id)).chapters.length).toBeGreaterThan(3);
+    expect(recaps.length).toBeGreaterThanOrEqual(2);
+    expect((await engine.campaigns.journal(c.id)).chapters.length).toBeGreaterThanOrEqual(2);
     const loom = await loadLoom(db.db, c.id);
-    expect(loom.state.deeds.length).toBeGreaterThan(5);
+    expect(loom.state.deeds.length).toBeGreaterThan(3);
     const evs = await db.db.select().from(events).where(eq(events.campaignId, c.id));
     expect(evs.length).toBeGreaterThan(rounds);
-
-    // The narrator never receives loom state.
-    for (const call of llm.calls.filter((x) => x.task === "narrator")) {
-      expect(call.user).not.toMatch(/reservedForBeat|sincerity|ripenSpan|grace/);
-    }
-  }, 120_000);
+  }, 180_000);
 
   it("fights round by round, then lets the heroes choose mercy", async () => {
-    const llm = new FakeLlm();
+    // The director opens on a fight in the garden.
+    const llm = new FakeLlm({
+      director: async (call, scope) => {
+        const out = (await FAKE_ANSWERS.director?.(call, scope)) as Record<string, unknown>;
+        if (call.schemaName !== "story_seed") return out;
+        const opening = out.opening as Record<string, unknown>;
+        return {
+          ...out,
+          opening: {
+            ...opening,
+            title: "Gloam in the Garden",
+            kind: "combat",
+            foes: [
+              { creature: "gloom-mite", count: 2 },
+              { creature: "gloam-skulker", count: 1 },
+            ],
+          },
+        };
+      },
+    });
     // Seeded dice, so this fight plays out the same every run.
     const engine = createEngine({ db: db.db, worlds, llm, dice: seededDice });
     const c = await engine.campaigns.create({
@@ -425,13 +445,6 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
       view = (r as { kind: "turn"; view: typeof view }).view;
     };
 
-    // Walk the story to the first fight.
-    for (let i = 0; i < 20 && view.combat?.phase !== "fighting"; i++) {
-      expect(await act("a", { kind: "combat", action: { kind: "defend" } })).toMatchObject({ ok: false });
-      await act("a", { kind: "choice", choiceIndex: 0 });
-      await act("b", { kind: "choice", choiceIndex: 0 });
-      await next();
-    }
     expect(view.combat?.phase).toBe("fighting");
     expect(view.sceneTitle).toBe("Gloam in the Garden");
     expect(view.combat?.foes.map((f) => f.name).join(", ")).toMatch(/Gloom Mite.*Gloam Skulker/);
@@ -484,8 +497,74 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
       expect(mercy?.anchor?.name).toMatch(/Gloam Skulker/);
       expect(loom.state.bearers.some((b) => b.npcId.startsWith("foe-"))).toBe(false);
     }
-    // The garden fight is over (the road ahead may hold a new one).
+    // The garden fight is over, and the director told the next scene how it went.
     expect(view.sceneTitle).not.toBe("Gloam in the Garden");
+    const framed = llm.calls.filter((x) => x.task === "director").at(-1);
+    expect(framed?.user).toContain("The heroes won the fight.");
+  });
+
+  it("gives each campaign its own story: a seed that suits the table, built around its heroes", async () => {
+    const llm = new FakeLlm();
+    const engine = createEngine({ db: db.db, worlds, llm });
+    const seeds: string[] = [];
+    for (const [i, premise] of [
+      "Smugglers, a floating market and a great auction.",
+      "A clever fox and a mirror.",
+    ].entries()) {
+      const c = await engine.campaigns.create({
+        guildId: "g-seed",
+        channelId: `ch-seed-${i}`,
+        name: `Seed ${i}`,
+        mode: "ai_dm",
+        createdBy: `s${i}`,
+        settings: { story: { premise, length: "short" } as never },
+      });
+      await makeHero(engine, c.id, `s${i}`, "scout", `Quill ${i === 0 ? "Swift" : "Bright"}`);
+      await engine.turns.openCampaign(c.id, `s${i}`);
+      const plan = await loadPlan(db.db, c.id);
+      seeds.push(plan?.seedId ?? "");
+      expect(plan?.length).toBe("short");
+      expect(plan?.hooks[0]?.hook).toBeTruthy();
+    }
+    expect(seeds).toEqual(["the-ledgers-price", "the-foxs-wager"]);
+    // The director was given the heroes and the whole seed; the storyteller only the scene and each hero's stake.
+    const seeded = llm.calls.filter((x) => x.task === "director");
+    expect(seeded[0]?.user).toContain("Quill Swift [ref:");
+    expect(seeded[0]?.user).toContain("[front:");
+    const told = llm.calls.filter((x) => x.task === "narrator");
+    expect(told[0]?.user).toContain("Their stake in this story:");
+    expect(told[0]?.user).not.toContain("[front:");
+  });
+
+  it("turns back a director answer that breaks the rules, and asks again", async () => {
+    let calls = 0;
+    const llm = new FakeLlm({
+      director: async (call, scope) => {
+        const out = (await FAKE_ANSWERS.director?.(call, scope)) as Record<string, unknown>;
+        calls += 1;
+        if (calls > 1 || call.schemaName !== "story_seed") return out;
+        const hooks = out.hooks as Array<{ heroRef: string; hook: string }>;
+        return {
+          ...out,
+          hooks: hooks.map((h) => ({ ...h, hook: "Fate has chosen them, and luck is on their side." })),
+          opening: { ...(out.opening as object), regionId: "nowhere-at-all" },
+        };
+      },
+    });
+    const engine = createEngine({ db: db.db, worlds, llm });
+    const c = await engine.campaigns.create({
+      guildId: "g-retry",
+      channelId: "ch-retry",
+      name: "Retry",
+      mode: "ai_dm",
+      createdBy: "r",
+    });
+    await makeHero(engine, c.id, "r", "scout", "Quill Swift");
+    await engine.turns.openCampaign(c.id, "r");
+    const directed = llm.calls.filter((x) => x.task === "director");
+    expect(directed).toHaveLength(2);
+    expect(directed[1]?.user).toMatch(/previous answer had these problems[\s\S]*nowhere-at-all/);
+    expect((await loadPlan(db.db, c.id))?.hooks[0]?.hook).not.toMatch(/fate|luck/i);
   });
 
   it("switches pace, stops the clock while paused, and remembers the server's rooms", async () => {
@@ -608,60 +687,12 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
     await engine.campaigns.setStatus(c.id, "mum", "active");
   });
 
-  it("throws away planner notes that would give the game away", async () => {
-    const llm = new FakeLlm({
-      director: () => ({
-        theme: "Karma is coming for them.",
-        beats: [
-          {
-            beatId: "ch2-the-fork-in-the-road",
-            note: "Their hidden luck score is high, so fate helps them.",
-            callback: null,
-            featured: [],
-          },
-          {
-            beatId: "ch2-shadow-wolves",
-            note: "Remember how brave the heroes were in the garden.",
-            callback: null,
-            featured: ["nobody-real", "hattie-wick"],
-          },
-        ],
-      }),
-    });
-    const { index } = worlds.get("lanternreach");
-    const c = await createEngine({ db: db.db, worlds, llm }).campaigns.create({
-      guildId: "g-plan",
-      channelId: "ch-plan",
-      name: "Plans",
-      mode: "ai_dm",
-      createdBy: "p",
-    });
-    const plan = await planChapter({
-      db: db.db,
-      llm,
-      index,
-      log: { info: () => {}, warn: () => {}, error: () => {} },
-      campaignId: c.id,
-      guildId: "g-plan",
-      chapter: 2,
-      story: asStory(c.story),
-      telling: { intensity: "light", voice: "fireside", humor: "plenty", premise: "", lines: [], veils: [] },
-    });
-    expect(plan?.beats["ch2-the-fork-in-the-road"]).toBeUndefined();
-    expect(plan?.beats["ch2-shadow-wolves"]).toEqual({
-      note: "Remember how brave the heroes were in the garden.",
-      featured: ["hattie-wick"],
-    });
-    expect(plan?.theme).not.toMatch(/karma/i);
-  });
-
   it("hands a turn the AI can't tell to a person in the DM room, with everything they need", async () => {
     // The storyteller is down until it comes back below; the action reader works.
     let down = true;
     const told: NarratorOutput = {
       narration: "Footprints in the soot lead from the square towards the lamp-house.",
       npcLines: [],
-      proposedDeltas: [],
       choices: [
         {
           label: "Follow the footprints",
@@ -687,8 +718,9 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
         },
       ],
       sceneOver: false,
+      happened: "The heroes found footprints in the soot.",
+      changes: [],
       imageBrief: null,
-      significance: "minor",
     };
     const llm = new FakeLlm({ narrator: () => (down ? new Error("service down") : told) });
     const engine = createEngine({ db: db.db, worlds, llm });
@@ -708,7 +740,8 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
     const opening = started.draft;
     expect(opening.narration).toBe("");
     expect(opening.handoff?.reasons.join(" ")).toMatch(/returned an error.*service down/);
-    expect(opening.handoff?.scene.title).toBe("The Last Flame");
+    expect(opening.handoff?.scene.title).toBe("A Quiet Lane");
+    expect(opening.handoff?.scene.question).toBeTruthy();
     expect((await engine.campaigns.require(c.id)).status).toBe("setup");
     await expect(
       engine.turns.approveDraft(opening.approvalId, "stranger", { narration: "Hello there, everyone." }),
@@ -736,7 +769,7 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
     expect(next.draft.actions).toEqual([expect.stringMatching(/search/)]);
     expect(next.draft.rolls.map((r) => r.label)).toEqual(["Investigation"]);
     expect(next.draft.handoff?.decisions).toContain("The heroes stay in this scene.");
-    expect(next.draft.handoff?.scene.goals.length).toBeGreaterThan(0);
+    expect(next.draft.handoff?.scene.question.length).toBeGreaterThan(0);
     expect((await engine.campaigns.require(c.id)).turnSeq).toBe(1);
 
     // Once the storyteller is back, asking again fills the draft in; a guardian can send it.
@@ -746,6 +779,165 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
     const sent = await engine.turns.approveDraft(next.draft.approvalId, "gran");
     expect(sent.narration).toContain("Footprints in the soot");
     expect((await engine.campaigns.require(c.id)).turnSeq).toBe(2);
+  });
+
+  it("when the director can't frame the next scene, a person takes the heroes there, and the director carries on", async () => {
+    let down = false;
+    const llm = new FakeLlm({
+      director: async (call, scope) =>
+        down && call.schemaName === "next_scene"
+          ? new Error("director down")
+          : FAKE_ANSWERS.director?.(call, scope),
+    });
+    const engine = createEngine({ db: db.db, worlds, llm });
+    const c = await engine.campaigns.create({
+      guildId: "g-frame",
+      channelId: "ch-frame",
+      name: "Framed",
+      mode: "ai_dm",
+      createdBy: "f",
+    });
+    await makeHero(engine, c.id, "f", "scout", "Quill Swift");
+    let view = await engine.turns.openCampaign(c.id, "f");
+    const play = async () => {
+      await engine.turns.submitAction({
+        roundId: view.roundId as string,
+        userId: "f",
+        kind: "choice",
+        choiceIndex: 0,
+      });
+      return engine.turns.resolveRound(view.roundId as string);
+    };
+    // The storyteller says the scene's question is answered; the heroes' next move closes it.
+    view = ((await play()) as { kind: "turn"; view: typeof view }).view;
+    down = true;
+    const handed = await play();
+    if (handed?.kind !== "draft") throw new Error("expected the scene change to be handed over");
+    expect(handed.draft.handoff?.reasons.join(" ")).toMatch(
+      /story director service returned an error.*director down/,
+    );
+    expect(handed.draft.handoff?.decisions.join(" ")).toMatch(/couldn't frame the next one/);
+    expect(handed.draft.handoff?.options.join(" ")).toMatch(/Nearby:/);
+    view = await engine.turns.approveDraft(handed.draft.approvalId, "f", {
+      narration: "The heroes follow the river north until they reach the old sluice gate at dusk.",
+      choices: ["Look for a way across", "Make camp"],
+    });
+    expect(view.sceneChanged).toBe(true);
+    // Back up: the director frames the next scene from where the person took them.
+    down = false;
+    view = ((await play()) as { kind: "turn"; view: typeof view }).view;
+    expect(view.sceneTitle).toBe("A Quiet Lane");
+    const framed = llm.calls.filter((x) => x.task === "director").at(-1);
+    expect(framed?.user).toContain("follow the river north");
+  });
+
+  it("lets a fight break out mid-scene, with the foes the scene allows", async () => {
+    const llm = new FakeLlm({
+      director: async (call, scope) => {
+        const out = (await FAKE_ANSWERS.director?.(call, scope)) as Record<string, unknown>;
+        if (call.schemaName !== "story_seed") return out;
+        return {
+          ...out,
+          opening: { ...(out.opening as object), foes: [{ creature: "gloom-mite", count: 3 }] },
+        };
+      },
+      narrator: async (call, scope) => {
+        const out = (await FAKE_ANSWERS.narrator?.(call, scope)) as NarratorOutput;
+        const here = call.user
+          .map((b) => b.text)
+          .join("\n")
+          .includes("[foe: gloom-mite]");
+        return {
+          ...out,
+          sceneOver: false,
+          changes: here
+            ? [
+                { kind: "fight", foes: ["gloom-mite", "the-gloam-king"] },
+                { kind: "attitude", who: "nobody-here", by: 2 },
+              ]
+            : [],
+        };
+      },
+    });
+    const engine = createEngine({ db: db.db, worlds, llm, dice: seededDice });
+    const c = await engine.campaigns.create({
+      guildId: "g-brawl",
+      channelId: "ch-brawl",
+      name: "Brawl",
+      mode: "ai_dm",
+      createdBy: "b1",
+    });
+    await makeHero(engine, c.id, "b1", "shieldheart", "Bram Stout");
+    // The opening itself says the mites attack: the fight is on from the first round.
+    const view = await engine.turns.openCampaign(c.id, "b1");
+    expect(view.combat?.phase).toBe("fighting");
+    expect(view.combat?.foes.every((f) => f.name.startsWith("Gloom Mite"))).toBe(true);
+    expect(view.choices).toEqual([]);
+    expect((await engine.turns.currentRound(c.id))?.kind).toBe("combat");
+  });
+
+  it("moves a campaign begun on the old fixed story onto a story of its own at its next scene change", async () => {
+    const llm = new FakeLlm();
+    const engine = createEngine({ db: db.db, worlds, llm });
+    const c = await engine.campaigns.create({
+      guildId: "g-old",
+      channelId: "ch-old",
+      name: "Old Times",
+      mode: "ai_dm",
+      createdBy: "o",
+    });
+    await makeHero(engine, c.id, "o", "scout", "Quill Swift");
+    let view = await engine.turns.openCampaign(c.id, "o");
+    // Make it look like a campaign from before: no plan, a beat on the scene, beats on the story.
+    const [row] = await db.db.select().from(campaigns).where(eq(campaigns.id, c.id));
+    const story = row?.story as Record<string, unknown>;
+    await db.db.delete(storyPlans).where(eq(storyPlans.campaignId, c.id));
+    await db.db
+      .update(campaigns)
+      .set({
+        story: { ...story, scenesDone: undefined, completedBeats: ["ch1-a", "ch1-b"], beatId: "ch1-c" },
+      })
+      .where(eq(campaigns.id, c.id));
+    await db.db
+      .update(scenes)
+      .set({
+        state: {
+          kind: "social",
+          beatId: "ch1-c",
+          regionId: "hearthmoor",
+          poiId: null,
+          title: "The Thief in the Lamp-House",
+          summary: "The heroes catch a shivering thief.",
+          goals: ["Decide what to do with Snibbet."],
+          entities: [],
+          offeredShortcuts: [],
+          opportunities: [],
+          isCrux: false,
+          chapterNumber: 1,
+          actNumber: 1,
+        },
+      })
+      .where(eq(scenes.id, story.sceneId as string));
+    const play = async () => {
+      await engine.turns.submitAction({
+        roundId: view.roundId as string,
+        userId: "o",
+        kind: "choice",
+        choiceIndex: 0,
+      });
+      return (
+        (await engine.turns.resolveRound(view.roundId as string)) as { kind: "turn"; view: typeof view }
+      ).view;
+    };
+    view = await play();
+    expect(await loadPlan(db.db, c.id)).toBeNull();
+    view = await play();
+    const plan = await loadPlan(db.db, c.id);
+    expect(plan?.seedId).toBeTruthy();
+    expect(plan?.scenes[0]?.title).toBe("The Thief in the Lamp-House");
+    const seeded = llm.calls.filter((x) => x.task === "director").at(-1);
+    expect(seeded?.user).toContain("This campaign is already under way");
+    expect(asStory((await engine.campaigns.require(c.id)).story).scenesDone).toBe(3);
   });
 
   it("never guesses at what a player typed when the action reader can't read it", async () => {
@@ -882,8 +1074,12 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
       mode: "assist",
       createdBy: "dm2",
       dmUserId: "dm2",
+      settings: { story: { premise: "The lanterns are going out and the Ember is gone." } as never },
     });
     await expect(engine.dm.loomView(c.id, "someone")).rejects.toThrow();
+    // Once the story has a finale, a planted thread is kept for it.
+    await makeHero(engine, c.id, "dm2", "scout", "Quill Swift");
+    await engine.turns.openCampaign(c.id, "dm2");
     await engine.dm.plant(c.id, "dm2", {
       tag: "mercy",
       npcId: "snibbet",

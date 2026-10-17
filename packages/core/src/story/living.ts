@@ -96,6 +96,7 @@ export interface HeroHook {
 /** A finished scene, in a sentence or two. */
 export interface SceneRecord {
   seq: number;
+  chapter: number;
   title: string;
   summary: string;
 }

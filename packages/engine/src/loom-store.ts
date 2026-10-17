@@ -86,7 +86,7 @@ export async function dmLoomView(db: DbOrTx, campaignId: string) {
       kind: t.tag,
       anchor: t.anchor?.name ?? null,
       state: t.state === "woven" ? "woven" : ripenessWord(t.plantedProgress, t.ripenSpan, now),
-      reservedForFinale: Boolean(t.reservedForBeat),
+      reservedForFinale: Boolean(t.reservedFor),
     })),
     snares: state.snares.map((s) => ({
       id: s.id,
@@ -100,7 +100,7 @@ export async function dmLoomView(db: DbOrTx, campaignId: string) {
       id: d.id,
       template: d.templateId,
       state: d.state,
-      target: d.target.beatId,
+      target: d.target.momentId,
     })),
   };
 }

@@ -1,5 +1,6 @@
 import type { NarratorOutput, PublicSceneData, SceneSpecView } from "@dq/core/narration";
 import type { ImageBrief } from "@dq/core/safety";
+import type { StoryPlan } from "@dq/core/story";
 import type { CombatView } from "./combat";
 import type { SceneSpec } from "./director";
 
@@ -94,11 +95,24 @@ export interface PreparedTurn {
   rolls: RollView[];
   cruxLabel: string | null;
   cruxSuccess: boolean | null;
-  chapterEnded: boolean;
-  completedAfter: string[];
-  /** Branch beats open after this turn. */
-  branchesAfter: string[];
   promisesKept: string[];
+  /**
+   * The story plan as this turn leaves it, before the storyteller's changes: the scene that ended recorded, the
+   * threats moved, the next scene's people in it. Null when the campaign has no plan yet.
+   */
+  plan: StoryPlan | null;
+  /** The scene that ended settled something big: the heroes level up. */
+  milestone: boolean;
+  /** A new chapter's title, when this turn begins one. */
+  chapterTitle: string | null;
+  /** The chapter this turn ends (a new one begins, or the story does), for its recap. */
+  endedChapter: { number: number; title: string } | null;
+  /** What the heroes chose this turn, for the director. */
+  heading: string[];
+  /** The scene this turn ends, turn by turn, with how it ended, for the director. */
+  endedLog: string[];
+  /** When the director couldn't frame the next scene: where the story could go, for the person telling it. */
+  options: string[];
   view: PublicSceneData;
   choicesFor: SceneSpecView;
   narration: NarratorOutput;
@@ -123,11 +137,20 @@ export interface PreparedTurn {
  */
 export interface DraftHandoff {
   reasons: string[];
-  scene: { title: string; summary: string; goals: string[] };
+  scene: SceneBrief;
   /** The scene this turn moves the story to, when it closes this one. */
-  next: { title: string; summary: string; goals: string[] } | null;
+  next: SceneBrief | null;
   /** Settled already: the fight, the decisive moment, what may be found, how the adventure ends. */
   decisions: string[];
+  /** When the next scene couldn't be framed: where the story could go from here. */
+  options: string[];
+}
+
+export interface SceneBrief {
+  title: string;
+  summary: string;
+  /** The question the scene turns on. */
+  question: string;
 }
 
 /** What the human DM sees before a turn goes out: an Assist-mode draft, or a turn handed over. */

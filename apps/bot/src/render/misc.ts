@@ -65,6 +65,8 @@ export function renderHelp() {
 export function renderJournal(j: {
   quests: Array<{ title: string; objective: string; status: string }>;
   promises: Array<{ to: string; text: string; status: string }>;
+  /** What the heroes have found out. */
+  discoveries?: string[];
   recent: string[];
   chapters?: Array<{ chapter: number; text: string }>;
 }) {
@@ -110,6 +112,11 @@ export function renderJournal(j: {
       ),
     ),
   );
+  const found = j.discoveries ?? [];
+  if (found.length > 0 && left > 200)
+    c.addTextDisplayComponents(
+      text(take(`**What you've found out**\n${found.map((d) => `- 🔎 ${esc(d)}`).join("\n")}`, 700)),
+    );
   const chapters = [...(j.chapters ?? [])].reverse();
   if (chapters.length > 0 && left > 200) {
     c.addSeparatorComponents(divider());

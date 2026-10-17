@@ -1,0 +1,169 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9-]*$"
+      },
+      "title": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "kind": {
+        "type": "string",
+        "enum": ["exploration", "social", "combat", "travel", "rest", "crux", "choice"]
+      },
+      "region": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9-]*$"
+      },
+      "poi": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9-]*$"
+      },
+      "summary": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4000
+      },
+      "question": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "introduces": {
+        "default": [],
+        "type": "array",
+        "items": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        }
+      },
+      "sockets": {
+        "default": [],
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "spared_one_acts",
+            "ally_arrives",
+            "knowledge_given",
+            "trusted_at_need",
+            "hidden_way",
+            "object_reveals",
+            "enemy_blunder",
+            "ambush_avoided"
+          ]
+        }
+      },
+      "virtueOpportunities": {
+        "default": [],
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "enum": [
+                "mercy",
+                "honesty_at_cost",
+                "patience",
+                "promise_kept",
+                "kindness_to_lowly",
+                "self_sacrifice",
+                "keepsake_kept",
+                "amends"
+              ]
+            },
+            "target": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]*$"
+            },
+            "note": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4000
+            }
+          },
+          "required": ["tag", "note"],
+          "additionalProperties": false
+        }
+      },
+      "offersShortcuts": {
+        "default": [],
+        "type": "array",
+        "items": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        }
+      },
+      "quest": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "objective": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          }
+        },
+        "required": ["id", "title", "objective"],
+        "additionalProperties": false
+      },
+      "foes": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "creature": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]*$"
+            },
+            "count": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 8
+                }
+              ],
+              "items": false,
+              "minItems": 2,
+              "maxItems": 2
+            }
+          },
+          "required": ["creature", "count"],
+          "additionalProperties": false
+        }
+      },
+      "factions": {
+        "default": [],
+        "type": "array",
+        "items": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        }
+      }
+    },
+    "required": ["id", "title", "kind", "region", "summary", "question"],
+    "additionalProperties": false
+  }
+}
