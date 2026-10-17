@@ -5,7 +5,7 @@ Railway runs each part as its own service from this repository.
 1. Create a project and add **PostgreSQL**.
 2. Add a service from this GitHub repository for the **bot**. Railway builds the `Dockerfile` automatically.
    - Variables: `DISCORD_TOKEN`, `DISCORD_CLIENT_ID`, `MASTER_KEYS`, `WEB_BASE_URL`, `DATABASE_URL`
-     (reference the Postgres service's `DATABASE_URL`), optionally `ANTHROPIC_API_KEY`, and `LOG_FORMAT=json`.
+     (reference the Postgres service's `DATABASE_URL`), optionally a story AI key (`OPENAI_API_KEY` or `GEMINI_API_KEY`), and `LOG_FORMAT=json`.
    - Keep it at **one replica**: the bot holds Discord's gateway connection and the round timers.
 3. Add a second service from the same repository for the **setup page**.
    - Settings → Deploy → Custom start command: `node apps/web/node_modules/next/dist/bin/next start apps/web`

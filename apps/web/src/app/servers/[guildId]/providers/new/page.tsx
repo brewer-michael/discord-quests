@@ -29,7 +29,7 @@ export default async function NewProvider({
       <h2>{kind === "llm" ? "Add a story service" : "Add a picture service"}</h2>
       <p className="muted">
         {kind === "llm"
-          ? "Pick the service that will tell the story. Claude is recommended; anything OpenAI-compatible works, including models you run yourself."
+          ? "Pick the service that will tell the story. Anything OpenAI-compatible works, including models you run yourself."
           : "Pick the service that paints scenes. Any HTTP image API can be described with the custom option."}
       </p>
       <ProviderForm

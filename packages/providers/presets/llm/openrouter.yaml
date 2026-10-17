@@ -1,7 +1,7 @@
 id: openrouter
 kind: llm
 label: OpenRouter (many models, one key)
-description: An OpenAI-compatible service. Pick a model from the list the service provides.
+description: Many providers' models behind one key. Pick a model from the list the service provides.
 adapter: openai_compat
 baseUrl: https://openrouter.ai/api/v1
 baseUrlEditable: false
@@ -9,5 +9,36 @@ selfHosted: false
 auth: { type: bearer }
 needsKey: true
 keyUrl: https://openrouter.ai/keys
-capabilities: { structured: json_schema, promptCache: implicit, effort: false, serverFallbacks: false, maxTokensParam: max_tokens }
-models: []
+# openrouter.ai/docs: reasoning: { effort } with max, xhigh, high, medium, low, minimal or none, translated for each
+# upstream model; reasoning counts toward the token limit, and a small limit can leave an empty answer.
+# max_completion_tokens (the API reference marks max_tokens deprecated). Structured outputs depend on the upstream
+# provider: provider.require_parameters keeps requests on providers that honor every field sent, json_schema
+# included. Read from search summaries of OpenRouter's pages.
+capabilities:
+  promptCache: implicit
+  effort: false
+  serverFallbacks: false
+  structured: json_schema
+  maxTokensParam: max_completion_tokens
+  reasoning: openrouter
+  requestFields: { provider: { require_parameters: true } }
+docs:
+  - https://openrouter.ai/docs/guides/best-practices/reasoning-tokens
+  - https://openrouter.ai/docs/api/api-reference/chat/send-chat-completion-request
+  - https://openrouter.ai/docs/guides/features/structured-outputs
+  - https://openrouter.ai/docs/guides/routing/provider-selection
+checked: 2026-10-17
+models:
+  - id: meta/muse-spark-open
+    label: Meta Muse Spark Open
+    contextWindow: 1048576
+    maxOutput: 262144
+    note: Meta's open-weight model. Its reasoning levels weren't confirmed in OpenRouter's docs.
+  - id: google/gemini-3.1-pro-preview
+    label: Gemini 3.1 Pro (preview)
+    reasoning: { mode: always, efforts: [low, medium, high], default: high }
+    note: The level is passed to Gemini's thinking level. Levels are from Google's docs.
+  - id: google/gemini-3-flash-preview
+    label: Gemini 3 Flash (preview)
+    reasoning: { mode: always, efforts: [minimal, low, medium, high], default: high }
+    note: The level is passed to Gemini's thinking level. Levels are from Google's docs.

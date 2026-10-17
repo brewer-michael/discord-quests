@@ -36,8 +36,9 @@ It can be the dungeon master itself (**AI-DM mode**) or help a human dungeon mas
   DM room only they and the bot can see. The bot welcomes each new server and links to a setup guide.
 - **Scene art** when the party reaches a new place or challenge, in the campaign's picture style and with the
   heroes as their players described them, from the image provider you choose.
-- **Your choice of AI.** Story and image providers are configured on the web setup page: Claude (the
-  default), OpenAI-compatible services, Gemini, local models, or your own custom endpoint.
+- **Your choice of AI.** Story and image providers are configured on the web setup page: OpenAI-compatible
+  services, Gemini, local models, or your own custom endpoint. Picking one shows what its documentation says about
+  each model: context, longest answer, reasoning levels and structured output, and the bot calls it that way.
 
 ## Young players and Discord
 

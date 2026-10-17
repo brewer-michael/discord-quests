@@ -24,7 +24,7 @@ const FEATURES = [
   {
     icon: "🎨",
     title: "Your choice of AI",
-    text: "Claude by default, or OpenAI-compatible services, Gemini, models you run yourself, or any custom endpoint. Same for scene art.",
+    text: "OpenAI-compatible services, Gemini, models you run yourself, or any custom endpoint, each called the way its docs describe. Same for scene art.",
   },
   {
     icon: "🪙",

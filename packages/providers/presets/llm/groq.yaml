@@ -1,7 +1,7 @@
 id: groq
 kind: llm
 label: Groq
-description: An OpenAI-compatible service. Pick a model from the list the service provides.
+description: Fast hosted open models.
 adapter: openai_compat
 baseUrl: https://api.groq.com/openai/v1
 baseUrlEditable: false
@@ -9,5 +9,70 @@ selfHosted: false
 auth: { type: bearer }
 needsKey: true
 keyUrl: https://console.groq.com/keys
-capabilities: { structured: json_object, promptCache: implicit, effort: false, serverFallbacks: false, maxTokensParam: max_tokens }
-models: []
+# console.groq.com: max_completion_tokens (max_tokens is deprecated); reasoning_effort, with levels per model and a
+# 400 for a level a model doesn't take. GPT-OSS returns its reasoning in message.reasoning; other reasoning models
+# return it parsed out when JSON mode is on. Strict json_schema on GPT-OSS; json_object elsewhere. The Reasoning
+# page gives 1024 as max_completion_tokens when none is sent. Read from search summaries of Groq's pages.
+capabilities:
+  { structured: json_object, promptCache: implicit, effort: false, serverFallbacks: false, maxTokensParam: max_completion_tokens, reasoning: reasoning_effort }
+unsetLimit: 1024
+docs:
+  - https://console.groq.com/docs/api-reference
+  - https://console.groq.com/docs/reasoning
+  - https://console.groq.com/docs/structured-outputs
+  - https://console.groq.com/docs/models
+  - https://console.groq.com/docs/deprecations
+checked: 2026-10-17
+models:
+  - id: openai/gpt-oss-120b
+    label: GPT-OSS 120B
+    pricing: { input: 0.15, output: 0.6 }
+    contextWindow: 131072
+    maxOutput: 65536
+    reasoning: { mode: always, efforts: [low, medium, high], default: medium }
+    structured: json_schema
+    note: Production model.
+  - id: openai/gpt-oss-20b
+    label: GPT-OSS 20B
+    pricing: { input: 0.075, output: 0.3 }
+    contextWindow: 131072
+    maxOutput: 65536
+    reasoning: { mode: always, efforts: [low, medium, high], default: medium }
+    structured: json_schema
+    note: Production model.
+  - id: qwen/qwen3.8-27b
+    label: Qwen 3.8 27B
+    pricing: { input: 0.8, output: 4 }
+    contextWindow: 131072
+    maxOutput: 16384
+    reasoning: { mode: optional, efforts: [none, low, medium, high] }
+    structured: json_object
+    note: Preview, which Groq may withdraw at short notice. Its pages disagree on the default level.
+  - id: meta-models/muse-spark-open
+    label: Muse Spark Open
+    contextWindow: 131072
+    maxOutput: 65536
+    reasoning: { mode: always, efforts: [low, medium, high, xhigh], default: xhigh }
+    structured: json_object
+    note: Limited preview (contact Groq). Groq gives 131,072 and 65,536 as its longest answer in different places; the lower is used.
+  - id: llama-3.3-70b-versatile
+    label: Llama 3.3 70B
+    contextWindow: 131072
+    maxOutput: 32768
+    reasoning: { mode: none }
+    structured: json_object
+    note: Enterprise accounts only since 2026-08-16.
+  - id: llama-3.1-8b-instant
+    label: Llama 3.1 8B
+    contextWindow: 131072
+    maxOutput: 131072
+    reasoning: { mode: none }
+    structured: json_object
+    note: Enterprise accounts only since 2026-08-16.
+defaultModels:
+  narrator: openai/gpt-oss-120b
+  director: openai/gpt-oss-120b
+  summarizer: openai/gpt-oss-120b
+  intent: openai/gpt-oss-120b
+  safety: openai/gpt-oss-120b
+  judge: openai/gpt-oss-120b

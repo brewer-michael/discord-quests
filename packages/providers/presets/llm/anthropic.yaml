@@ -1,7 +1,10 @@
 id: anthropic
 kind: llm
-label: Anthropic Claude (recommended)
-description: Claude writes warm, careful stories and follows safety rules closely. The default for Discord Quests.
+label: Anthropic Claude
+description: Anthropic's Claude models.
+avoid: >-
+  Avoid at all costs. In the project owner's experience, its models are lazy and don't care about the quality of
+  their work.
 adapter: anthropic
 baseUrl: null
 baseUrlEditable: false

@@ -27,12 +27,12 @@ Copy `.env.example` to `.env` and fill in:
 | `WEB_BASE_URL` | Public address of the setup page. Use `https://` in production so sign-in cookies are Secure |
 | `DATABASE_URL` | Postgres 15+ (Neon, Supabase, RDS, Railway, or the included docker-compose) |
 | `MASTER_KEYS` | Encrypts API keys saved on the setup page. `v1:` plus 32 random bytes in base64 |
-| `ANTHROPIC_API_KEY` | Optional server default for the story AI (Claude). Servers can bring their own keys |
-| `OPENAI_API_KEY` / `GEMINI_API_KEY` | Optional server defaults (OpenAI is also used for scene images) |
+| `OPENAI_API_KEY` / `GEMINI_API_KEY` / `ANTHROPIC_API_KEY` | Optional server defaults for the story AI, tried in that order. OpenAI and Gemini also paint scene images. Servers can bring their own keys |
 | `DEFAULT_DAILY_BUDGET_USD`, `DEFAULT_DAILY_IMAGE_CAP` | Caps on server-default keys per Discord server per day (defaults: $5, 30 images) |
 | `ALLOW_PRIVATE_ENDPOINTS` | `true` lets servers use AI running on your own network (Ollama, LM Studio, Automatic1111) |
 
-Without any AI configured the bot still works: the engine tells each turn itself from the world's text.
+Without any AI configured, every turn goes to the campaign's DM room with the dice, the decisions and the scene,
+for a person to tell.
 
 ## 3. Run
 
@@ -59,8 +59,9 @@ The bot serves a health check at `http://localhost:8080/healthz`; the setup page
 
 Anyone with **Manage Server** on a Discord server can sign in and, for that server:
 
-- add **story services** (Claude, OpenAI, OpenRouter, Groq, Together, Fireworks, DeepSeek, Mistral, xAI, Gemini,
-  Ollama, LM Studio, vLLM, or any custom OpenAI-compatible endpoint) and **picture services** (OpenAI, Imagen,
+- add **story services** (OpenAI, OpenRouter, Groq, Together, Fireworks, DeepSeek, Mistral, xAI, Z.ai, Gemini,
+  Anthropic, Ollama, LM Studio, vLLM, or any custom OpenAI-compatible endpoint), each showing what its docs say
+  about every model and how the bot sets its reasoning, and **picture services** (OpenAI, Imagen,
   Gemini, Stability, Replicate, fal.ai, Automatic1111, an OpenAI-compatible image endpoint, or any HTTP API
   described with a request template), with a **Test connection** button that makes one tiny real call;
 - choose which service and model does each job, with backups if the first one is down;
@@ -283,7 +284,7 @@ is today):
    | `POSTGRES_PASSWORD` | The output of `openssl rand -hex 24` |
    | `DOMAIN` | `quests.example.com` |
    | `WEB_BASE_URL` | `https://quests.example.com` |
-   | `ANTHROPIC_API_KEY` | Optional: a server-wide default for the story AI |
+   | `OPENAI_API_KEY` or `GEMINI_API_KEY` | Optional: a server-wide default for the story AI |
 
    `DATABASE_URL` is ignored here; the stack builds its own from `POSTGRES_PASSWORD`.
 3. **Start it:**

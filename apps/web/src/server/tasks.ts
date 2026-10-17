@@ -2,7 +2,7 @@ import type { RouteTask } from "@dq/providers";
 
 export const STORY_TASKS = ["narrator", "director", "intent", "safety", "judge", "summarizer"] as const;
 export const ALL_TASKS: readonly RouteTask[] = [...STORY_TASKS, "image"];
-export const EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
+export const EFFORTS = ["none", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
 
 export const TASK_INFO: Record<RouteTask, { label: string; help: string }> = {
   narrator: { label: "Storyteller", help: "Writes every turn. Your best model belongs here." },

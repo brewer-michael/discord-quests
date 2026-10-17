@@ -102,6 +102,21 @@ export class ProviderStore {
         ...Object.fromEntries((p?.models ?? []).filter((m) => m.pricing).map((m) => [m.id, m.pricing ?? {}])),
         ...(row.pricing as ResolvedProviderConfig["pricing"]),
       },
+      maxOutput: {
+        ...Object.fromEntries(
+          (p?.models ?? []).filter((m) => m.maxOutput).map((m) => [m.id, m.maxOutput as number]),
+        ),
+        ...answerLimits(row.modelDefaults),
+      },
+      models: Object.fromEntries(
+        (p?.models ?? []).map((m) => [
+          m.id,
+          {
+            ...(m.reasoning ? { reasoning: m.reasoning } : {}),
+            ...(m.structured ? { structured: m.structured } : {}),
+          },
+        ]),
+      ),
       genericSpec: (row.genericSpec ??
         (p?.genericSpec as GenericHttpSpec | undefined) ??
         null) as GenericHttpSpec | null,
@@ -114,4 +129,11 @@ export class ProviderStore {
     if (configId) this.cache.delete(configId);
     else this.cache.clear();
   }
+}
+
+/** For a model the provider doesn't document (one on the server's own machine, or a custom endpoint): its limit as entered. */
+function answerLimits(modelDefaults: Record<string, unknown>): Record<string, number> {
+  const model = modelDefaults.model;
+  const limit = modelDefaults.maxOutputTokens;
+  return typeof model === "string" && typeof limit === "number" && limit > 0 ? { [model]: limit } : {};
 }

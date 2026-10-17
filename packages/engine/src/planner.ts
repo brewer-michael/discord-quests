@@ -161,7 +161,7 @@ export async function planChapter(args: {
       user: [{ text: user }],
       schema: PlannerOutput,
       schemaName: "chapter_plan",
-      maxOutputTokens: 4000,
+      expectTokens: 1500,
       effort: "high",
     },
     { guildId: args.guildId, campaignId: args.campaignId },

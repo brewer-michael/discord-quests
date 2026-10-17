@@ -1,7 +1,7 @@
 id: deepseek
 kind: llm
 label: DeepSeek
-description: An OpenAI-compatible service. Pick a model from the list the service provides.
+description: DeepSeek's V4 models.
 adapter: openai_compat
 baseUrl: https://api.deepseek.com/v1
 baseUrlEditable: false
@@ -9,5 +9,27 @@ selfHosted: false
 auth: { type: bearer }
 needsKey: true
 keyUrl: https://platform.deepseek.com/api_keys
-capabilities: { structured: json_object, promptCache: implicit, effort: false, serverFallbacks: false, maxTokensParam: max_tokens }
-models: []
+# api-docs.deepseek.com thinking mode: thinking { type: enabled | disabled } and reasoning_effort low, high or max
+# (minimal and low act as low; medium, high and xhigh as high). Thinking is on by default, at high. Read from search
+# summaries of DeepSeek's page, not the page itself; the models' token limits, structured output and the
+# token-limit field weren't confirmed.
+capabilities:
+  { structured: json_object, promptCache: implicit, effort: false, serverFallbacks: false, maxTokensParam: max_tokens, reasoning: thinking_type }
+docs:
+  - https://api-docs.deepseek.com/guides/thinking_mode/
+  - https://api-docs.deepseek.com/
+checked: 2026-10-17
+models:
+  - id: deepseek-v4-pro
+    label: DeepSeek V4 Pro
+    reasoning: { mode: optional, efforts: [none, low, high, max], default: high }
+  - id: deepseek-v4-flash
+    label: DeepSeek V4 Flash
+    reasoning: { mode: optional, efforts: [none, low, high, max], default: high }
+defaultModels:
+  narrator: deepseek-v4-pro
+  director: deepseek-v4-pro
+  summarizer: deepseek-v4-flash
+  intent: deepseek-v4-flash
+  safety: deepseek-v4-flash
+  judge: deepseek-v4-flash

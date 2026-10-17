@@ -104,8 +104,8 @@ export default async function Overview({ params }: { params: Promise<{ guildId: 
         <div>
           <h2>Story services</h2>
           <p className="muted small" style={{ margin: 0 }}>
-            The AI that tells the story. Claude is the default; any OpenAI-compatible service, Gemini or your
-            own endpoint works too.
+            The AI that tells the story: any OpenAI-compatible service, Gemini, a model you run yourself, or
+            your own endpoint.
           </p>
         </div>
         <Link className="btn btn-primary" href={`/servers/${guildId}/providers/new?kind=llm`}>

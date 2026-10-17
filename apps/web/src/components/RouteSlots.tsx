@@ -9,6 +9,8 @@ export interface RouteService {
   /** Models known for this service: its own, its preset's, and any a job already uses with it. */
   models: string[];
   defaultModel: string | null;
+  /** Each documented model's reasoning: whether it reasons, and the levels its provider lists. */
+  reasoning: Record<string, { mode: "always" | "optional" | "none"; efforts: string[] }>;
 }
 
 export interface RouteSlotValue {
@@ -156,16 +158,55 @@ function Slot({
       </td>
       {efforts ? (
         <td style={{ minWidth: 120 }}>
-          <select name={`effort.${i}`} defaultValue={initial?.effort ?? ""} aria-label={`${label}: effort`}>
-            <option value="">Default</option>
-            {efforts.map((e) => (
-              <option key={e} value={e}>
-                {e}
-              </option>
-            ))}
-          </select>
+          <EffortSelect
+            name={`effort.${i}`}
+            label={label}
+            initial={initial?.effort ?? ""}
+            all={efforts}
+            documented={services.find((s) => s.id === providerId)?.reasoning[model]}
+          />
         </td>
       ) : null}
     </tr>
+  );
+}
+
+/** How hard the job's model reasons: the levels its provider documents for it, or every level when it's undocumented. */
+function EffortSelect({
+  name,
+  label,
+  initial,
+  all,
+  documented,
+}: {
+  name: string;
+  label: string;
+  initial: string;
+  all: readonly string[];
+  documented: RouteService["reasoning"][string] | undefined;
+}) {
+  if (documented?.mode === "none")
+    return (
+      <select name={name} value="" disabled aria-label={`${label}: effort`}>
+        <option value="">Doesn't reason</option>
+      </select>
+    );
+  const levels = documented?.efforts.length
+    ? documented.efforts.filter((e) => documented.mode !== "always" || e !== "none")
+    : all;
+  return (
+    <select
+      key={levels.join(",")}
+      name={name}
+      defaultValue={levels.includes(initial) ? initial : ""}
+      aria-label={`${label}: effort`}
+    >
+      <option value="">Default</option>
+      {levels.map((e) => (
+        <option key={e} value={e}>
+          {e === "none" ? "off" : e}
+        </option>
+      ))}
+    </select>
   );
 }

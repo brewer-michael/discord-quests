@@ -9,5 +9,91 @@ selfHosted: false
 auth: { type: header, headerName: x-goog-api-key }
 needsKey: true
 keyUrl: https://aistudio.google.com/app/apikey
+# ai.google.dev: generationConfig.thinkingConfig takes thinkingLevel on Gemini 3 and later and thinkingBudget (in
+# tokens) on Gemini 2.5; sending both is an error. Thinking counts toward maxOutputTokens and is billed as output.
+# Structured output: responseMimeType application/json with responseJsonSchema (the reference now marks it
+# deprecated in favour of responseFormat, with no removal date). Read from search summaries of Google's pages.
 capabilities: { structured: json_schema, promptCache: implicit, effort: false, serverFallbacks: false }
-models: []
+docs:
+  - https://ai.google.dev/gemini-api/docs/thinking
+  - https://ai.google.dev/gemini-api/docs/generate-content/thinking
+  - https://ai.google.dev/gemini-api/docs/generate-content/long-decode
+  - https://ai.google.dev/api/generate-content
+  - https://ai.google.dev/gemini-api/docs/models
+  - https://ai.google.dev/gemini-api/docs/deprecations
+checked: 2026-10-17
+models:
+  - id: gemini-4-argon
+    label: Gemini 4 Argon
+    contextWindow: 1048576
+    maxOutput: 32768
+    reasoning: { mode: always, efforts: [low, medium, high], default: medium }
+    structured: json_schema
+    note: Newest (2026-10-13). A single non-streaming call answers at most 32,768 tokens; more needs long decode. minimal is an error.
+  - id: gemini-3.8-flash
+    label: Gemini 3.8 Flash
+    contextWindow: 1048576
+    maxOutput: 65536
+    reasoning: { mode: always, efforts: [low, medium, high], default: medium }
+    structured: json_schema
+    note: The current Flash. minimal is an error.
+  - id: gemini-3.6-flash
+    label: Gemini 3.6 Flash
+    contextWindow: 1048576
+    maxOutput: 65536
+    reasoning: { mode: always, efforts: [minimal, low, medium, high], default: medium }
+    structured: json_schema
+    note: minimal doesn't switch thinking fully off.
+  - id: gemini-3.5-flash-lite
+    label: Gemini 3.5 Flash-Lite
+    contextWindow: 1048576
+    maxOutput: 65536
+    reasoning: { mode: always, efforts: [minimal, low, medium, high], default: minimal }
+    structured: json_schema
+    note: The longest answer is from Google Cloud's page for this model.
+  - id: gemini-3.1-pro-preview
+    label: Gemini 3.1 Pro (preview)
+    contextWindow: 1048576
+    maxOutput: 65536
+    reasoning: { mode: always, efforts: [low, medium, high], default: high }
+    structured: json_schema
+  - id: gemini-3-flash-preview
+    label: Gemini 3 Flash (preview)
+    contextWindow: 1048576
+    maxOutput: 65536
+    reasoning: { mode: always, efforts: [minimal, low, medium, high], default: high }
+    structured: json_schema
+  - id: gemini-3.1-flash-lite
+    label: Gemini 3.1 Flash-Lite
+    contextWindow: 1048576
+    maxOutput: 65536
+    reasoning: { mode: always, efforts: [minimal, low, medium, high], default: minimal }
+    structured: json_schema
+  - id: gemini-2.5-pro
+    label: Gemini 2.5 Pro
+    contextWindow: 1048576
+    maxOutput: 65536
+    reasoning: { mode: always, efforts: [minimal, low, medium, high, max], budget: { min: 128, max: 32768 } }
+    structured: json_schema
+    note: Takes a thinking budget of 128 to 32,768 tokens and can't switch it off. Google's pages disagree on whether 2.5 is still offered to new users.
+  - id: gemini-2.5-flash
+    label: Gemini 2.5 Flash
+    contextWindow: 1048576
+    maxOutput: 65536
+    reasoning: { mode: optional, efforts: [none, minimal, low, medium, high, max], budget: { min: 0, max: 24576 } }
+    structured: json_schema
+    note: Takes a thinking budget of up to 24,576 tokens; 0 switches it off.
+  - id: gemini-2.5-flash-lite
+    label: Gemini 2.5 Flash-Lite
+    contextWindow: 1048576
+    maxOutput: 65536
+    reasoning: { mode: optional, efforts: [none, minimal, low, medium, high, max], budget: { min: 512, max: 24576 } }
+    structured: json_schema
+    note: Takes a thinking budget of 512 to 24,576 tokens (the range is from Google Cloud's page); 0 switches it off.
+defaultModels:
+  narrator: gemini-3.8-flash
+  director: gemini-3.8-flash
+  summarizer: gemini-3.5-flash-lite
+  intent: gemini-3.5-flash-lite
+  safety: gemini-3.5-flash-lite
+  judge: gemini-3.5-flash-lite

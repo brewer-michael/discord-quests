@@ -1,0 +1,54 @@
+id: zai
+kind: llm
+label: Z.ai (GLM)
+description: >-
+  Z.ai's GLM models on its pay-as-you-go API. Z.ai's GLM Coding Plan endpoint is for its supported coding tools
+  only under Z.ai's terms, so a bot can't use it.
+adapter: openai_compat
+baseUrl: https://api.z.ai/api/paas/v4
+baseUrlEditable: true
+selfHosted: false
+auth: { type: bearer }
+needsKey: true
+keyUrl: https://z.ai/manage-apikey/apikey-list
+# docs.z.ai: response_format takes text or json_object (no json_schema); max_tokens 1 to 131072. GLM-5.3 and
+# GLM-5.3-Flash supersede the earlier GLM models; they always think and take reasoning_effort low, high or max.
+# Reasoning comes back in message.reasoning_content.
+capabilities:
+  { structured: json_object, promptCache: implicit, effort: false, serverFallbacks: false, maxTokensParam: max_tokens, reasoning: thinking_type }
+docs:
+  - https://docs.z.ai/api-reference/llm/chat-completion
+  - https://docs.z.ai/guides/overview/concept-param
+  - https://docs.z.ai/guides/capabilities/thinking-mode
+  - https://docs.z.ai/guides/capabilities/struct-output
+  - https://docs.z.ai/devpack/faq
+checked: 2026-10-17
+models:
+  - id: glm-5.3
+    label: GLM-5.3
+    contextWindow: 1000000
+    maxOutput: 131072
+    reasoning: { mode: always, efforts: [low, high, max], default: max }
+    structured: json_object
+    note: Flagship. Always thinks; thinking can't be switched off.
+  - id: glm-5.3-flash
+    label: GLM-5.3-Flash
+    contextWindow: 1000000
+    maxOutput: 131072
+    reasoning: { mode: always, efforts: [low, high, max], default: max }
+    structured: json_object
+    note: Low-cost sibling of GLM-5.3. Always thinks.
+  - id: glm-5.3-flashx
+    label: GLM-5.3-FlashX
+    contextWindow: 1000000
+    maxOutput: 131072
+    reasoning: { mode: always, efforts: [low, high, max], default: max }
+    structured: json_object
+    note: Faster Flash. Documented on the GLM-5.3-Flash page, which lists thinking as enabled only.
+defaultModels:
+  narrator: glm-5.3
+  director: glm-5.3
+  summarizer: glm-5.3-flash
+  intent: glm-5.3-flash
+  safety: glm-5.3-flash
+  judge: glm-5.3-flash

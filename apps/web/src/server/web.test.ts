@@ -167,6 +167,48 @@ describe("provider form", () => {
     });
   });
 
+  it("asks for a model's longest answer where the provider cuts answers short without one", () => {
+    const fw = { kind: "llm", presetId: "fireworks", name: "fw" };
+    expect(
+      buildRow(parse({ ...fw, model: "accounts/fireworks/models/kimi-k3" }), { allowPrivate: false }),
+    ).toMatchObject({ ok: false, errors: { maxOutput: expect.stringContaining("2,048") } });
+    // A model whose limit the provider documents needs nothing entered.
+    expect(
+      buildRow(parse({ ...fw, model: "accounts/fireworks/routers/kimi-k3-fast" }), { allowPrivate: false })
+        .ok,
+    ).toBe(true);
+    const entered = buildRow(
+      parse({ ...fw, model: "accounts/fireworks/models/kimi-k3", maxOutput: "100000" }),
+      { allowPrivate: false },
+    );
+    expect(entered).toMatchObject({
+      ok: true,
+      row: {
+        values: { modelDefaults: { model: "accounts/fireworks/models/kimi-k3", maxOutputTokens: 100000 } },
+      },
+    });
+  });
+
+  it("lets a model on the server's own machine be told not to reason", () => {
+    const r = buildRow(
+      parse({
+        kind: "llm",
+        presetId: "ollama",
+        name: "local",
+        baseUrl: "http://10.0.0.5:11434/v1",
+        reasoning: "none",
+      }),
+      { allowPrivate: true },
+    );
+    expect(r).toMatchObject({ ok: true, row: { values: { capabilityOverrides: { reasoning: "none" } } } });
+    // A hosted service's reasoning comes from its docs only.
+    expect(
+      buildRow(parse({ kind: "llm", presetId: "openai", name: "o", reasoning: "none" }), {
+        allowPrivate: false,
+      }),
+    ).toMatchObject({ ok: true, row: { values: { capabilityOverrides: {} } } });
+  });
+
   it("hides key-shaped text in provider errors", () => {
     expect(clean("401: invalid key sk-proj-abcdefghijklmnop1234 provided")).not.toContain("abcdefghijklmnop");
   });

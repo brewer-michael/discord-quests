@@ -1,7 +1,7 @@
 id: openai
 kind: llm
 label: OpenAI
-description: An OpenAI-compatible service. Pick a model from the list the service provides.
+description: OpenAI's GPT models.
 adapter: openai_compat
 baseUrl: https://api.openai.com/v1
 baseUrlEditable: false
@@ -9,5 +9,77 @@ selfHosted: false
 auth: { type: bearer }
 needsKey: true
 keyUrl: https://platform.openai.com/api-keys
-capabilities: { structured: json_schema, promptCache: implicit, effort: false, serverFallbacks: false, maxTokensParam: max_completion_tokens }
-models: []
+# developers.openai.com: Chat Completions takes max_completion_tokens (max_tokens is deprecated) and
+# reasoning_effort. Reasoning counts toward max_completion_tokens and isn't returned as text. Which levels a model
+# takes varies, and a level it doesn't take is an HTTP 400. Structured outputs: response_format json_schema with
+# strict: true. Read from search summaries of OpenAI's pages.
+capabilities:
+  { structured: json_schema, promptCache: implicit, effort: false, serverFallbacks: false, maxTokensParam: max_completion_tokens, reasoning: reasoning_effort }
+docs:
+  - https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create
+  - https://developers.openai.com/api/docs/guides/reasoning
+  - https://developers.openai.com/api/docs/guides/latest-model
+  - https://developers.openai.com/api/docs/guides/structured-outputs
+  - https://developers.openai.com/api/docs/models
+checked: 2026-10-17
+models:
+  - id: gpt-6-astra
+    label: GPT-6 Astra
+    pricing: { input: 10, output: 50 }
+    contextWindow: 1050000
+    maxOutput: 128000
+    reasoning: { mode: always, efforts: [low, medium, high, xhigh, max] }
+    structured: json_schema
+    note: Flagship. Reasoning can't be switched off (none is rejected); its default level isn't documented.
+  - id: gpt-6.1-sol
+    label: GPT-6.1 Sol
+    pricing: { input: 2, output: 10 }
+    contextWindow: 1050000
+    maxOutput: 128000
+    reasoning: { mode: always, efforts: [low, medium, high, xhigh, max], default: medium }
+    structured: json_schema
+    note: Near-Astra quality at a lower cost. none and minimal are rejected.
+  - id: gpt-6-sol
+    label: GPT-6 Sol
+    contextWindow: 1050000
+    maxOutput: 128000
+    reasoning: { mode: optional, efforts: [none, low, medium, high, xhigh, max], default: medium }
+    structured: json_schema
+    note: Coding and agentic model; OpenAI points to GPT-6.1 Sol as the newer one.
+  - id: gpt-6-luna
+    label: GPT-6 Luna
+    pricing: { input: 0.1, output: 0.5, cacheRead: 0.01 }
+    contextWindow: 1050000
+    maxOutput: 128000
+    reasoning: { mode: optional, efforts: [none, low, medium, high, xhigh, max], default: medium }
+    structured: json_schema
+    note: The most efficient, for focused, high-volume jobs. Prompts over 272k tokens cost more.
+  - id: gpt-5.6-sol
+    label: GPT-5.6 Sol
+    contextWindow: 1050000
+    maxOutput: 128000
+    reasoning: { mode: optional, efforts: [none, low, medium, high, xhigh, max], default: medium }
+    structured: json_schema
+    note: The previous flagship, still offered.
+  - id: gpt-5.6-terra
+    label: GPT-5.6 Terra
+    pricing: { input: 2, output: 12 }
+    contextWindow: 1050000
+    maxOutput: 128000
+    reasoning: { mode: optional, efforts: [none, low, medium, high, xhigh, max], default: medium }
+    structured: json_schema
+  - id: gpt-5.6-luna
+    label: GPT-5.6 Luna
+    pricing: { input: 0.2, output: 1.2, cacheRead: 0.02 }
+    contextWindow: 1050000
+    maxOutput: 128000
+    reasoning: { mode: optional, efforts: [none, low, medium, high, xhigh, max], default: medium }
+    structured: json_schema
+    note: Takes at most 922,000 tokens of input.
+defaultModels:
+  narrator: gpt-6.1-sol
+  director: gpt-6.1-sol
+  summarizer: gpt-6-luna
+  intent: gpt-6-luna
+  safety: gpt-6-luna
+  judge: gpt-6-luna

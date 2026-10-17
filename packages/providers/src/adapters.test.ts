@@ -2,7 +2,7 @@ import { NarratorOutput } from "@dq/core/narration";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { anthropicAdapter } from "./adapters/anthropic";
-import { geminiAdapter } from "./adapters/gemini";
+import { geminiAdapter, thinkingConfig } from "./adapters/gemini";
 import {
   falAdapter,
   genericHttpAdapter,
@@ -13,6 +13,7 @@ import {
 import { openAiCompatAdapter } from "./adapters/openai-compat";
 import { extractJson, strictJsonSchema } from "./json-schema";
 import { presets } from "./presets";
+import { budgetFor, effortFor, reasoningFields, withoutThinking } from "./reasoning";
 import { getPath, renderTemplate, validateTemplate } from "./template";
 import { fakeFetch, json, PNG, PNG_B64 } from "./test-fetch";
 import type { ResolvedProviderConfig, StructuredRequest } from "./types";
@@ -42,6 +43,8 @@ const cfg = (over: Partial<ResolvedProviderConfig> = {}): ResolvedProviderConfig
   selfHosted: false,
   capabilities: {},
   pricing: {},
+  maxOutput: {},
+  models: {},
   genericSpec: null,
   ...over,
 });
@@ -235,6 +238,149 @@ describe("OpenAI-compatible adapter", () => {
   });
 });
 
+describe("reasoning settings", () => {
+  it("sends the level in each provider's own format", () => {
+    expect(reasoningFields("reasoning_effort", "medium")).toEqual({ reasoning_effort: "medium" });
+    expect(reasoningFields("openrouter", "xhigh", ["xhigh"])).toEqual({ reasoning: { effort: "xhigh" } });
+    expect(reasoningFields("thinking_type", "max", ["low", "high", "max"])).toEqual({
+      thinking: { type: "enabled" },
+      reasoning_effort: "max",
+    });
+    // A model that only switches thinking on or off gets no level.
+    expect(reasoningFields("thinking_type", "high")).toEqual({ thinking: { type: "enabled" } });
+    expect(reasoningFields("thinking_type", "none")).toEqual({ thinking: { type: "disabled" } });
+    expect(reasoningFields("reasoning_enabled", "none")).toEqual({ reasoning: { enabled: false } });
+    expect(reasoningFields("reasoning_enabled", "low")).toEqual({ reasoning_effort: "low" });
+    expect(reasoningFields("enable_thinking", "none")).toEqual({
+      chat_template_kwargs: { enable_thinking: false },
+    });
+    expect(reasoningFields("none", "high")).toEqual({});
+    expect(reasoningFields("reasoning_effort", undefined)).toEqual({});
+    // Without a documented list, only the levels every reasoning_effort service takes.
+    expect(reasoningFields("reasoning_effort", "max")).toEqual({ reasoning_effort: "high" });
+    expect(reasoningFields("reasoning_effort", "minimal")).toEqual({ reasoning_effort: "low" });
+  });
+
+  it("picks the documented level nearest the one asked for", () => {
+    const sol = {
+      reasoning: { mode: "always" as const, efforts: ["low", "medium", "high", "xhigh", "max"] as const },
+    };
+    const spec = { reasoning: { ...sol.reasoning, efforts: [...sol.reasoning.efforts] } };
+    expect(effortFor(spec, "minimal")).toBe("low");
+    // A model that always reasons is never switched off: the lightest level instead.
+    expect(effortFor(spec, "none")).toBe("low");
+    expect(effortFor({ reasoning: { mode: "optional", efforts: ["none", "high"] } }, "low")).toBe("high");
+    expect(effortFor({ reasoning: { mode: "optional", efforts: ["none", "high"] } }, "none")).toBe("none");
+    expect(effortFor({ reasoning: { mode: "none" } }, "high")).toBeUndefined();
+    expect(effortFor(undefined, "medium")).toBe("medium");
+    expect(effortFor(spec, undefined)).toBeUndefined();
+  });
+
+  it("turns a level into a thinking budget within the documented range", () => {
+    expect(budgetFor({ min: 0, max: 24576 }, "none", "optional")).toBe(0);
+    expect(budgetFor({ min: 128, max: 32768 }, "none", "always")).toBe(128);
+    expect(budgetFor({ min: 0, max: 24576 }, "medium", "optional")).toBe(12288);
+    expect(budgetFor({ min: 128, max: 32768 }, "max", "always")).toBe(32768);
+    expect(budgetFor({ min: 512, max: 24576 }, "minimal", "optional")).toBe(2458);
+  });
+
+  it("reads the answer past reasoning left inline", () => {
+    expect(withoutThinking('<think>hmm, {"a":1}?</think>\n{"answer":"x"}')).toBe('{"answer":"x"}');
+    expect(withoutThinking('<thinking>x</thinking>{"b":2}')).toBe('{"b":2}');
+  });
+});
+
+describe("OpenAI-compatible adapter: what each provider documents", () => {
+  const reply = (content: unknown) =>
+    json({ model: "m", choices: [{ finish_reason: "stop", message: { content } }], usage: {} });
+
+  it("sends a documented model's level, the provider's limit field, and its required fields", async () => {
+    const { fetch, calls } = fakeFetch(() => reply('{"answer":"yes","score":2}'));
+    await openAiCompatAdapter.generateStructured(
+      req({ model: "gpt-6.1-sol", effort: "minimal", maxOutputTokens: 128000 }),
+      cfg({
+        adapterId: "openai_compat",
+        capabilities: {
+          structured: "json_schema",
+          reasoning: "reasoning_effort",
+          maxTokensParam: "max_completion_tokens",
+          requestFields: { provider: { require_parameters: true } },
+        },
+        models: {
+          "gpt-6.1-sol": {
+            reasoning: { mode: "always", efforts: ["low", "medium", "high", "xhigh", "max"] },
+          },
+        },
+      }),
+      { fetch },
+    );
+    expect(calls[0]?.body).toMatchObject({
+      reasoning_effort: "low",
+      max_completion_tokens: 128000,
+      provider: { require_parameters: true },
+    });
+    expect(calls[0]?.body).not.toHaveProperty("max_tokens");
+  });
+
+  it("sends no limit when none is set, and nothing about reasoning to a model that doesn't reason", async () => {
+    const { fetch, calls } = fakeFetch(() => reply('{"answer":"yes","score":2}'));
+    await openAiCompatAdapter.generateStructured(
+      req({ model: "mistral-large-2512", effort: "high", maxOutputTokens: undefined }),
+      cfg({
+        adapterId: "openai_compat",
+        capabilities: { structured: "json_schema", reasoning: "reasoning_effort" },
+        models: { "mistral-large-2512": { reasoning: { mode: "none" } } },
+      }),
+      { fetch },
+    );
+    const body = calls[0]?.body as Record<string, unknown>;
+    expect(Object.keys(body)).not.toContain("max_tokens");
+    expect(Object.keys(body)).not.toContain("reasoning_effort");
+  });
+
+  it("uses a model's own structured-output mode over the provider's", async () => {
+    const { fetch, calls } = fakeFetch(() => reply('{"answer":"yes","score":2}'));
+    await openAiCompatAdapter.generateStructured(
+      req({ model: "openai/gpt-oss-120b" }),
+      cfg({
+        adapterId: "openai_compat",
+        capabilities: { structured: "json_object" },
+        models: { "openai/gpt-oss-120b": { structured: "json_schema" } },
+      }),
+      { fetch },
+    );
+    expect(calls[0]?.body).toMatchObject({ response_format: { type: "json_schema" } });
+  });
+
+  it("reads the text chunks of an answer that comes back in chunks", async () => {
+    const { fetch } = fakeFetch(() =>
+      reply([
+        { type: "thinking", thinking: [{ type: "text", text: "Let me think {about it}" }] },
+        { type: "text", text: '{"answer":"chunked",' },
+        { type: "text", text: '"score":1}' },
+      ]),
+    );
+    expect(
+      await openAiCompatAdapter.generateStructured(
+        req({ model: "mistral-small-2603" }),
+        cfg({ adapterId: "openai_compat", capabilities: { structured: "json_schema" } }),
+        { fetch },
+      ),
+    ).toMatchObject({ ok: true, value: { answer: "chunked" } });
+  });
+
+  it("reads past reasoning a server leaves inline", async () => {
+    const { fetch } = fakeFetch(() => reply('<think>{"answer":"draft"}</think>{"answer":"final","score":0}'));
+    expect(
+      await openAiCompatAdapter.generateStructured(
+        req({ model: "local" }),
+        cfg({ adapterId: "openai_compat", capabilities: { structured: "json_schema" } }),
+        { fetch },
+      ),
+    ).toMatchObject({ ok: true, value: { answer: "final" } });
+  });
+});
+
 describe("Gemini adapter", () => {
   it("asks for JSON with a schema and strict safety", async () => {
     const { fetch, calls } = fakeFetch(() =>
@@ -259,6 +405,58 @@ describe("Gemini adapter", () => {
     };
     expect(body.generationConfig.responseMimeType).toBe("application/json");
     expect(body.safetySettings.length).toBeGreaterThan(0);
+  });
+
+  it("sets a thinking level on Gemini 3 and later, a budget on 2.5, and never both", () => {
+    const flash = {
+      reasoning: {
+        mode: "always" as const,
+        efforts: ["low", "medium", "high"] as Array<"low" | "medium" | "high">,
+      },
+    };
+    expect(thinkingConfig(flash, "minimal")).toEqual({ thinkingLevel: "low" });
+    expect(thinkingConfig(flash, "max")).toEqual({ thinkingLevel: "high" });
+    const pro25 = {
+      reasoning: {
+        mode: "always" as const,
+        efforts: ["minimal", "low", "medium", "high", "max"] as Array<
+          "minimal" | "low" | "medium" | "high" | "max"
+        >,
+        budget: { min: 128, max: 32768 },
+      },
+    };
+    expect(thinkingConfig(pro25, "high")).toEqual({ thinkingBudget: 24576 });
+    expect(thinkingConfig(pro25, "none")).toEqual({ thinkingBudget: 128 });
+    expect(thinkingConfig(undefined, "high")).toBeUndefined();
+    expect(thinkingConfig(flash, undefined)).toBeUndefined();
+  });
+
+  it("sends the thinking setting, skips thought parts, and counts thinking as output", async () => {
+    const { fetch, calls } = fakeFetch(() =>
+      json({
+        candidates: [
+          {
+            finishReason: "STOP",
+            content: {
+              parts: [{ text: "planning…", thought: true }, { text: '{"answer":"g","score":1}' }],
+            },
+          },
+        ],
+        usageMetadata: { promptTokenCount: 9, candidatesTokenCount: 10, thoughtsTokenCount: 30 },
+      }),
+    );
+    const res = await geminiAdapter.generateStructured(
+      req({ model: "gemini-3.8-flash", effort: "medium", maxOutputTokens: 65536 }),
+      cfg({
+        adapterId: "gemini",
+        models: { "gemini-3.8-flash": { reasoning: { mode: "always", efforts: ["low", "medium", "high"] } } },
+      }),
+      { fetch },
+    );
+    expect(res).toMatchObject({ ok: true, value: { answer: "g" }, usage: { outputTokens: 40 } });
+    expect(calls[0]?.body).toMatchObject({
+      generationConfig: { maxOutputTokens: 65536, thinkingConfig: { thinkingLevel: "medium" } },
+    });
   });
 });
 
@@ -395,5 +593,44 @@ describe("presets", () => {
       ]),
     );
     expect(presets("llm").find((p) => p.id === "anthropic")?.defaultModels.narrator).toBe("claude-opus-5-5");
+  });
+
+  it("describe each documented model consistently", () => {
+    for (const p of presets("llm")) {
+      for (const m of p.models) {
+        const r = m.reasoning;
+        if (r?.default && r.efforts) expect(r.efforts, `${p.id} ${m.id}`).toContain(r.default);
+        if (r?.mode === "always") expect(r.efforts ?? [], `${p.id} ${m.id}`).not.toContain("none");
+        if (r?.mode === "optional" && r.efforts?.length)
+          expect(r.efforts, `${p.id} ${m.id}`).toContain("none");
+        if (m.maxOutput && m.contextWindow) expect(m.maxOutput).toBeLessThanOrEqual(m.contextWindow);
+      }
+      if (p.models.length > 0 && p.id !== "anthropic") {
+        expect(p.docs.length, p.id).toBeGreaterThan(0);
+        expect(p.checked, p.id).toBeTruthy();
+      }
+      for (const id of Object.values(p.defaultModels))
+        if (p.models.length > 0)
+          expect(
+            p.models.map((m) => m.id),
+            `${p.id} default`,
+          ).toContain(id);
+    }
+  });
+
+  it("send reasoning only in a form each provider documents", () => {
+    const style = (id: string) => presets("llm").find((p) => p.id === id)?.capabilities.reasoning;
+    expect(style("openai")).toBe("reasoning_effort");
+    expect(style("openrouter")).toBe("openrouter");
+    expect(style("zai")).toBe("thinking_type");
+    expect(style("deepseek")).toBe("thinking_type");
+    expect(style("together")).toBe("reasoning_enabled");
+    expect(style("lmstudio")).toBe("none");
+  });
+
+  it("steer away from Anthropic", () => {
+    const a = presets("llm").find((p) => p.id === "anthropic");
+    expect(a?.avoid).toMatch(/avoid at all costs/i);
+    expect(a?.label).not.toMatch(/recommended/i);
   });
 });

@@ -73,9 +73,9 @@ export async function setupStatus(ctx: BotContext, guild: Guild, justSaved: bool
   const ready = table && dm && tableProblems.length === 0 && dmProblems.length === 0;
   const base = ctx.env.WEB_BASE_URL;
   const ai = [
-    ctx.env.ANTHROPIC_API_KEY ? "Claude" : null,
     ctx.env.OPENAI_API_KEY ? "OpenAI" : null,
     ctx.env.GEMINI_API_KEY ? "Gemini" : null,
+    ctx.env.ANTHROPIC_API_KEY ? "Anthropic" : null,
   ].filter(Boolean);
   const lines = [
     `## ${justSaved ? "Saved! " : ""}Discord Quests on ${guild.name}`,

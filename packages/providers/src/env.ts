@@ -1,4 +1,4 @@
-import type { LlmTask } from "@dq/core/llm";
+import type { Effort, LlmTask } from "@dq/core/llm";
 import { preset } from "./presets";
 import type { ResolvedProviderConfig } from "./types";
 
@@ -16,7 +16,7 @@ export interface ProviderEnv {
 export interface Route {
   configId: string;
   model: string;
-  params: { effort?: "low" | "medium" | "high" | "xhigh" | "max"; maxTokens?: number };
+  params: { effort?: Effort; maxTokens?: number };
   priority: number;
 }
 
@@ -44,6 +44,18 @@ function fromPreset(id: string, presetId: string, apiKey: string): ResolvedProvi
     selfHosted: false,
     capabilities: p.capabilities,
     pricing: Object.fromEntries(p.models.filter((m) => m.pricing).map((m) => [m.id, m.pricing ?? {}])),
+    maxOutput: Object.fromEntries(
+      p.models.filter((m) => m.maxOutput).map((m) => [m.id, m.maxOutput as number]),
+    ),
+    models: Object.fromEntries(
+      p.models.map((m) => [
+        m.id,
+        {
+          ...(m.reasoning ? { reasoning: m.reasoning } : {}),
+          ...(m.structured ? { structured: m.structured } : {}),
+        },
+      ]),
+    ),
     genericSpec: null,
   };
 }
@@ -68,18 +80,22 @@ export function envDefaults(env: ProviderEnv): EnvDefaults {
     add(fromPreset("env:gemini-image", "gemini-image", env.GEMINI_API_KEY));
   }
 
-  const anthropic = preset("anthropic");
+  // Every story key the operator set gets the story jobs, in this order of preference.
+  const story = [
+    ["env:openai", "openai"],
+    ["env:gemini", "gemini"],
+    ["env:anthropic", "anthropic"],
+  ].flatMap(([configId, presetId]) => {
+    const p = preset(presetId as string);
+    return p && configs.has(configId as string) ? [{ configId: configId as string, p }] : [];
+  });
   for (const task of LLM_TASKS) {
-    const list: Route[] = [];
-    if (configs.has("env:anthropic") && anthropic) {
-      list.push({
-        configId: "env:anthropic",
-        model: anthropic.defaultModels[task] ?? "claude-opus-5-5",
-        params: (anthropic.defaultParams[task] ?? {}) as Route["params"],
-        priority: 0,
-      });
-    }
-    routes[task] = list;
+    routes[task] = story.flatMap(({ configId, p }, priority) => {
+      const model = p.defaultModels[task] ?? p.defaultModels.narrator;
+      return model
+        ? [{ configId, model, params: (p.defaultParams[task] ?? {}) as Route["params"], priority }]
+        : [];
+    });
   }
   const images: Route[] = [];
   if (configs.has("env:openai-images"))

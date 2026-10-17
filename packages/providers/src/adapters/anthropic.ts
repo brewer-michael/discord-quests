@@ -52,14 +52,17 @@ export const anthropicAdapter: LlmAdapter = {
     const useFallbacks =
       cfg.capabilities.serverFallbacks !== false && officialEndpoint && SERVER_FALLBACK_MODELS.has(req.model);
     const format = betaZodOutputFormat(req.schema);
+    // Its API won't take a request without a cap, so one this project doesn't document gets a generous one.
+    const maxTokens = req.maxOutputTokens ?? 32000;
+    const effort = req.effort === "none" ? undefined : req.effort === "minimal" ? "low" : req.effort;
     const params: Anthropic.Beta.MessageCreateParamsNonStreaming = {
       model: req.model,
-      max_tokens: req.maxOutputTokens,
+      max_tokens: maxTokens,
       system: blocks(req.system),
       messages: [{ role: "user", content: blocks(req.user) }],
       output_config: {
         format: { type: "json_schema", schema: format.schema },
-        ...(req.effort && cfg.capabilities.effort !== false ? { effort: req.effort } : {}),
+        ...(effort && cfg.capabilities.effort !== false ? { effort } : {}),
       },
       ...(useFallbacks ? { betas: [FALLBACK_BETA], fallbacks: "default" as const } : {}),
     };
@@ -67,7 +70,7 @@ export const anthropicAdapter: LlmAdapter = {
     let message: Anthropic.Beta.BetaMessage;
     try {
       message =
-        req.maxOutputTokens <= NON_STREAMING_MAX
+        maxTokens <= NON_STREAMING_MAX
           ? await client.beta.messages.create(params, { signal: ctx.signal })
           : await client.beta.messages.stream(params, { signal: ctx.signal }).finalMessage();
     } catch (e) {

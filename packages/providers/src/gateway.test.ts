@@ -18,7 +18,7 @@ const call = {
   user: [{ text: "hi" }],
   schema: Answer,
   schemaName: "a",
-  maxOutputTokens: 1000,
+  expectTokens: 1000,
 };
 const chat = (answer: string) =>
   json({
@@ -80,7 +80,7 @@ describe.skipIf(!TEST_DATABASE_URL)("provider gateway", () => {
     expect(usage?.tokens).toBe(15);
   });
 
-  it("fails over to the next route on outages, but not on bad output", async () => {
+  it("fails over to the next route on outages and broken answers, but not on refusals", async () => {
     await addConfig("g2", "flaky", "https://flaky.example/v1", "k1", 0);
     await addConfig("g2", "backup", "https://backup.example/v1", "k2", 1);
     const store = new ProviderStore(db.db, { MASTER_KEYS: masterKeys });
@@ -95,20 +95,32 @@ describe.skipIf(!TEST_DATABASE_URL)("provider gateway", () => {
       ok: true,
       value: { answer: "from backup" },
     });
+    // A broken answer gets the next service's try.
     const bad = fakeFetch((r) =>
       r.url.hostname === "flaky.example"
         ? json({ choices: [{ finish_reason: "stop", message: { content: '{"nope":1}' } }] })
-        : chat("x"),
+        : chat("fixed by backup"),
     );
     expect(
       await new ProviderGateway(store, new BudgetGuard(db.db, {}), { fetch: bad.fetch }).structured(call, {
         guildId: "g2",
       }),
-    ).toMatchObject({
-      ok: false,
-      stop: "invalid",
-    });
-    expect(bad.calls.every((c) => c.url.hostname === "flaky.example")).toBe(true);
+    ).toMatchObject({ ok: true, value: { answer: "fixed by backup" } });
+    // A refusal is the engine's to handle, not another service's.
+    const refused = fakeFetch((r) =>
+      r.url.hostname === "flaky.example"
+        ? json({ choices: [{ finish_reason: "stop", message: { content: null, refusal: "no" } }] })
+        : chat("x"),
+    );
+    expect(
+      await new ProviderGateway(store, new BudgetGuard(db.db, {}), { fetch: refused.fetch }).structured(
+        call,
+        {
+          guildId: "g2",
+        },
+      ),
+    ).toMatchObject({ ok: false, stop: "refusal" });
+    expect(refused.calls.every((c) => c.url.hostname === "flaky.example")).toBe(true);
   });
 
   it("falls back to server defaults, and says so when there are none", async () => {
@@ -120,29 +132,19 @@ describe.skipIf(!TEST_DATABASE_URL)("provider gateway", () => {
       stop: "unconfigured",
     });
 
-    const anthropic = fakeFetch(() =>
-      json({
-        id: "m",
-        type: "message",
-        role: "assistant",
-        model: "claude-opus-5-5",
-        content: [{ type: "text", text: '{"answer":"claude"}' }],
-        stop_reason: "end_turn",
-        stop_sequence: null,
-        usage: { input_tokens: 1, output_tokens: 1 },
-      }),
-    );
+    const openai = fakeFetch(() => chat("from the server's key"));
     const env = new ProviderGateway(
-      new ProviderStore(db.db, { ANTHROPIC_API_KEY: "sk-ant" }),
+      new ProviderStore(db.db, { OPENAI_API_KEY: "sk-openai" }),
       new BudgetGuard(db.db, {}),
-      { fetch: anthropic.fetch },
+      { fetch: openai.fetch },
     );
     expect(await env.structured(call, { guildId: "g-env" })).toMatchObject({
       ok: true,
-      value: { answer: "claude" },
+      value: { answer: "from the server's key" },
     });
-    expect(anthropic.calls[0]?.headers["x-api-key"]).toBe("sk-ant");
-    expect((anthropic.calls[0]!.body as { model: string }).model).toBe("claude-opus-5-5");
+    expect(openai.calls[0]?.headers.authorization).toBe("Bearer sk-openai");
+    expect(openai.calls[0]?.url.hostname).toBe("api.openai.com");
+    expect((openai.calls[0]!.body as { model: string }).model).toBe("gpt-6.1-sol");
   });
 
   it("respects a guild that opts out of server defaults", async () => {

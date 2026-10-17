@@ -1,12 +1,24 @@
 id: lmstudio
 kind: llm
 label: LM Studio (runs on your own computer)
-description: A model you run yourself. The bot's server must be able to reach it, and the operator must allow private endpoints.
+description: >-
+  A model you run yourself. The bot's server must be able to reach it, and the operator must allow private
+  endpoints. LM Studio's chat API takes no thinking setting, so set it on the model in LM Studio, along with its
+  context length.
 adapter: openai_compat
 baseUrl: http://localhost:1234/v1
 baseUrlEditable: true
 selfHosted: true
 auth: { type: none }
 needsKey: false
-capabilities: { structured: json_object, promptCache: none, effort: false, serverFallbacks: false, maxTokensParam: max_tokens }
+# lmstudio.ai/docs (read from github.com/lmstudio-ai/docs): /v1/chat/completions documents max_tokens and
+# response_format json_schema; json_object isn't documented, and LM Studio's tracker reports it rejected. It
+# documents no reasoning setting there, so none is sent. The context length is set when the model is loaded.
+capabilities:
+  { structured: json_schema, promptCache: none, effort: false, serverFallbacks: false, maxTokensParam: max_tokens, reasoning: none }
+docs:
+  - https://lmstudio.ai/docs/developer/openai-compat/chat-completions
+  - https://lmstudio.ai/docs/developer/openai-compat/structured-output
+  - https://lmstudio.ai/docs/developer/api-changelog
+checked: 2026-10-17
 models: []

@@ -34,7 +34,13 @@ export default async function Routing({ params }: { params: Promise<{ guildId: s
       ...(pre?.models.map((m) => m.id) ?? []),
       ...routed.filter((r) => r.providerId === p.id).map((r) => r.model),
     ]);
+    const reasoning = Object.fromEntries(
+      (pre?.models ?? [])
+        .filter((m) => m.reasoning)
+        .map((m) => [m.id, { mode: m.reasoning?.mode ?? "none", efforts: m.reasoning?.efforts ?? [] }]),
+    );
     return {
+      reasoning,
       id: p.id,
       name: p.name,
       enabled: p.enabled,
@@ -101,8 +107,9 @@ export default async function Routing({ params }: { params: Promise<{ guildId: s
         );
       })}
       <p className="hint">
-        Effort only applies to services that support it (like Claude): higher effort thinks harder and costs
-        more.
+        Effort is how hard the model reasons before it answers: higher thinks harder, takes longer and costs
+        more; off skips reasoning where the model allows it. The choices follow what each model's provider
+        documents.
       </p>
     </>
   );

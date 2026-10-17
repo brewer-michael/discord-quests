@@ -1,12 +1,25 @@
 id: vllm
 kind: llm
 label: vLLM server
-description: A model you run yourself. The bot's server must be able to reach it, and the operator must allow private endpoints.
+description: >-
+  A model you run yourself. The bot's server must be able to reach it, and the operator must allow private
+  endpoints. Start vLLM with --reasoning-parser for a reasoning model.
 adapter: openai_compat
 baseUrl: http://localhost:8000/v1
 baseUrlEditable: true
 selfHosted: true
 auth: { type: none }
 needsKey: false
-capabilities: { structured: json_object, promptCache: none, effort: false, serverFallbacks: false, maxTokensParam: max_tokens }
+# docs.vllm.ai (read from github.com/vllm-project/vllm): max_completion_tokens (max_tokens is deprecated); without
+# it, the answer can use the rest of the context unless the model's generation config sets a limit.
+# reasoning_effort none to max (max is for DeepSeek V4), which also sets the chat template's enable_thinking.
+# Reasoning is split out only when the server runs with --reasoning-parser. response_format json_schema, applied
+# after the reasoning ends.
+capabilities:
+  { structured: json_schema, promptCache: none, effort: false, serverFallbacks: false, maxTokensParam: max_completion_tokens, reasoning: reasoning_effort }
+docs:
+  - https://docs.vllm.ai/en/latest/features/reasoning_outputs/
+  - https://docs.vllm.ai/en/latest/features/structured_outputs/
+  - https://docs.vllm.ai/en/latest/serving/online_serving/openai_compatible_server/
+checked: 2026-10-17
 models: []

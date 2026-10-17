@@ -34,10 +34,35 @@ export interface PresetOption {
   needsKey: boolean;
   keyUrl: string | null;
   generic: boolean;
-  models: Array<{ id: string; label: string }>;
+  /** Each model as the provider documents it: shown when the provider is picked, and used in requests. */
+  models: Array<{
+    id: string;
+    label: string;
+    contextWindow: number | null;
+    maxOutput: number | null;
+    reasoning: { mode: "always" | "optional" | "none"; efforts: string[] } | null;
+    structured: string | null;
+    note: string | null;
+  }>;
   defaultModel: string | null;
   genericSpecExample: string | null;
+  /** How the provider is told how hard to reason, in its own words. */
+  reasoningControl: string | null;
+  docs: string[];
+  checked: string | null;
+  /** The longest answer the provider gives when no limit is sent, where its docs say. */
+  unsetLimit: number | null;
+  avoid: string | null;
 }
+
+/** How each reasoning style reads on the setup page. */
+const REASONING_CONTROL: Record<string, string> = {
+  reasoning_effort: "reasoning_effort",
+  openrouter: "reasoning: { effort }",
+  thinking_type: "thinking: { type }, with reasoning_effort",
+  reasoning_enabled: "reasoning_effort, or reasoning: { enabled: false }",
+  enable_thinking: "chat_template_kwargs: { enable_thinking }",
+};
 
 const isCustom = (p: Preset) => p.id.startsWith("custom-");
 
@@ -54,12 +79,25 @@ export function presetOptions(): PresetOption[] {
     needsKey: p.needsKey,
     keyUrl: p.keyUrl ?? null,
     generic: p.adapter === "generic_http",
-    models: p.models.map((m) => ({ id: m.id, label: m.label })),
+    models: p.models.map((m) => ({
+      id: m.id,
+      label: m.label,
+      contextWindow: m.contextWindow ?? null,
+      maxOutput: m.maxOutput ?? null,
+      reasoning: m.reasoning ? { mode: m.reasoning.mode, efforts: m.reasoning.efforts ?? [] } : null,
+      structured: m.structured ?? null,
+      note: m.note ?? null,
+    })),
     defaultModel: (p.kind === "image" ? p.defaultModels.image : p.defaultModels.narrator) ?? null,
     genericSpecExample:
       p.adapter === "generic_http"
         ? JSON.stringify(p.genericSpec ?? preset("automatic1111")?.genericSpec ?? null, null, 2)
         : null,
+    reasoningControl: REASONING_CONTROL[p.capabilities.reasoning ?? "none"] ?? null,
+    docs: p.docs,
+    checked: p.checked ?? null,
+    unsetLimit: p.unsetLimit ?? null,
+    avoid: p.avoid ?? null,
   }));
 }
 
@@ -91,6 +129,22 @@ export const ProviderForm = z.object({
   ),
   extraHeaders: optionalText(2000),
   structured: z.enum(["preset", "json_schema", "json_object", "prompt_only"]).default("preset"),
+  reasoning: z
+    .enum([
+      "preset",
+      "none",
+      "reasoning_effort",
+      "openrouter",
+      "thinking_type",
+      "reasoning_enabled",
+      "enable_thinking",
+    ])
+    .default("preset"),
+  /** For a model the provider doesn't document: the longest answer it can give, from its model card. */
+  maxOutput: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() !== "" ? Number(v) : undefined),
+    z.number({ error: "Enter a whole number" }).int().min(1).max(2_000_000).optional(),
+  ),
   genericSpec: optionalText(10_000),
   model: optionalText(150),
   priceInput: optionalPrice,
@@ -219,8 +273,20 @@ export function buildRow(
     }
   }
 
-  const capabilityOverrides: Record<string, unknown> =
-    custom && input.kind === "llm" && input.structured !== "preset" ? { structured: input.structured } : {};
+  const capabilityOverrides: Record<string, unknown> = {
+    ...(custom && input.kind === "llm" && input.structured !== "preset"
+      ? { structured: input.structured }
+      : {}),
+    ...((custom || p.selfHosted) && input.kind === "llm" && input.reasoning !== "preset"
+      ? { reasoning: input.reasoning }
+      : {}),
+  };
+  // A documented model's limit comes from the provider's docs; only an undocumented one takes what was entered.
+  const documented = p.models.some((m) => m.id === (input.model ?? p.defaultModels.narrator) && m.maxOutput);
+  if (input.maxOutput !== undefined && !input.model) errors.maxOutput = "Name the model this limit is for";
+  // A provider that cuts answers short unless told otherwise needs every model's limit.
+  else if (p.unsetLimit && input.kind === "llm" && !documented && input.maxOutput === undefined)
+    errors.maxOutput = `${p.label} stops at ${p.unsetLimit.toLocaleString("en")} tokens unless told otherwise. Enter this model's longest answer from its card.`;
 
   const pricing: Record<string, unknown> = {};
   if (
@@ -254,7 +320,12 @@ export function buildRow(
         baseUrl: p.baseUrlEditable ? (baseUrl ?? null) : null,
         auth,
         extraHeaders: headers.ok ? headers.value : {},
-        modelDefaults: input.model ? { model: input.model } : {},
+        modelDefaults: input.model
+          ? {
+              model: input.model,
+              ...(input.maxOutput !== undefined && !documented ? { maxOutputTokens: input.maxOutput } : {}),
+            }
+          : {},
         capabilityOverrides,
         pricing,
         genericSpec,
@@ -338,6 +409,10 @@ export async function providerFormValues(db: DbOrTx, guildId: string, id: string
       .join("\n"),
     structured:
       typeof cfg.capabilityOverrides.structured === "string" ? cfg.capabilityOverrides.structured : "preset",
+    reasoning:
+      typeof cfg.capabilityOverrides.reasoning === "string" ? cfg.capabilityOverrides.reasoning : "preset",
+    maxOutput:
+      typeof cfg.modelDefaults.maxOutputTokens === "number" ? String(cfg.modelDefaults.maxOutputTokens) : "",
     genericSpec: cfg.genericSpec ? JSON.stringify(cfg.genericSpec, null, 2) : "",
     model,
     priceInput: price.input?.toString() ?? "",
@@ -569,7 +644,7 @@ export async function testProvider(
           user: [{ text: 'Reply with the word "lantern".' }],
           schema: TestReply,
           schemaName: "connection_test",
-          maxOutputTokens: 1024,
+          ...(cfg.maxOutput[model] ? { maxOutputTokens: cfg.maxOutput[model] } : {}),
           effort: "low",
         },
         cfg,

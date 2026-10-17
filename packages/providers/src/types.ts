@@ -41,14 +41,56 @@ export interface ResolvedProviderConfig {
   selfHosted: boolean;
   capabilities: Partial<LlmCapabilities>;
   pricing: Record<string, ModelPricing>;
+  /**
+   * The longest answer each model can give, in tokens: from the provider's documentation, or what the server
+   * entered for a model on its own machine or a custom endpoint.
+   */
+  maxOutput: Record<string, number>;
+  /** Each documented model's reasoning support and structured-output mode. */
+  models: Record<string, ModelSpecView>;
   genericSpec: GenericHttpSpec | null;
 }
+
+/**
+ * How a service is told how hard to reason. OpenAI-compatible services don't agree on it:
+ * - reasoning_effort: a top-level "reasoning_effort" (OpenAI, Groq, xAI, Fireworks, Mistral, Ollama, vLLM).
+ * - openrouter: a "reasoning": { effort } object.
+ * - thinking_type: a "thinking": { type: "enabled" | "disabled" } object, plus "reasoning_effort" for models
+ *   that list levels (Z.ai GLM, DeepSeek).
+ * - reasoning_enabled: "reasoning_effort" for the level, and "reasoning": { enabled: false } to switch it off
+ *   (Together).
+ * - enable_thinking: "chat_template_kwargs": { enable_thinking } (Qwen-style servers).
+ * - none: nothing is sent; the model reasons (or not) as it does by default.
+ */
+export type ReasoningStyle =
+  | "none"
+  | "reasoning_effort"
+  | "openrouter"
+  | "thinking_type"
+  | "reasoning_enabled"
+  | "enable_thinking";
 
 export interface LlmCapabilities {
   structured: "json_schema" | "json_object" | "prompt_only";
   promptCache: "explicit" | "implicit" | "none";
   effort: boolean;
   serverFallbacks: boolean;
+  reasoning: ReasoningStyle;
+  maxTokensParam: "max_tokens" | "max_completion_tokens";
+  /** Fields the provider's docs say to add to every request. */
+  requestFields: Record<string, unknown>;
+}
+
+/** What a provider documents about one model, for building requests. */
+export interface ModelSpecView {
+  reasoning?: {
+    mode: "always" | "optional" | "none";
+    efforts?: Effort[];
+    default?: string;
+    /** For models that take a thinking budget in tokens instead of a level. */
+    budget?: { min: number; max: number };
+  };
+  structured?: LlmCapabilities["structured"];
 }
 
 export interface CallContext {
@@ -63,7 +105,8 @@ export interface StructuredRequest<T> {
   user: PromptBlock[];
   schema: z.ZodType<T>;
   schemaName: string;
-  maxOutputTokens: number;
+  /** The longest answer allowed, when the service has a limit set. Without one, nothing caps the answer. */
+  maxOutputTokens?: number;
   effort?: Effort;
 }
 

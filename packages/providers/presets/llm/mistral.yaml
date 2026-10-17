@@ -1,7 +1,7 @@
 id: mistral
 kind: llm
 label: Mistral
-description: An OpenAI-compatible service. Pick a model from the list the service provides.
+description: Mistral's models, and Z.ai's GLM 5.3 hosted by Mistral.
 adapter: openai_compat
 baseUrl: https://api.mistral.ai/v1
 baseUrlEditable: false
@@ -9,5 +9,70 @@ selfHosted: false
 auth: { type: bearer }
 needsKey: true
 keyUrl: https://console.mistral.ai/api-keys
-capabilities: { structured: json_object, promptCache: implicit, effort: false, serverFallbacks: false, maxTokensParam: max_tokens }
-models: []
+# docs.mistral.ai (read from its source, github.com/mistralai/platform-docs-public): reasoning_effort high or none
+# on Mistral Small 4, Medium 3.5 and Large 4 (high puts a thinking chunk before the answer; none skips it); GLM 5.3
+# takes low, high or max and always thinks. A thinking answer comes back as a list of thinking and text chunks.
+# response_format json_schema on every current model. max_tokens, and the prompt plus max_tokens can't exceed the
+# context length. Mistral's own model cards give no longest answer.
+capabilities:
+  { structured: json_schema, promptCache: implicit, effort: false, serverFallbacks: false, maxTokensParam: max_tokens, reasoning: reasoning_effort }
+docs:
+  - https://docs.mistral.ai/studio/conversations/reasoning
+  - https://docs.mistral.ai/studio/conversations/structured-output/custom
+  - https://docs.mistral.ai/api/endpoint/chat
+  - https://docs.mistral.ai/models
+checked: 2026-10-17
+models:
+  - id: mistral-large-4
+    label: Mistral Large 4
+    pricing: { input: 1.36, output: 4.18, cacheRead: 0.14 }
+    contextWindow: 1000000
+    reasoning: { mode: optional, efforts: [none, high] }
+    structured: json_schema
+    note: Public preview since 2026-10-06. Also called mistral-large-4-0.
+  - id: mistral-medium-3-5
+    label: Mistral Medium 3.5
+    pricing: { input: 1.5, output: 7.5 }
+    contextWindow: 256000
+    reasoning: { mode: optional, efforts: [none, high] }
+    structured: json_schema
+    note: Also called mistral-medium-latest.
+  - id: mistral-small-2603
+    label: Mistral Small 4
+    pricing: { input: 0.15, output: 0.6 }
+    contextWindow: 256000
+    reasoning: { mode: optional, efforts: [none, high] }
+    structured: json_schema
+    note: Also called mistral-small-latest.
+  - id: mistral-large-2512
+    label: Mistral Large 3
+    pricing: { input: 0.5, output: 1.5 }
+    contextWindow: 256000
+    reasoning: { mode: none }
+    structured: json_schema
+    note: mistral-large-latest still points here.
+  - id: ministral-14b-2512
+    label: Ministral 3 14B
+    contextWindow: 256000
+    reasoning: { mode: none }
+    structured: json_schema
+  - id: ministral-8b-2512
+    label: Ministral 3 8B
+    contextWindow: 256000
+    reasoning: { mode: none }
+    structured: json_schema
+  - id: zai-glm-5-3
+    label: Z.ai GLM 5.3
+    pricing: { input: 1.4, output: 4.4, cacheRead: 0.14 }
+    contextWindow: 1000000
+    maxOutput: 131072
+    reasoning: { mode: always, efforts: [low, high, max] }
+    structured: json_schema
+    note: Z.ai's model, served unmodified. Not yet on Mistral's US endpoint.
+defaultModels:
+  narrator: mistral-medium-3-5
+  director: mistral-medium-3-5
+  summarizer: mistral-small-2603
+  intent: mistral-small-2603
+  safety: mistral-small-2603
+  judge: mistral-small-2603

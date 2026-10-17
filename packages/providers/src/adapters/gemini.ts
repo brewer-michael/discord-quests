@@ -1,10 +1,12 @@
-import type { PromptBlock } from "@dq/core/llm";
+import type { Effort, PromptBlock } from "@dq/core/llm";
 import { joinUrl, requestJson } from "../http";
 import { strictJsonSchema } from "../json-schema";
+import { budgetFor, effortFor } from "../reasoning";
 import {
   type AdapterResult,
   type CallContext,
   type LlmAdapter,
+  type ModelSpecView,
   ProviderError,
   type ResolvedProviderConfig,
   type StructuredRequest,
@@ -15,10 +17,14 @@ const join = (blocks: PromptBlock[]) => blocks.map((b) => b.text).join("\n\n");
 interface GeminiResponse {
   modelVersion?: string;
   promptFeedback?: { blockReason?: string };
-  candidates?: Array<{ finishReason?: string; content?: { parts?: Array<{ text?: string }> } }>;
+  candidates?: Array<{
+    finishReason?: string;
+    content?: { parts?: Array<{ text?: string; thought?: boolean }> };
+  }>;
   usageMetadata?: {
     promptTokenCount?: number;
     candidatesTokenCount?: number;
+    thoughtsTokenCount?: number;
     cachedContentTokenCount?: number;
   };
 }
@@ -30,6 +36,21 @@ const SAFETY = [
   "HARM_CATEGORY_DANGEROUS_CONTENT",
 ].map((category) => ({ category, threshold: "BLOCK_LOW_AND_ABOVE" }));
 
+/**
+ * How hard the model thinks, in the field its generation takes: a level for Gemini 3 and later, a token budget for
+ * Gemini 2.5. Never both: Gemini rejects a request that sends both. Nothing for a model the docs don't cover.
+ */
+export function thinkingConfig(
+  spec: ModelSpecView | undefined,
+  want: Effort | undefined,
+): Record<string, unknown> | undefined {
+  const r = spec?.reasoning;
+  if (!want || !r || r.mode === "none") return undefined;
+  if (r.budget) return { thinkingBudget: budgetFor(r.budget, want, r.mode) };
+  const level = effortFor(spec, want);
+  return level && level !== "none" ? { thinkingLevel: level } : undefined;
+}
+
 /** Google Gemini over its REST API, with JSON-schema responses and strict safety settings. */
 export const geminiAdapter: LlmAdapter = {
   id: "gemini",
@@ -40,13 +61,15 @@ export const geminiAdapter: LlmAdapter = {
     ctx: CallContext,
   ): Promise<AdapterResult<T>> {
     const base = cfg.baseUrl ?? "https://generativelanguage.googleapis.com/v1beta";
+    const thinking = thinkingConfig(cfg.models[req.model], req.effort);
     const body = {
       systemInstruction: { parts: [{ text: join(req.system) }] },
       contents: [{ role: "user", parts: [{ text: join(req.user) }] }],
       generationConfig: {
         responseMimeType: "application/json",
         responseJsonSchema: strictJsonSchema(req.schema),
-        maxOutputTokens: req.maxOutputTokens,
+        ...(req.maxOutputTokens ? { maxOutputTokens: req.maxOutputTokens } : {}),
+        ...(thinking ? { thinkingConfig: thinking } : {}),
       },
       safetySettings: SAFETY,
     };
@@ -71,7 +94,9 @@ export const geminiAdapter: LlmAdapter = {
     }
     const usage = {
       inputTokens: res.usageMetadata?.promptTokenCount ?? 0,
-      outputTokens: res.usageMetadata?.candidatesTokenCount ?? 0,
+      // Thinking is billed as output.
+      outputTokens:
+        (res.usageMetadata?.candidatesTokenCount ?? 0) + (res.usageMetadata?.thoughtsTokenCount ?? 0),
       cacheReadTokens: res.usageMetadata?.cachedContentTokenCount ?? 0,
     };
     if (res.promptFeedback?.blockReason)
@@ -82,7 +107,10 @@ export const geminiAdapter: LlmAdapter = {
     if (cand?.finishReason === "SAFETY" || cand?.finishReason === "PROHIBITED_CONTENT") {
       return { ok: false, stop: "filtered", usage, retryable: false };
     }
-    const text = (cand?.content?.parts ?? []).map((p) => p.text ?? "").join("");
+    const text = (cand?.content?.parts ?? [])
+      .filter((p) => !p.thought)
+      .map((p) => p.text ?? "")
+      .join("");
     let json: unknown;
     try {
       json = JSON.parse(text);

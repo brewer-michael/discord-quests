@@ -112,6 +112,8 @@ export function ProviderForm({
         </fieldset>
       )}
 
+      {p ? <PresetDocs p={p} /> : null}
+
       {p ? (
         <>
           <div className="fields-2">
@@ -152,6 +154,28 @@ export function ProviderForm({
               </datalist>
             </Field>
           </div>
+
+          {kind === "llm" && (p.unsetLimit || !p.models.some((m) => m.maxOutput)) ? (
+            <Field
+              label="Longest answer this model can give (tokens)"
+              name="maxOutput"
+              error={errors.maxOutput}
+              hint={
+                p.unsetLimit
+                  ? `${p.label} stops answers at ${p.unsetLimit.toLocaleString("en")} tokens unless told otherwise. For a model the table doesn't give one for, enter it from the model's card.`
+                  : "From the model's own card or your server's settings. Empty: the server decides."
+              }
+            >
+              <input
+                type="number"
+                inputMode="numeric"
+                min={1}
+                {...inputProps("maxOutput", errors)}
+                key={`max-${p.id}`}
+                defaultValue={initial?.maxOutput ?? ""}
+              />
+            </Field>
+          ) : null}
 
           {loadModels && kind === "llm" ? (
             <div className="row">
@@ -375,6 +399,43 @@ export function ProviderForm({
                   </label>
                 </>
               ) : null}
+              {kind === "llm" && (p.custom || p.selfHosted) ? (
+                <Field
+                  label="How it's told how hard to think"
+                  name="reasoning"
+                  hint={
+                    p.custom
+                      ? "Check the service's docs for the reasoning parameter its chat API takes."
+                      : "Pick “Not at all” for a model that doesn't reason."
+                  }
+                >
+                  <select
+                    {...inputProps("reasoning", errors)}
+                    key={`reasoning-${p.id}`}
+                    defaultValue={initial?.reasoning ?? "preset"}
+                  >
+                    {p.reasoningControl ? (
+                      <>
+                        <option value="preset">
+                          As {p.label.replace(/\s*\(.*\)$/, "")} documents ({p.reasoningControl})
+                        </option>
+                        <option value="none">Not at all (the model's default)</option>
+                      </>
+                    ) : (
+                      <option value="preset">Not at all (the model's default)</option>
+                    )}
+                    <option value="reasoning_effort">reasoning_effort (OpenAI, Groq, Ollama, vLLM…)</option>
+                    <option value="thinking_type">thinking: enabled / disabled (Z.ai GLM, DeepSeek)</option>
+                    <option value="reasoning_enabled">
+                      reasoning_effort, and reasoning.enabled to switch off (Together)
+                    </option>
+                    <option value="enable_thinking">
+                      chat_template_kwargs.enable_thinking (Qwen-style servers)
+                    </option>
+                    <option value="openrouter">reasoning: {"{ effort }"} (OpenRouter)</option>
+                  </select>
+                </Field>
+              ) : null}
               <Field
                 label="Extra headers"
                 name="extraHeaders"
@@ -451,5 +512,81 @@ export function ProviderForm({
         </>
       ) : null}
     </ActionForm>
+  );
+}
+
+const tokens = (n: number | null) =>
+  n === null ? "—" : n >= 1000 ? `${Math.round(n / 100) / 10}k`.replace(".0k", "k") : String(n);
+
+/** What the provider documents, shown as soon as it's picked: the models and how the bot will call them. */
+function PresetDocs({ p }: { p: PresetOption }) {
+  const documented = p.models.filter((m) => m.contextWindow || m.maxOutput || m.reasoning);
+  if (!p.avoid && documented.length === 0 && p.docs.length === 0) return null;
+  return (
+    <div className="stack" style={{ gap: 8 }}>
+      {p.avoid ? (
+        <div className="callout callout-warn" role="note">
+          <strong>Avoid.</strong> {p.avoid}
+        </div>
+      ) : null}
+      {documented.length > 0 ? (
+        <div className="table-wrap">
+          <table>
+            <caption className="small muted" style={{ textAlign: "left" }}>
+              What {p.label} documents{p.checked ? ` (read ${p.checked})` : ""}
+              {p.reasoningControl ? (
+                <>
+                  . Reasoning is set with <code>{p.reasoningControl}</code>.
+                </>
+              ) : (
+                "."
+              )}
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Model</th>
+                <th scope="col">Context</th>
+                <th scope="col">Longest answer</th>
+                <th scope="col">Reasoning</th>
+                <th scope="col">Structured</th>
+              </tr>
+            </thead>
+            <tbody>
+              {documented.map((m) => (
+                <tr key={m.id}>
+                  <td>
+                    <code>{m.id}</code>
+                    {m.note ? <div className="small muted">{m.note}</div> : null}
+                  </td>
+                  <td>{tokens(m.contextWindow)}</td>
+                  <td>{tokens(m.maxOutput)}</td>
+                  <td className="small">
+                    {!m.reasoning
+                      ? "—"
+                      : m.reasoning.mode === "none"
+                        ? "no"
+                        : `${m.reasoning.mode === "always" ? "always" : "optional"}${m.reasoning.efforts.length ? `: ${m.reasoning.efforts.join(", ")}` : ""}`}
+                  </td>
+                  <td className="small">{m.structured?.replace("_", " ") ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+      {p.docs.length > 0 ? (
+        <p className="small muted" style={{ margin: 0 }}>
+          From:{" "}
+          {p.docs.map((url, i) => (
+            <span key={url}>
+              {i > 0 ? ", " : ""}
+              <a href={url} target="_blank" rel="noreferrer">
+                {new URL(url).host}
+              </a>
+            </span>
+          ))}
+        </p>
+      ) : null}
+    </div>
   );
 }

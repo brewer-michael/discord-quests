@@ -1,6 +1,7 @@
 import type { PromptBlock } from "@dq/core/llm";
 import { joinUrl, requestJson } from "../http";
 import { extractJson, strictJsonSchema } from "../json-schema";
+import { effortFor, reasoningFields, withoutThinking } from "../reasoning";
 import {
   type AdapterResult,
   type CallContext,
@@ -12,9 +13,26 @@ import {
 
 const join = (blocks: PromptBlock[]) => blocks.map((b) => b.text).join("\n\n");
 
+/** Mistral answers in chunks when it reasons: thinking chunks, then text chunks. */
+interface ContentChunk {
+  type?: string;
+  text?: string;
+}
+
+const answerText = (content: string | ContentChunk[] | null | undefined) =>
+  Array.isArray(content)
+    ? content
+        .filter((c) => c.type === "text")
+        .map((c) => c.text ?? "")
+        .join("")
+    : (content ?? "");
+
 interface ChatResponse {
   model?: string;
-  choices?: Array<{ finish_reason?: string; message?: { content?: string | null; refusal?: string | null } }>;
+  choices?: Array<{
+    finish_reason?: string;
+    message?: { content?: string | ContentChunk[] | null; refusal?: string | null };
+  }>;
   usage?: {
     prompt_tokens?: number;
     completion_tokens?: number;
@@ -23,10 +41,13 @@ interface ChatResponse {
 }
 
 /**
- * Any OpenAI-compatible chat completions API: OpenAI, OpenRouter, Groq,
+ * Any OpenAI-compatible chat completions API: Z.ai, OpenAI, OpenRouter, Groq,
  * Together, Fireworks, DeepSeek, Mistral, xAI, Ollama, LM Studio, vLLM,
- * llama.cpp, or a custom endpoint. Uses the strongest structured-output mode
- * the endpoint supports, and always validates the result.
+ * llama.cpp, or a custom endpoint. For each model it uses what the provider
+ * documents: how reasoning is set and at which levels, the structured-output
+ * mode, the longest answer, and any fields its docs say every request needs.
+ * It reads the answer past any reasoning left inline or in thinking chunks,
+ * and always validates the result.
  */
 export const openAiCompatAdapter: LlmAdapter = {
   id: "openai_compat",
@@ -37,20 +58,27 @@ export const openAiCompatAdapter: LlmAdapter = {
     ctx: CallContext,
   ): Promise<AdapterResult<T>> {
     const base = cfg.baseUrl ?? "https://api.openai.com/v1";
-    const mode = cfg.capabilities.structured ?? "json_schema";
+    const spec = cfg.models[req.model];
+    const mode = spec?.structured ?? cfg.capabilities.structured ?? "json_schema";
     const schema = strictJsonSchema(req.schema);
     let system = join(req.system);
     if (mode !== "json_schema") {
       system += `\n\nRespond with a single JSON object matching this JSON Schema, and nothing else:\n${JSON.stringify(schema)}`;
     }
-    const maxParam = (cfg.capabilities as { maxTokensParam?: string }).maxTokensParam ?? "max_tokens";
+    const maxParam = cfg.capabilities.maxTokensParam ?? "max_tokens";
     const body: Record<string, unknown> = {
+      ...cfg.capabilities.requestFields,
       model: req.model,
       messages: [
         { role: "system", content: system },
         { role: "user", content: join(req.user) },
       ],
-      [maxParam]: req.maxOutputTokens,
+      ...(req.maxOutputTokens ? { [maxParam]: req.maxOutputTokens } : {}),
+      ...reasoningFields(
+        cfg.capabilities.reasoning ?? "none",
+        effortFor(spec, req.effort),
+        spec?.reasoning?.efforts?.filter((e) => e !== "none"),
+      ),
     };
     if (mode === "json_schema")
       body.response_format = {
@@ -80,10 +108,10 @@ export const openAiCompatAdapter: LlmAdapter = {
     if (choice?.finish_reason === "length") return { ok: false, stop: "max_tokens", usage, retryable: false };
     if (choice?.finish_reason === "content_filter")
       return { ok: false, stop: "filtered", usage, retryable: false };
-    const content = choice?.message?.content ?? "";
+    const content = withoutThinking(answerText(choice?.message?.content));
     let json: unknown;
     try {
-      json = mode === "json_schema" ? JSON.parse(content) : extractJson(content);
+      json = extractJson(content);
     } catch {
       return { ok: false, stop: "invalid", error: "response was not JSON", usage, retryable: false };
     }

@@ -63,7 +63,7 @@ export async function writeAppearance(args: {
       ],
       schema: HeroAppearance,
       schemaName: "appearance",
-      maxOutputTokens: 400,
+      expectTokens: 200,
       effort: "low",
     },
     args.scope,

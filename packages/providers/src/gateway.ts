@@ -14,8 +14,8 @@ export interface GatewayOptions {
 /**
  * The engine's door to the story AI: picks the route for each task, enforces
  * budgets, calls the adapter, records usage, and fails over to the next
- * route on outages. Refusals and bad output are returned, not retried
- * elsewhere, so the engine can handle them.
+ * route on outages, broken answers and answers cut short. Refusals are
+ * returned, not retried elsewhere, so the engine can handle them.
  */
 export class ProviderGateway implements LlmGateway {
   private readonly safeFetch: typeof fetch;
@@ -51,16 +51,15 @@ export class ProviderGateway implements LlmGateway {
       if (!cfg) continue;
       const adapter = llmAdapter(cfg.adapterId);
       if (!adapter) continue;
-      const maxOutputTokens = Math.min(
-        call.maxOutputTokens,
-        route.params.maxTokens ?? Number.POSITIVE_INFINITY,
-      );
-      const estimateTokens = Math.ceil(promptChars / 4) + Math.ceil(maxOutputTokens * 0.3);
+      // Only a limit set for this job or this service's model caps the answer; nothing here invents one.
+      const limit = route.params.maxTokens ?? cfg.maxOutput[route.model];
+      const expected = call.expectTokens;
+      const estimateTokens = Math.ceil(promptChars / 4) + expected;
       const pricing = cfg.pricing[route.model];
       const gate = await this.budget.allow(scope.guildId, {
         estimateMicros: costMicros(pricing, {
           inputTokens: Math.ceil(promptChars / 4),
-          outputTokens: Math.ceil(maxOutputTokens * 0.3),
+          outputTokens: expected,
         }),
         estimateTokens,
         platform: this.store.isPlatformConfig(cfg.id),
@@ -69,7 +68,8 @@ export class ProviderGateway implements LlmGateway {
       });
       if (!gate.ok) return { ok: false, stop: "budget", error: `daily ${gate.reason} limit reached` };
 
-      const effort = call.effort ?? route.params.effort;
+      // What the server chose for this job comes first; the task's usual depth only fills in when it chose nothing.
+      const effort = route.params.effort ?? call.effort;
       const res = await adapter.generateStructured(
         {
           task: call.task,
@@ -78,7 +78,7 @@ export class ProviderGateway implements LlmGateway {
           user: call.user,
           schema: call.schema,
           schemaName: call.schemaName,
-          maxOutputTokens,
+          ...(limit ? { maxOutputTokens: limit } : {}),
           ...(effort ? { effort } : {}),
         },
         cfg,
@@ -105,8 +105,13 @@ export class ProviderGateway implements LlmGateway {
         ...(res.error ? { error: res.error } : {}),
         ...(res.usage ? { usage: res.usage } : {}),
       };
-      if (!res.retryable) return last;
-      this.opts.log?.warn("provider failed, trying next route", { configId: cfg.id, error: res.error });
+      // A broken or cut-short answer is worth the next service's try; a refusal is the engine's to handle.
+      if (!res.retryable && res.stop !== "invalid" && res.stop !== "max_tokens") return last;
+      this.opts.log?.warn("provider failed, trying next route", {
+        configId: cfg.id,
+        stop: res.stop,
+        error: res.error,
+      });
     }
     return last;
   }

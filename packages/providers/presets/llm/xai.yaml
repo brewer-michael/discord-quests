@@ -1,7 +1,7 @@
 id: xai
 kind: llm
 label: xAI Grok
-description: An OpenAI-compatible service. Pick a model from the list the service provides.
+description: xAI's Grok models.
 adapter: openai_compat
 baseUrl: https://api.x.ai/v1
 baseUrlEditable: false
@@ -9,5 +9,46 @@ selfHosted: false
 auth: { type: bearer }
 needsKey: true
 keyUrl: https://console.x.ai
-capabilities: { structured: json_schema, promptCache: implicit, effort: false, serverFallbacks: false, maxTokensParam: max_tokens }
-models: []
+# docs.x.ai: grok-4.5, 4.6 and 4.7 take a reasoning effort (low, medium, high, and xhigh on 4.6 and 4.7) and
+# default to high. xAI documents it on its Responses API and calls Chat Completions legacy; its Chat Completions
+# examples show no effort field, so the level goes as reasoning_effort, the name xAI's SDK uses. xAI's docs didn't
+# confirm structured output, the token-limit field or any model's longest answer; json_object and max_tokens are
+# what its SDK uses. Read from search summaries of xAI's pages.
+capabilities:
+  { structured: json_object, promptCache: implicit, effort: false, serverFallbacks: false, maxTokensParam: max_tokens, reasoning: reasoning_effort }
+docs:
+  - https://docs.x.ai/developers/model-capabilities/text/reasoning
+  - https://docs.x.ai/developers/model-capabilities/legacy/chat-completions
+  - https://docs.x.ai/developers/models
+  - https://docs.x.ai/developers/pricing
+checked: 2026-10-17
+models:
+  - id: grok-4.7
+    label: Grok 4.7
+    pricing: { input: 2, output: 6, cacheRead: 0.5 }
+    contextWindow: 500000
+    reasoning: { mode: always, efforts: [low, medium, high, xhigh], default: high }
+    note: Flagship. Prompts over 200k tokens cost double.
+  - id: grok-4.6
+    label: Grok 4.6
+    pricing: { input: 2, output: 6, cacheRead: 0.5 }
+    contextWindow: 500000
+    reasoning: { mode: always, efforts: [low, medium, high, xhigh], default: high }
+  - id: grok-4.5
+    label: Grok 4.5
+    pricing: { input: 2, output: 6, cacheRead: 0.3 }
+    contextWindow: 500000
+    reasoning: { mode: always, efforts: [low, medium, high], default: high }
+    note: xhigh acts as high.
+  - id: grok-4.3
+    label: Grok 4.3
+    pricing: { input: 1.25, output: 2.5 }
+    contextWindow: 1000000
+    note: Cheaper, with a 1M context. Its reasoning settings aren't documented.
+defaultModels:
+  narrator: grok-4.7
+  director: grok-4.7
+  summarizer: grok-4.7
+  intent: grok-4.7
+  safety: grok-4.7
+  judge: grok-4.7

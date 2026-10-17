@@ -1,7 +1,7 @@
 id: fireworks
 kind: llm
 label: Fireworks AI
-description: An OpenAI-compatible service. Pick a model from the list the service provides.
+description: Hosted open models. Fireworks stops answers at 2,048 tokens unless told otherwise.
 adapter: openai_compat
 baseUrl: https://api.fireworks.ai/inference/v1
 baseUrlEditable: false
@@ -9,5 +9,44 @@ selfHosted: false
 auth: { type: bearer }
 needsKey: true
 keyUrl: https://fireworks.ai/account/api-keys
-capabilities: { structured: json_object, promptCache: implicit, effort: false, serverFallbacks: false, maxTokensParam: max_tokens }
-models: []
+# docs.fireworks.ai: reasoning_effort (none, low, medium, high, xhigh, max, or a token count; levels vary by model,
+# and some reject none); reasoning comes back in reasoning_content. max_tokens is 2048 when none is sent, and one
+# too large for the context window is lowered to fit. json_schema switches off the reasoning output, which the bot
+# doesn't read. Its pinned models list no context window or longest answer. Read from search summaries of
+# Fireworks' pages.
+capabilities:
+  { structured: json_object, promptCache: implicit, effort: false, serverFallbacks: false, maxTokensParam: max_tokens, reasoning: reasoning_effort }
+unsetLimit: 2048
+docs:
+  - https://docs.fireworks.ai/guides/reasoning
+  - https://docs.fireworks.ai/api-reference/post-chatcompletions
+  - https://docs.fireworks.ai/structured-responses/structured-response-formatting
+  - https://docs.fireworks.ai/faq/models/inference/limitations-controls
+  - https://docs.fireworks.ai/firepass
+checked: 2026-10-17
+models:
+  - id: accounts/fireworks/routers/kimi-k3-fast
+    label: Kimi K3 Fast
+    contextWindow: 1040000
+    maxOutput: 131072
+    reasoning: { mode: always, efforts: [low, high, max], default: max }
+    note: Limits as Fireworks gives them for kimi-fast-latest, which points to this model.
+  - id: accounts/fireworks/models/kimi-k3
+    label: Kimi K3
+    reasoning: { mode: always, efforts: [low, high, max], default: max }
+    note: Its limits aren't documented, so enter its longest answer.
+  - id: accounts/fireworks/models/glm-5p3
+    label: GLM 5.3
+    reasoning: { mode: always }
+    note: Its levels and limits aren't documented, so enter its longest answer.
+  - id: accounts/fireworks/models/glm-5p3-flash
+    label: GLM 5.3 Flash
+    structured: json_schema
+    note: Its limits aren't documented, so enter its longest answer.
+defaultModels:
+  narrator: accounts/fireworks/routers/kimi-k3-fast
+  director: accounts/fireworks/routers/kimi-k3-fast
+  summarizer: accounts/fireworks/routers/kimi-k3-fast
+  intent: accounts/fireworks/routers/kimi-k3-fast
+  safety: accounts/fireworks/routers/kimi-k3-fast
+  judge: accounts/fireworks/routers/kimi-k3-fast

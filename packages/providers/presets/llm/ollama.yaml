@@ -1,12 +1,26 @@
 id: ollama
 kind: llm
 label: Ollama (runs on your own computer)
-description: A model you run yourself. The bot's server must be able to reach it, and the operator must allow private endpoints.
+description: >-
+  A model you run yourself. The bot's server must be able to reach it, and the operator must allow private
+  endpoints. Set the context length on the Ollama server (OLLAMA_CONTEXT_LENGTH): below 24 GB of VRAM it starts at
+  4k tokens, too short for the storyteller.
 adapter: openai_compat
 baseUrl: http://localhost:11434/v1
 baseUrlEditable: true
 selfHosted: true
 auth: { type: none }
 needsKey: false
-capabilities: { structured: json_object, promptCache: none, effort: false, serverFallbacks: false, maxTokensParam: max_tokens }
+# docs.ollama.com and Ollama's source (github.com/ollama/ollama): /v1/chat/completions takes reasoning_effort (none
+# switches thinking off; each model has its own levels, and one it lacks falls back to its default), max_tokens (no
+# limit when none is sent), and response_format json_schema (only the schema is read; thinking is left free).
+# Reasoning comes back in message.reasoning. The context length is set on the server, not per request.
+capabilities:
+  { structured: json_schema, promptCache: none, effort: false, serverFallbacks: false, maxTokensParam: max_tokens, reasoning: reasoning_effort }
+docs:
+  - https://docs.ollama.com/api/openai-compatibility
+  - https://docs.ollama.com/capabilities/thinking
+  - https://docs.ollama.com/capabilities/structured-outputs
+  - https://docs.ollama.com/context-length
+checked: 2026-10-17
 models: []

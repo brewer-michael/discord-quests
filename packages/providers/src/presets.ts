@@ -12,6 +12,31 @@ const Pricing = z.strictObject({
   image: z.number().optional(),
 });
 
+const EffortLevel = z.enum(["none", "minimal", "low", "medium", "high", "xhigh", "max"]);
+
+/** A model as its provider documents it. Requests use these values; the setup page shows them. */
+const ModelSpec = z.strictObject({
+  id: z.string(),
+  label: z.string(),
+  pricing: Pricing.optional(),
+  /** Tokens the model can take in. */
+  contextWindow: z.number().int().positive().optional(),
+  /** The longest answer it can give, in tokens (reasoning included where the provider counts it). */
+  maxOutput: z.number().int().positive().optional(),
+  /** always: it always reasons; optional: it can be told how hard, or not at all; none: it doesn't reason. */
+  reasoning: z
+    .strictObject({
+      mode: z.enum(["always", "optional", "none"]),
+      efforts: z.array(EffortLevel).optional(),
+      default: z.string().optional(),
+      /** For models that take a thinking budget in tokens instead of a level (Gemini 2.5). */
+      budget: z.strictObject({ min: z.number().int().min(0), max: z.number().int().positive() }).optional(),
+    })
+    .optional(),
+  structured: z.enum(["json_schema", "json_object", "prompt_only"]).optional(),
+  note: z.string().optional(),
+});
+
 const Auth = z.discriminatedUnion("type", [
   z.strictObject({ type: z.literal("none") }),
   z.strictObject({ type: z.literal("bearer") }),
@@ -50,11 +75,28 @@ export const Preset = z.strictObject({
       effort: z.boolean().optional(),
       serverFallbacks: z.boolean().optional(),
       maxTokensParam: z.enum(["max_tokens", "max_completion_tokens"]).optional(),
+      reasoning: z
+        .enum([
+          "none",
+          "reasoning_effort",
+          "openrouter",
+          "thinking_type",
+          "reasoning_enabled",
+          "enable_thinking",
+        ])
+        .optional(),
+      /** Fields the provider's docs say to add to every request. */
+      requestFields: z.record(z.string(), z.unknown()).optional(),
     })
     .default({}),
-  models: z
-    .array(z.strictObject({ id: z.string(), label: z.string(), pricing: Pricing.optional() }))
-    .default([]),
+  models: z.array(ModelSpec).default([]),
+  /** The provider's documentation these settings come from, and when it was read. */
+  docs: z.array(z.string()).default([]),
+  checked: z.string().optional(),
+  /** The longest answer the provider gives when no limit is sent, where its docs say (Fireworks: 2048). */
+  unsetLimit: z.number().int().positive().optional(),
+  /** Shown when the provider is picked: why this project steers away from it. */
+  avoid: z.string().optional(),
   defaultModels: z.record(z.string(), z.string()).default({}),
   defaultParams: z.record(z.string(), z.record(z.string(), z.unknown())).default({}),
   genericSpec: GenericHttpSpecSchema.optional(),

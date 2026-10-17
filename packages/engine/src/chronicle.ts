@@ -91,7 +91,7 @@ export async function writeChapterRecap(args: {
         ],
         schema: ChapterRecap,
         schemaName: "recap",
-        maxOutputTokens: 1500,
+        expectTokens: 600,
         effort: "low",
       },
       { guildId: args.guildId, campaignId: args.campaignId },

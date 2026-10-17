@@ -2,7 +2,7 @@ import type { z } from "zod";
 
 /**
  * The contract between the game and whatever AI writes the story. Providers
- * (Claude by default, or any configured endpoint) implement LlmGateway; the
+ * (whichever services the server configured) implement LlmGateway; the
  * engine only ever talks to this interface.
  */
 
@@ -16,7 +16,11 @@ export const LLM_TASKS: readonly LlmTask[] = [
   "judge",
 ];
 
-export type Effort = "low" | "medium" | "high" | "xhigh" | "max";
+/** How hard a model reasons before it answers. "none" asks it not to, where the service allows. */
+export type Effort = "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+
+/** Every effort level, from no reasoning to the most. */
+export const EFFORTS: readonly Effort[] = ["none", "minimal", "low", "medium", "high", "xhigh", "max"];
 
 /** A block of prompt text. Stable blocks go first and may be cached by providers that support it. */
 export interface PromptBlock {
@@ -30,7 +34,12 @@ export interface StructuredCall<T> {
   user: PromptBlock[];
   schema: z.ZodType<T>;
   schemaName: string;
-  maxOutputTokens: number;
+  /**
+   * Roughly how long the answer runs, in tokens. Used only to estimate spending before the call; it is never sent
+   * as a limit. Limits come from the service's own settings.
+   */
+  expectTokens: number;
+  /** The task's usual reasoning depth. The server's per-job setting, when there is one, wins. */
   effort?: Effort;
 }
 
