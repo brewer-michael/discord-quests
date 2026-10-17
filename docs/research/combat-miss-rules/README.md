@@ -33,14 +33,15 @@ encounter (`packages/core/src/combat/balance.ts`), real random dice, and the rew
 
 | Area | Notes file | Status | What's left |
 | --- | --- | --- | --- |
-| d20 systems: 5e 2024 / SRD 5.2.1, 4e, Pathfinder 2e, 13th Age | `notes/d20_systems.md` (if present) | See the file's own header; the first pass may not have finished | Everything listed under A below that the file doesn't mark as opened |
+| d20 systems: 5e 2024 / SRD 5.2.1, 4e, Pathfinder 2e, 13th Age | `notes/d20_systems.md` | SRD 5.2, Pathfinder 2e and 13th Age verified from machine-readable rules data on GitHub (5e-bits and open5e for SRD 5.2, foundryvtt/pf2e, asacolips-projects/13th-age); 4e, 2014 DMG and designer rationale from search summaries or memory | The SRD 5.2.1 PDF itself (5.2 vs 5.2.1 wording), Grapple and Shove glossary text, any primary 4e text, first-party rationale for Graze, Studied Attacks and miss damage, 13th Age 2E changes |
 | Narrative and other systems | `notes/narrative_systems.md` | Blades in the Dark, Dungeon World, Ironsworn and Fate verified from open-licensed text (mirrors on GitHub, the Datasworn npm package); WFRP 4e partly, from Foundry VTT strings | Genesys, Savage Worlds, Mythras/RuneQuest, WFRP Advantage rules, Ironsworn rulebook momentum pages, Blades effect table |
 | Video games | `notes/video_game_fairness.md` | XCOM 2 aim assist verified from game script source on GitHub; everything else from search excerpts | XCOM per-difficulty values, Fire Emblem, Sid Meier's talk, Dota PRD, pity timers, psychology papers |
 | Design theory | `notes/design_theory.md` | Search excerpts only; nothing opened | All of D below |
 
-Every finding in the notes is labelled by how it was seen: `[opened]` (page read in full), `[search extract]` (only
-the search engine's excerpt), `[computed]` (arithmetic from a cited formula), or `UNVERIFIED (memory)`. Upgrade a
-label only by opening the page.
+Every finding in the notes is labelled by how it was seen. The files use slightly different tags for the same
+three levels: read in full (`[opened]`, or rules data cloned from GitHub), seen only in a search result
+(`[search extract]`, `[search summary, page not opened]`), or not sourced (`UNVERIFIED`, `[unverified, from memory]`).
+`[computed]` marks arithmetic from a cited formula. Upgrade a label only by opening the page.
 
 ## Hosts the next environment needs
 
@@ -60,13 +61,15 @@ license. Keep each notes file's format: per question, **Takeaway / Cited Finding
 
 ### A. d20 systems
 
-- **SRD 5.2.1** (CC-BY-4.0; the project's own license basis): weapon masteries (Graze, Vex, Sap, Topple, Push, Slow,
-  Nick, Cleave), which weapons have each, exact effect on hit and on miss; the Fighter's Studied Attacks (level and
-  exact text); Unarmed Strike's Grapple and Shove (save type, DC formula); how D20 Tests treat a natural 20 or 1 for
-  attacks, ability checks and saving throws; critical hits.
-- **2014 DMG optional rules** (not SRD): the "players roll all the dice" variant and its exact conversion from saving
-  throws to attack rolls. The project's working assumption is that a fixed defense of **14 + save bonus** gives the
-  same odds as the save; confirm or correct against the published formula.
+- **SRD 5.2.1** (CC-BY-4.0; the project's own license basis): mostly verified from the rules data (all eight
+  masteries; Graze, on the Glaive and Greatsword only, is the one that does anything on a miss; Studied Attacks at
+  Fighter level 13; save DCs of 8 + modifier + proficiency). Still to check in the official PDF: that the data
+  matches 5.2.1 wording, and the full glossary text of Grapple and Shove. The likely URL is
+  `https://media.dndbeyond.com/compendium-images/srd/5.2/SRD_CC_v5.2.1.pdf`.
+- **2014 DMG optional rules** (not SRD): Hitting Cover and Cleaving through Creatures (p. 272). The first pass found no
+  "players roll all the dice" variant in the 5e DMG (it may trace to D&D 3.5); confirm either way. The odds-preserving
+  conversion is worked out in the notes: a caster's attack against **14 + the target's save bonus**, and a player's
+  defense roll of d20 + (AC − 10) against **12 + the monster's attack bonus**.
 - **D&D 4e** (not open): how AC, Fortitude, Reflex and Will are computed (10 + half level + ability modifier, which
   abilities), which attacks target which, the typical gap between AC and the other defenses, "miss: half damage"
   powers, minions, and designer rationale. Also find the criticism that 4e's defenses converged so the choice felt
