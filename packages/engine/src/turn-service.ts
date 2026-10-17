@@ -99,6 +99,7 @@ import {
 } from "./combat";
 import { type EngineDeps, GameError, realDice, silentLogger } from "./deps";
 import { nextSceneSpec, type SceneEntityState, type SceneSpec } from "./director";
+import { withLogContext } from "./logger";
 import { clearPendingLoom, loadLoom, loadPendingLoom, saveLoom, savePendingLoom } from "./loom-store";
 import { narrate } from "./narrator";
 import { applyPlan, latestPlan, planChapter } from "./planner";
@@ -469,7 +470,13 @@ export class TurnService {
    * resolving this round.
    */
   async resolveRound(roundId: string): Promise<ResolveResult | null> {
+    // Every line logged while the round resolves, the AI calls' included, says which round it was for.
+    return withLogContext({ roundId }, () => this.resolve(roundId));
+  }
+
+  private async resolve(roundId: string): Promise<ResolveResult | null> {
     const db = this.deps.db;
+    const started = Date.now();
     const [claimed] = await db
       .update(rounds)
       .set({ status: "resolving" })
@@ -484,10 +491,26 @@ export class TurnService {
         return null;
       }
       const prepared = await this.prepare(claimed);
-      if (c?.mode === "assist" && c.dmUserId)
-        return { kind: "draft", draft: await this.saveDraft(prepared, c.dmUserId) };
+      const prepareMs = Date.now() - started;
+      const turn = prepared.turn;
+      const timing = { campaignId: c.id, seq: turn.seq, mode: turn.mode, fallback: turn.fallback, prepareMs };
+      if (c?.mode === "assist" && c.dmUserId) {
+        const draft = await this.saveDraft(prepared, c.dmUserId);
+        this.log.info("turn drafted for the DM", { ...timing, totalMs: Date.now() - started });
+        return { kind: "draft", draft };
+      }
       const view = await this.commit(prepared.turn, prepared.loom, prepared.inputHash);
+      const committed = Date.now();
       await this.afterCommit(prepared.turn);
+      // prepareMs covers the action reader, the dice, the hidden hand and the storyteller with its reviewer;
+      // afterCommitMs is the chapter recap and plan at a chapter's end. The AI calls have lines of their own.
+      this.log.info("turn resolved", {
+        ...timing,
+        chapterEnded: turn.chapterEnded,
+        commitMs: committed - started - prepareMs,
+        afterCommitMs: Date.now() - committed,
+        totalMs: Date.now() - started,
+      });
       return { kind: "turn", view };
     } catch (e) {
       await db

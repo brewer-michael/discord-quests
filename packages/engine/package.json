@@ -18,6 +18,7 @@
     "@dq/core": "workspace:*",
     "@dq/db": "workspace:*",
     "drizzle-orm": "catalog:",
+    "pino": "catalog:",
     "zod": "catalog:"
   }
 }

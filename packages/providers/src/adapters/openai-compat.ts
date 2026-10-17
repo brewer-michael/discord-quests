@@ -4,6 +4,7 @@ import { extractJson, strictJsonSchema } from "../json-schema";
 import {
   type AdapterResult,
   type CallContext,
+  type CallTrace,
   type LlmAdapter,
   ProviderError,
   type ResolvedProviderConfig,
@@ -14,11 +15,39 @@ const join = (blocks: PromptBlock[]) => blocks.map((b) => b.text).join("\n\n");
 
 interface ChatResponse {
   model?: string;
-  choices?: Array<{ finish_reason?: string; message?: { content?: string | null; refusal?: string | null } }>;
+  choices?: Array<{
+    finish_reason?: string;
+    message?: {
+      content?: string | null;
+      refusal?: string | null;
+      /** Reasoning returned apart from the answer: reasoning_content (llama.cpp, DeepSeek, vLLM) or reasoning. */
+      reasoning_content?: string | null;
+      reasoning?: string | null;
+    };
+  }>;
   usage?: {
     prompt_tokens?: number;
     completion_tokens?: number;
     prompt_tokens_details?: { cached_tokens?: number };
+    completion_tokens_details?: { reasoning_tokens?: number };
+  };
+  /** llama.cpp's own timings for the request. */
+  timings?: Record<string, unknown>;
+}
+
+/** What the logs keep from a response besides the answer. */
+function traceOf(res: ChatResponse): CallTrace {
+  const message = res.choices?.[0]?.message;
+  const reasoning = message?.reasoning_content ?? message?.reasoning;
+  const reasoningTokens = res.usage?.completion_tokens_details?.reasoning_tokens;
+  const timings = Object.fromEntries(
+    Object.entries(res.timings ?? {}).filter((e): e is [string, number] => typeof e[1] === "number"),
+  );
+  return {
+    ...(typeof message?.content === "string" ? { answer: message.content } : {}),
+    ...(typeof reasoning === "string" && reasoning ? { reasoning } : {}),
+    ...(typeof reasoningTokens === "number" ? { reasoningTokens } : {}),
+    ...(Object.keys(timings).length > 0 ? { timings } : {}),
   };
 }
 
@@ -70,22 +99,24 @@ export const openAiCompatAdapter: LlmAdapter = {
       return { ok: false, stop: "error", error: (e as Error).message, retryable };
     }
     const choice = res.choices?.[0];
+    const trace = traceOf(res);
     const usage = {
       inputTokens: res.usage?.prompt_tokens ?? 0,
       outputTokens: res.usage?.completion_tokens ?? 0,
       cacheReadTokens: res.usage?.prompt_tokens_details?.cached_tokens ?? 0,
     };
     if (choice?.message?.refusal)
-      return { ok: false, stop: "refusal", error: choice.message.refusal, usage, retryable: false };
-    if (choice?.finish_reason === "length") return { ok: false, stop: "max_tokens", usage, retryable: false };
+      return { ok: false, stop: "refusal", error: choice.message.refusal, usage, retryable: false, trace };
+    if (choice?.finish_reason === "length")
+      return { ok: false, stop: "max_tokens", usage, retryable: false, trace };
     if (choice?.finish_reason === "content_filter")
-      return { ok: false, stop: "filtered", usage, retryable: false };
+      return { ok: false, stop: "filtered", usage, retryable: false, trace };
     const content = choice?.message?.content ?? "";
     let json: unknown;
     try {
       json = mode === "json_schema" ? JSON.parse(content) : extractJson(content);
     } catch {
-      return { ok: false, stop: "invalid", error: "response was not JSON", usage, retryable: false };
+      return { ok: false, stop: "invalid", error: "response was not JSON", usage, retryable: false, trace };
     }
     const parsed = req.schema.safeParse(json);
     if (!parsed.success)
@@ -95,8 +126,9 @@ export const openAiCompatAdapter: LlmAdapter = {
         error: parsed.error.message.slice(0, 500),
         usage,
         retryable: false,
+        trace,
       };
-    return { ok: true, value: parsed.data, usage, model: res.model ?? req.model, fellBack: false };
+    return { ok: true, value: parsed.data, usage, model: res.model ?? req.model, fellBack: false, trace };
   },
 
   async listModels(cfg, ctx) {

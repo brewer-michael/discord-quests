@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { connect, runMigrations } from "@dq/db";
-import { createEngine, createLogger, WorldCache } from "@dq/engine";
+import { createEngine, createLogger, logLevel, WorldCache } from "@dq/engine";
 import { BudgetGuard, ImageService, ProviderGateway, ProviderStore } from "@dq/providers";
 import { sql } from "drizzle-orm";
 import { createClient, wire } from "./bot";
@@ -14,6 +14,7 @@ const log = createLogger({
   service: "bot",
   format:
     process.env.LOG_FORMAT === "json" ? "json" : process.env.LOG_FORMAT === "pretty" ? "pretty" : undefined,
+  level: logLevel(process.env.LOG_LEVEL),
 });
 const handle = connect(env.DATABASE_URL);
 if (env.RUN_MIGRATIONS !== "false") {
@@ -23,7 +24,7 @@ if (env.RUN_MIGRATIONS !== "false") {
 
 const store = new ProviderStore(handle.db, env);
 const budget = new BudgetGuard(handle.db, env);
-const llm = new ProviderGateway(store, budget, { log });
+const llm = new ProviderGateway(store, budget, { log, logOutput: process.env.LOG_AI_OUTPUT === "true" });
 const images = new ImageService(handle.db, store, budget, { log });
 const worlds = new WorldCache();
 const engine = createEngine({ db: handle.db, worlds, llm, log });

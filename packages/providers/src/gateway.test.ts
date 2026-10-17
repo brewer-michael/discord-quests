@@ -27,6 +27,92 @@ const chat = (answer: string) =>
     usage: { prompt_tokens: 10, completion_tokens: 5 },
   });
 
+describe("provider gateway logs", () => {
+  const config = {
+    id: "cfg-1",
+    name: "home server",
+    presetId: "custom-openai",
+    adapterId: "openai_compat",
+    baseUrl: "https://llm.example/v1",
+    auth: { type: "none" },
+    apiKey: null,
+    extraHeaders: {},
+    selfHosted: false,
+    capabilities: { structured: "json_schema" },
+    pricing: {},
+    genericSpec: null,
+  };
+  const store = {
+    env: {},
+    routes: async () => [{ configId: "cfg-1", model: "m", params: {} }],
+    guildSettings: async () => ({}),
+    resolve: async () => config,
+    isPlatformConfig: () => false,
+  } as unknown as ProviderStore;
+  const budget = { allow: async () => ({ ok: true }), record: async () => {} } as unknown as BudgetGuard;
+
+  function capture() {
+    const lines: Array<{ level: string; msg: string; data?: Record<string, unknown> }> = [];
+    const at = (level: string) => (msg: string, data?: Record<string, unknown>) =>
+      lines.push({ level, msg, ...(data ? { data } : {}) });
+    return { lines, log: { info: at("info"), warn: at("warn") } };
+  }
+
+  it("give each call's time, tokens, reasoning and the server's timings", async () => {
+    const { lines, log } = capture();
+    const { fetch } = fakeFetch(() =>
+      json({
+        model: "m",
+        choices: [
+          {
+            finish_reason: "stop",
+            message: { content: '{"answer":"ok"}', reasoning_content: "Hmm, let me see." },
+          },
+        ],
+        usage: { prompt_tokens: 10, completion_tokens: 5 },
+        timings: { prompt_ms: 12.5, predicted_n: 5 },
+      }),
+    );
+    const gw = new ProviderGateway(store, budget, { fetch, log });
+    await gw.structured(call, { guildId: "g1", campaignId: "c1" });
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatchObject({
+      level: "info",
+      msg: "ai call",
+      data: {
+        task: "narrator",
+        campaignId: "c1",
+        provider: "home server",
+        model: "m",
+        ok: true,
+        inputTokens: 10,
+        outputTokens: 5,
+        answerChars: 15,
+        reasoningChars: 16,
+        serverTimings: { prompt_ms: 12.5, predicted_n: 5 },
+      },
+    });
+    expect(typeof lines[0]?.data?.ms).toBe("number");
+    expect(lines[0]?.data).not.toHaveProperty("answer");
+  });
+
+  it("warn about failed calls, and log the answer in full only when asked", async () => {
+    const { lines, log } = capture();
+    const bad = fakeFetch(() =>
+      json({ choices: [{ finish_reason: "stop", message: { content: '{"nope":1}' } }] }),
+    );
+    await new ProviderGateway(store, budget, { fetch: bad.fetch, log, logOutput: true }).structured(call, {
+      guildId: "g1",
+    });
+    expect(lines.map((l) => [l.level, l.msg])).toEqual([
+      ["warn", "ai call failed"],
+      ["info", "ai output"],
+    ]);
+    expect(lines[0]?.data).toMatchObject({ ok: false, stop: "invalid" });
+    expect(lines[1]?.data).toMatchObject({ task: "narrator", answer: '{"nope":1}' });
+  });
+});
+
 describe.skipIf(!TEST_DATABASE_URL)("provider gateway", () => {
   let db: Awaited<ReturnType<typeof createTestDb>>;
   const masterKeys = `v1:${randomBytes(32).toString("base64")}`;

@@ -73,7 +73,7 @@ export async function narrate(opts: {
       scope,
     );
     if (!res.ok) {
-      log.warn("narrator unavailable", { stop: res.stop, error: res.error });
+      log.warn("narrator unavailable", { ...scope, attempt: attempt + 1, stop: res.stop, error: res.error });
       problems = [`narrator ${res.stop}`];
       if (res.stop === "unconfigured" || res.stop === "budget" || res.stop === "error") break;
       continue;
@@ -93,7 +93,14 @@ export async function narrate(opts: {
         },
         scope,
       );
-      if (judged.ok) {
+      if (!judged.ok)
+        log.warn("reviewer unavailable", {
+          ...scope,
+          attempt: attempt + 1,
+          stop: judged.stop,
+          error: judged.error,
+        });
+      else {
         if (judged.value.revealsHiddenMechanic) problems.push("It mentions a hidden mechanic. Don't.");
         if (judged.value.explainsCauseOfLuck)
           problems.push(
@@ -104,8 +111,9 @@ export async function narrate(opts: {
       }
     }
     if (problems.length === 0) return { output: cleaned, fallback: false, problems: [] };
-    log.warn("narration rejected", { problems });
+    log.warn("narration rejected", { ...scope, attempt: attempt + 1, problems });
   }
+  log.warn("narration fell back to the engine's own turn", { ...scope, problems });
   return { output: fallbackNarration(view, directives, opts.choicesFor), fallback: true, problems };
 }
 

@@ -233,6 +233,36 @@ describe("OpenAI-compatible adapter", () => {
       }),
     ).toMatchObject({ retryable: true });
   });
+
+  it("keeps the reasoning and the server's timings for the logs, without changing the answer", async () => {
+    const { fetch } = fakeFetch(() =>
+      json({
+        model: "m",
+        choices: [
+          {
+            finish_reason: "stop",
+            message: { content: '{"answer":"yes","score":2}', reasoning_content: "Let me think it over." },
+          },
+        ],
+        usage: { prompt_tokens: 5, completion_tokens: 3, completion_tokens_details: { reasoning_tokens: 2 } },
+        timings: { prompt_n: 5, prompt_ms: 40.5, predicted_n: 3, predicted_ms: 61.2, cache_n: 0, note: "x" },
+      }),
+    );
+    const res = await openAiCompatAdapter.generateStructured(req({ model: "m" }), ccfg("json_schema"), {
+      fetch,
+    });
+    expect(res).toMatchObject({
+      ok: true,
+      value: { answer: "yes", score: 2 },
+      trace: {
+        answer: '{"answer":"yes","score":2}',
+        reasoning: "Let me think it over.",
+        reasoningTokens: 2,
+        timings: { prompt_n: 5, prompt_ms: 40.5, predicted_n: 3, predicted_ms: 61.2, cache_n: 0 },
+      },
+    });
+    expect(res.trace?.timings).not.toHaveProperty("note");
+  });
 });
 
 describe("Gemini adapter", () => {

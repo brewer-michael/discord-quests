@@ -67,14 +67,27 @@ export interface StructuredRequest<T> {
   effort?: Effort;
 }
 
+/** What came back alongside the answer, for the logs only. Nothing in the game reads it. */
+export interface CallTrace {
+  /** The answer text as the service sent it. */
+  answer?: string;
+  /** The model's reasoning, when the service returns it apart from the answer. */
+  reasoning?: string;
+  /** Output tokens the service says went to reasoning. */
+  reasoningTokens?: number;
+  /** The service's own timings, as it names them (llama.cpp: prompt_n, prompt_ms, predicted_n, cache_n...). */
+  timings?: Record<string, number>;
+}
+
 export type AdapterResult<T> =
-  | { ok: true; value: T; usage: LlmUsage; model: string; fellBack: boolean }
+  | { ok: true; value: T; usage: LlmUsage; model: string; fellBack: boolean; trace?: CallTrace }
   | {
       ok: false;
       stop: "refusal" | "max_tokens" | "filtered" | "error" | "invalid";
       error?: string;
       usage?: LlmUsage;
       retryable: boolean;
+      trace?: CallTrace;
     };
 
 export interface LlmAdapter {
