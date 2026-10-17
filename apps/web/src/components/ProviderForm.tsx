@@ -48,10 +48,13 @@ export function ProviderForm({
   initial,
   save,
   loadModels,
+  inUse = false,
 }: {
   kind: "llm" | "image";
   presets: PresetOption[];
   initial?: ProviderFormValues;
+  /** The server already has services doing these jobs, so a new one is only added unless asked to take over. */
+  inUse?: boolean;
   save: (fd: FormData) => Promise<FormState>;
   loadModels?: () => Promise<{ ok: true; models: string[] } | { ok: false; message: string }>;
 }) {
@@ -265,20 +268,35 @@ export function ProviderForm({
                     type="radio"
                     name="useFor"
                     value={kind === "llm" ? "story" : "images"}
-                    defaultChecked
+                    defaultChecked={!inUse}
                   />
                   <span>
-                    {kind === "llm" ? "Telling the whole story" : "Paint scenes with this service"}
+                    {kind === "llm"
+                      ? inUse
+                        ? "Telling the whole story, instead of what does it now"
+                        : "Telling the whole story"
+                      : inUse
+                        ? "Painting scenes, instead of what does it now"
+                        : "Paint scenes with this service"}
                     <br />
                     <span className="hint">
-                      Replaces this server's current choice. You can fine-tune each job on the “Who does what”
-                      page.
+                      {inUse
+                        ? "Every job moves to this service. To use it for only some jobs, just add it and pick them on the “Who does what” page."
+                        : "You can fine-tune each job on the “Who does what” page."}
                     </span>
                   </span>
                 </label>
                 <label className="check-field">
-                  <input type="radio" name="useFor" value="none" />
-                  <span>Just add it for now</span>
+                  <input type="radio" name="useFor" value="none" defaultChecked={inUse} />
+                  <span>
+                    Just add it for now
+                    {inUse ? (
+                      <>
+                        <br />
+                        <span className="hint">The jobs keep the services they have.</span>
+                      </>
+                    ) : null}
+                  </span>
                 </label>
               </div>
               {errors.useFor ? <span className="error">{errors.useFor}</span> : null}

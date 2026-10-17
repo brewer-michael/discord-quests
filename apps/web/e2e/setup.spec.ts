@@ -163,12 +163,34 @@ test("adding a custom endpoint keeps the key secret, and the connection test wor
 
 test("routing, settings, usage and activity", async ({ page }) => {
   await signIn(page);
+  // A second story service is only added: the jobs keep the one they have.
+  await page.goto(`/servers/${GUILD_ID}/providers/new`);
+  await page.getByText("Custom OpenAI-compatible endpoint").click();
+  await expect(page.getByLabel(/Just add it for now/)).toBeChecked();
+  await page.getByLabel("Name", { exact: true }).fill("Spare server");
+  await page.getByLabel("Model", { exact: true }).fill("spare-model");
+  await page.getByLabel("Address", { exact: true }).fill(`http://127.0.0.1:${MOCK_PORT}/v1`);
+  await page.getByText("More options").click();
+  await page.getByLabel(/This runs on my own network/).check();
+  await page.getByRole("button", { name: "Add service" }).click();
+  await expect(page).toHaveURL(/\/providers\/[0-9a-f-]+\?added=1/);
+
   await page.goto(`/servers/${GUILD_ID}/routing`);
   const intent = page.locator("section", { has: page.getByRole("heading", { name: "Action reader" }) });
-  await expect(intent.getByLabel("First choice: service")).toHaveValue(/[0-9a-f-]{36}/);
-  await intent.getByLabel("First choice: model").fill("mock-large");
+  const service = intent.getByLabel("First choice: service");
+  await expect(service.locator("option:checked")).toHaveText("Home server");
+  // Each row offers the chosen service's own models, and any other by name.
+  const model = intent.getByLabel("First choice: model");
+  await expect(model).toHaveValue("mock-small");
+  await service.selectOption({ label: "Spare server" });
+  await expect(model).toHaveValue("spare-model");
+  await service.selectOption({ label: "Home server" });
+  await model.selectOption({ label: "Other…" });
+  await model.fill("mock-large");
   await intent.getByRole("button", { name: "Save" }).click();
   await expect(intent.getByText("Saved.")).toBeVisible();
+  await page.reload();
+  await expect(intent.getByLabel("First choice: model")).toHaveValue("mock-large");
   await snap(page, "07-routing");
 
   await page.goto(`/servers/${GUILD_ID}/settings`);

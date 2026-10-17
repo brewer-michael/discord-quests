@@ -1,5 +1,6 @@
 import { preset } from "@dq/providers";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
+import { type RouteService, RouteSlots } from "@/components/RouteSlots";
 import { requireGuild } from "@/server/access";
 import { services } from "@/server/db";
 import { listProviders } from "@/server/providers";
@@ -22,15 +23,24 @@ export default async function Routing({ params }: { params: Promise<{ guildId: s
     guildRoutes(handle.db, guildId),
     serverSettings(handle.db, guildId),
   ]);
-  const models = (kind: "llm" | "image") => {
-    const set = new Set<string>();
-    for (const p of providers.filter((x) => x.kind === kind)) {
-      if (p.model) set.add(p.model);
-      for (const m of preset(p.presetId)?.models ?? []) set.add(m.id);
-    }
-    for (const [task, list] of Object.entries(routes))
-      if ((task === "image") === (kind === "image")) for (const r of list) set.add(r.model);
-    return [...set].sort();
+  // Each service's own models: the one saved with it, its preset's, and any a job already uses with it.
+  const routed = Object.values(routes).flat();
+  const service = (p: (typeof providers)[number]): RouteService => {
+    const pre = preset(p.presetId);
+    const preferred =
+      p.model ?? (p.kind === "image" ? pre?.defaultModels.image : pre?.defaultModels.narrator);
+    const models = new Set<string>([
+      ...(preferred ? [preferred] : []),
+      ...(pre?.models.map((m) => m.id) ?? []),
+      ...routed.filter((r) => r.providerId === p.id).map((r) => r.model),
+    ]);
+    return {
+      id: p.id,
+      name: p.name,
+      enabled: p.enabled,
+      models: [...models],
+      defaultModel: preferred ?? null,
+    };
   };
 
   return (
@@ -42,16 +52,6 @@ export default async function Routing({ params }: { params: Promise<{ guildId: s
           is down. Quick jobs can use a faster, cheaper model.
         </p>
       </div>
-      <datalist id="models-llm">
-        {models("llm").map((m) => (
-          <option key={m} value={m} />
-        ))}
-      </datalist>
-      <datalist id="models-image">
-        {models("image").map((m) => (
-          <option key={m} value={m} />
-        ))}
-      </datalist>
       {ALL_TASKS.map((task) => {
         const kind = task === "image" ? "image" : "llm";
         const options = providers.filter((p) => p.kind === kind);
@@ -85,69 +85,12 @@ export default async function Routing({ params }: { params: Promise<{ guildId: s
               </p>
             ) : (
               <ActionForm action={saveRoutesAction.bind(null, guildId, task)}>
-                <div className="table-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th scope="col">Order</th>
-                        <th scope="col">Service</th>
-                        <th scope="col">Model</th>
-                        {kind === "llm" ? <th scope="col">Effort</th> : null}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {SLOTS.map((label, i) => {
-                        const r = current[i];
-                        return (
-                          <tr key={label}>
-                            <td className="small muted">{label}</td>
-                            <td style={{ minWidth: 180 }}>
-                              <select
-                                name={`providerId.${i}`}
-                                defaultValue={r?.providerId ?? ""}
-                                aria-label={`${label}: service`}
-                              >
-                                <option value="">—</option>
-                                {options.map((p) => (
-                                  <option key={p.id} value={p.id}>
-                                    {p.name}
-                                    {p.enabled ? "" : " (off)"}
-                                  </option>
-                                ))}
-                              </select>
-                            </td>
-                            <td style={{ minWidth: 200 }}>
-                              <input
-                                type="text"
-                                name={`model.${i}`}
-                                defaultValue={r?.model ?? ""}
-                                list={`models-${kind}`}
-                                aria-label={`${label}: model`}
-                                autoComplete="off"
-                              />
-                            </td>
-                            {kind === "llm" ? (
-                              <td style={{ minWidth: 120 }}>
-                                <select
-                                  name={`effort.${i}`}
-                                  defaultValue={r?.effort ?? ""}
-                                  aria-label={`${label}: effort`}
-                                >
-                                  <option value="">Default</option>
-                                  {EFFORTS.map((e) => (
-                                    <option key={e} value={e}>
-                                      {e}
-                                    </option>
-                                  ))}
-                                </select>
-                              </td>
-                            ) : null}
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                <RouteSlots
+                  labels={SLOTS}
+                  services={options.map(service)}
+                  current={current}
+                  {...(kind === "llm" ? { efforts: EFFORTS } : {})}
+                />
                 <div className="form-actions">
                   <SubmitButton>Save</SubmitButton>
                   <span className="hint">With nothing chosen: {fallback}.</span>

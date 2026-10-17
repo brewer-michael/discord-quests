@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { ProviderForm } from "@/components/ProviderForm";
 import { requireGuild } from "@/server/access";
+import { services } from "@/server/db";
 import { presetOptions } from "@/server/providers";
+import { guildRoutes } from "@/server/routes";
+import { STORY_TASKS } from "@/server/tasks";
 import { saveProviderAction } from "../../actions";
 
 export const metadata = { title: "Add a service" };
@@ -16,6 +19,8 @@ export default async function NewProvider({
   const { guildId } = await params;
   const kind = (await searchParams).kind === "image" ? "image" : "llm";
   await requireGuild(guildId);
+  const routes = await guildRoutes(services().handle.db, guildId);
+  const inUse = kind === "llm" ? STORY_TASKS.some((t) => routes[t].length > 0) : routes.image.length > 0;
   return (
     <div className="card">
       <p className="small">
@@ -31,6 +36,7 @@ export default async function NewProvider({
         kind={kind}
         presets={presetOptions()}
         save={saveProviderAction.bind(null, guildId, null)}
+        inUse={inUse}
       />
     </div>
   );
