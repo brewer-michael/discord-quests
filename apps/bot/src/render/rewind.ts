@@ -1,7 +1,7 @@
 /**
- * The rewind card, shown only in the DM room: the turns the story can go back to (with how the party stood
- * after each), a confirm step, and two fixes that work without a restore point: mend the party, and rebuild
- * the fight in progress.
+ * The DM tools card, shown only in the DM room: the turns the story can go back to (with how the party stood
+ * after each), a confirm step, two fixes that work without a restore point (mend the party, and rebuild the
+ * fight in progress), and the table's fight rules.
  */
 import {
   ActionRowBuilder,
@@ -19,6 +19,8 @@ export interface RewindInfo {
   campaignName: string;
   turnSeq: number;
   fighting: boolean;
+  /** Whether near misses graze and misses earn Courage. */
+  partialHits: boolean;
   party: Array<{ name: string; hp: number; hpMax: number }>;
   points: Array<{
     turnSeq: number;
@@ -46,7 +48,7 @@ export function renderRewindCard(info: RewindInfo, problem?: string) {
   const c = new ContainerBuilder().setAccentColor(COLORS.dusk);
   c.addTextDisplayComponents(
     text(
-      `## ⏪ Rewind: ${esc(info.campaignName)}\n-# Puts the party, their packs, the scene and the choices back as they were after an earlier turn. The turns after it are kept in the history, marked as undone, and the storyteller forgets them.`,
+      `## 🛠️ DM tools: ${esc(info.campaignName)}\n**⏪ Rewind** puts the party, their packs, the scene and the choices back as they were after an earlier turn.\n-# The turns after it are kept in the history, marked as undone, and the storyteller forgets them.`,
     ),
   );
   if (problem) c.addTextDisplayComponents(text(`⚠️ ${problem}`));
@@ -91,8 +93,28 @@ export function renderRewindCard(info: RewindInfo, problem?: string) {
         .setEmoji("⚔️")
         .setStyle(ButtonStyle.Secondary),
     );
-  row.addComponents(button(info.campaignId, "cancel").setLabel("Never mind").setStyle(ButtonStyle.Secondary));
   c.addActionRowComponents(row);
+  c.addSeparatorComponents(divider());
+  c.addTextDisplayComponents(
+    text(
+      info.partialHits
+        ? "**⚔️ Fight rules: partial hits.** A hero's attack that misses by 1 or 2 grazes for a little damage, and a miss earns ✨ Courage: a second try on their next miss."
+        : "**⚔️ Fight rules: standard.** A miss is a miss, as in the SRD. Partial hits let near misses graze and turn misses into ✨ Courage for a second try.",
+    ),
+  );
+  c.addActionRowComponents(
+    new ActionRowBuilder<ButtonBuilder>().addComponents(
+      info.partialHits
+        ? button(info.campaignId, "graze-off")
+            .setLabel("Back to standard rules")
+            .setStyle(ButtonStyle.Secondary)
+        : button(info.campaignId, "graze-on")
+            .setLabel("Turn on partial hits")
+            .setEmoji("✨")
+            .setStyle(ButtonStyle.Primary),
+      button(info.campaignId, "cancel").setLabel("Never mind").setStyle(ButtonStyle.Secondary),
+    ),
+  );
   return { components: [c], flags: V2, allowedMentions: { parse: [] as never[] } };
 }
 

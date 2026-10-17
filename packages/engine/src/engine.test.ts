@@ -955,6 +955,14 @@ describe.skipIf(!TEST_DATABASE_URL)("rewinding", () => {
     const mended = (await db.db.select().from(characters).where(eq(characters.id, hero.id)))[0];
     expect([mended?.hp, mended?.conditions]).toEqual([hero.hpMax, []]);
 
+    // Partial hits switch on and off from the DM room, for the host, a DM or a guardian only.
+    expect((await engine.turns.rewindPoints(c.id, "host")).partialHits).toBe(false);
+    await expect(engine.turns.setPartialHits(c.id, "player", true)).rejects.toThrow();
+    await engine.turns.setPartialHits(c.id, "host", true);
+    expect((await engine.turns.rewindPoints(c.id, "host")).partialHits).toBe(true);
+    await engine.turns.setPartialHits(c.id, "host", false);
+    expect((await engine.turns.rewindPoints(c.id, "host")).partialHits).toBe(false);
+
     await expect(engine.turns.rebuildFight(c.id, "host")).rejects.toThrow(/no fight/i);
     for (let i = 0; i < 20 && view().combat?.phase !== "fighting"; i++) await step();
     expect(view().combat?.phase).toBe("fighting");

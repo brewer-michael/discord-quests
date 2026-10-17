@@ -863,6 +863,7 @@ describe("rewinding from the DM room", () => {
       campaignName: "A Campaign With A Very Long Name Indeed",
       turnSeq: 99,
       fighting: true,
+      partialHits: false,
       party,
       points: Array.from({ length: 10 }, (_, i) => ({
         turnSeq: 98 - i,
@@ -877,20 +878,38 @@ describe("rewinding from the DM room", () => {
     expect(card).toContain("Go back to…");
     expect(card).toContain("Rebuild this fight");
     expect(JSON.stringify(checkLimits(renderRewindConfirm(info, 97)))).toContain("Go back 2 turns?");
-    const none = JSON.stringify(checkLimits(renderRewindCard({ ...info, points: [], fighting: false })));
+    expect(card).toContain("Fight rules: standard");
+    expect(card).toContain("Turn on partial hits");
+    const none = JSON.stringify(
+      checkLimits(renderRewindCard({ ...info, points: [], fighting: false, partialHits: true })),
+    );
     expect(none).toContain("No restore points yet");
     expect(none).not.toContain("Rebuild this fight");
+    expect(none).toContain("Fight rules: partial hits");
+    expect(none).toContain("Back to standard rules");
     checkLimits(renderRewindDone("Done."));
   });
 });
 
 describe("rewind mentions", () => {
   const campaign = { id: UUID, name: "Rewind Road", status: "active", threadId: "table-thread" };
+  let partialHits = false;
+  const tableSend = vi.fn(async () => ({}));
+  const setPartialHits = vi.fn(async (_c: string, _u: string, on: boolean) => {
+    partialHits = on;
+  });
   const ctx = () =>
     ({
-      client: { user: { id: "bot" } },
+      client: {
+        user: { id: "bot" },
+        channels: {
+          fetch: async (id: string) =>
+            id === "table-thread" ? { isSendable: () => true, send: tableSend } : null,
+        },
+      },
       engine: {
         campaigns: {
+          get: async () => campaign,
           rooms: async () => ({
             table: { id: "table", name: "quest-table" },
             dm: { id: "dm-room", name: "dm-screen" },
@@ -900,11 +919,13 @@ describe("rewind mentions", () => {
           canSupervise: async (_: string, userId: string) => userId === "host",
         },
         turns: {
+          setPartialHits,
           rewindPoints: async () => ({
             campaignId: UUID,
             campaignName: "Rewind Road",
             turnSeq: 9,
             fighting: false,
+            partialHits,
             party: [{ name: "Bram", hp: 3, hpMax: 12 }],
             points: [
               {
@@ -963,5 +984,40 @@ describe("rewind mentions", () => {
     const screen = message({ id: "screen", parentId: "dm-room", thread: true }, "host", "<@bot> rewind");
     await rewindMention(ctx(), screen.msg);
     expect(JSON.stringify(screen.reply.mock.calls)).toContain("Go back to");
+  });
+
+  it("switch partial hits from the DM room, and tell the table", async () => {
+    const { rewindInteraction } = await import("./handlers/rewind");
+    const click = (channelId: string) => {
+      const editReply = vi.fn(async () => ({}));
+      return {
+        editReply,
+        i: {
+          inGuild: () => true,
+          guildId: "g",
+          channel: { id: channelId, parentId: null, isThread: () => false },
+          user: { id: "host" },
+          deferUpdate: vi.fn(async () => ({})),
+          editReply,
+          deferred: true,
+          replied: false,
+        } as never,
+      };
+    };
+    const atTable = click("table");
+    await rewindInteraction(ctx(), atTable.i, { kind: "rewind", campaignId: UUID, action: "graze-on" });
+    expect(setPartialHits).not.toHaveBeenCalled();
+
+    const on = click("dm-room");
+    await rewindInteraction(ctx(), on.i, { kind: "rewind", campaignId: UUID, action: "graze-on" });
+    expect(setPartialHits).toHaveBeenCalledWith(UUID, "host", true);
+    expect(JSON.stringify(tableSend.mock.calls)).toContain("New fight rules");
+    expect(JSON.stringify(on.editReply.mock.calls)).toContain("Back to standard rules");
+
+    const off = click("dm-room");
+    await rewindInteraction(ctx(), off.i, { kind: "rewind", campaignId: UUID, action: "graze-off" });
+    expect(setPartialHits).toHaveBeenLastCalledWith(UUID, "host", false);
+    expect(JSON.stringify(tableSend.mock.calls)).toContain("back to standard");
+    expect(JSON.stringify(off.editReply.mock.calls)).toContain("Turn on partial hits");
   });
 });

@@ -177,7 +177,7 @@ bot opens a private **DM screen** thread that only the DM is added to.
   safe for later. `/loom plant` adds a deed by hand. `/loom mode` switches the hidden hand off if the DM would
   rather handle it themselves.
 
-### Rewinding turns
+### DM room tools: rewinding, fixes and fight rules
 
 When a turn goes wrong (a bug, a fight that should never have happened), the host, a DM or a guardian can put
 the game back as it was. This works **only in the DM room** (or a DM screen thread inside it), so nothing shows at
@@ -197,6 +197,11 @@ bugged`. The bot replies with a card:
   fight** draws the fight in progress again, balanced for the party as it stands. Both work at any time, including
   in campaigns from before restore points existed: restore points are saved from the first turn played after the
   update that added them.
+- **Fight rules** switches partial hits on or off. With them on, a hero's attack (weapon or spell) that misses by
+  1 or 2, and isn't a natural 1, grazes for the attack's ability modifier, and an attack that does nothing earns
+  ✨ Courage: on the hero's next miss the bot rerolls it for them, and the new roll stands. Foes' misses stay
+  misses. The change applies from the next round, and the table gets a short note saying what changed. New
+  campaigns start with standard SRD rules. The research behind it is in `docs/research/combat-miss-rules/`.
 
 The bot reads only messages that mention it. It needs no extra permissions or intents switched on in the
 Developer Portal.

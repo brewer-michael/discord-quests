@@ -2080,6 +2080,7 @@ export class TurnService {
       turnSeq: c.turnSeq,
       party: party.map((p) => ({ name: p.name, hp: p.hp, hpMax: p.hpMax })),
       fighting: Boolean(asStory(c.story).sceneKind) && (await this.currentFight(c)) !== null,
+      partialHits: campaignSettings(c).combatRules.partialHits,
       points: points
         .filter((p) => !isRewound(c.story, p.turnSeq))
         .slice(0, 10)
@@ -2194,6 +2195,26 @@ export class TurnService {
     const [row] = await this.deps.db.select().from(scenes).where(eq(scenes.id, sceneId));
     const spec = row?.state as unknown as SceneSpec | undefined;
     return row && spec?.combat?.phase === "fighting" ? { row, spec } : null;
+  }
+
+  /** Switches partial hits on or off, from the next round of a fight. */
+  async setPartialHits(campaignId: string, userId: string, on: boolean): Promise<void> {
+    const c = await this.supervised(campaignId, userId);
+    await this.deps.db.transaction(async (tx) => {
+      await tx
+        .update(campaigns)
+        .set({
+          settings: { ...(c.settings as Record<string, unknown>), partialHits: on },
+          updatedAt: new Date(),
+        })
+        .where(eq(campaigns.id, c.id));
+      await tx.insert(events).values({
+        campaignId,
+        turnSeq: c.turnSeq,
+        type: "fight_rules_changed",
+        payload: { by: userId, partialHits: on },
+      });
+    });
   }
 
   /** For any campaign, restore points or not: everyone back on their feet and fully rested. */

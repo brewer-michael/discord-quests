@@ -1,7 +1,8 @@
 /**
- * Rewinding, from the DM room only. The host, a DM or a guardian mentions the bot there ("@Discord Quests
- * rewind 2 turns, the wolf fight went wrong") and gets the rewind card; nothing about it is shown at the table
- * until a rewind, mend or rebuild actually happens. Mentions and clicks anywhere else are ignored.
+ * DM tools, from the DM room only. The host, a DM or a guardian mentions the bot there ("@Discord Quests
+ * rewind 2 turns, the wolf fight went wrong") and gets the card: rewind, mend, rebuild, and the fight rules.
+ * Nothing about it is shown at the table until something actually changes. Mentions and clicks anywhere else
+ * are ignored.
  */
 import { GameError } from "@dq/engine";
 import type { ButtonInteraction, Message, StringSelectMenuInteraction } from "discord.js";
@@ -179,6 +180,21 @@ export async function rewindInteraction(
           await postTurn(ctx, ch, view);
         }
         await i.editReply(renderRewindDone("✅ The fight was rebuilt for the party as it stands.") as never);
+        return;
+      }
+      case "graze-on":
+      case "graze-off": {
+        await i.deferUpdate();
+        const on = id.action === "graze-on";
+        await ctx.engine.turns.setPartialHits(campaignId, i.user.id, on);
+        await toTable(
+          ctx,
+          campaignId,
+          on
+            ? "⚔️ **New fight rules:** an attack that only just misses still grazes the foe, and a miss builds ✨ Courage for a second try on the next one."
+            : "⚔️ **The fight rules are back to standard:** a miss is a miss.",
+        );
+        await i.editReply((await card()) as never);
         return;
       }
     }
