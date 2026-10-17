@@ -424,8 +424,12 @@ export function ProviderForm({
                     ) : (
                       <option value="preset">Not at all (the model's default)</option>
                     )}
-                    <option value="reasoning_effort">reasoning_effort (OpenAI, Groq, Ollama, vLLM…)</option>
-                    <option value="thinking_type">thinking: enabled / disabled (Z.ai GLM, DeepSeek)</option>
+                    <option value="reasoning_effort">
+                      reasoning_effort (OpenAI, Z.ai, Groq, Ollama, vLLM…)
+                    </option>
+                    <option value="thinking_type">
+                      thinking: enabled / disabled, with reasoning_effort (DeepSeek)
+                    </option>
                     <option value="reasoning_enabled">
                       reasoning_effort, and reasoning.enabled to switch off (Together)
                     </option>

@@ -622,7 +622,7 @@ describe("presets", () => {
     const style = (id: string) => presets("llm").find((p) => p.id === id)?.capabilities.reasoning;
     expect(style("openai")).toBe("reasoning_effort");
     expect(style("openrouter")).toBe("openrouter");
-    expect(style("zai")).toBe("thinking_type");
+    expect(style("zai")).toBe("reasoning_effort");
     expect(style("deepseek")).toBe("thinking_type");
     expect(style("together")).toBe("reasoning_enabled");
     expect(style("lmstudio")).toBe("none");

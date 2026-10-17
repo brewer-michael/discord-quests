@@ -54,8 +54,7 @@ export function reasoningFields(
     case "openrouter":
       return { reasoning: { effort: level } };
     case "thinking_type":
-      // Thinking switches on or off; models that list levels (Z.ai GLM-5.2 and up, DeepSeek V4) also take
-      // reasoning_effort.
+      // Thinking switches on or off; models that list levels (DeepSeek V4) also take reasoning_effort.
       return {
         thinking: { type: effort === "none" ? "disabled" : "enabled" },
         ...(effort !== "none" && levels.length > 0 ? { reasoning_effort: effort } : {}),

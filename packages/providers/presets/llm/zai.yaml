@@ -15,7 +15,7 @@ keyUrl: https://z.ai/manage-apikey/apikey-list
 # GLM-5.3-Flash supersede the earlier GLM models; they always think and take reasoning_effort low, high or max.
 # Reasoning comes back in message.reasoning_content.
 capabilities:
-  { structured: json_object, promptCache: implicit, effort: false, serverFallbacks: false, maxTokensParam: max_tokens, reasoning: thinking_type }
+  { structured: json_object, promptCache: implicit, effort: false, serverFallbacks: false, maxTokensParam: max_tokens, reasoning: reasoning_effort }
 docs:
   - https://docs.z.ai/api-reference/llm/chat-completion
   - https://docs.z.ai/guides/overview/concept-param
@@ -30,21 +30,21 @@ models:
     maxOutput: 131072
     reasoning: { mode: always, efforts: [low, high, max], default: max }
     structured: json_object
-    note: Flagship. Always thinks; thinking can't be switched off.
+    note: Flagship.
   - id: glm-5.3-flash
     label: GLM-5.3-Flash
     contextWindow: 1000000
     maxOutput: 131072
     reasoning: { mode: always, efforts: [low, high, max], default: max }
     structured: json_object
-    note: Low-cost sibling of GLM-5.3. Always thinks.
+    note: Low-cost sibling of GLM-5.3.
   - id: glm-5.3-flashx
     label: GLM-5.3-FlashX
     contextWindow: 1000000
     maxOutput: 131072
     reasoning: { mode: always, efforts: [low, high, max], default: max }
     structured: json_object
-    note: Faster Flash. Documented on the GLM-5.3-Flash page, which lists thinking as enabled only.
+    note: Faster Flash, documented on the GLM-5.3-Flash page.
 defaultModels:
   narrator: glm-5.3
   director: glm-5.3

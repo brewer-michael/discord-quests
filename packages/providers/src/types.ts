@@ -53,10 +53,10 @@ export interface ResolvedProviderConfig {
 
 /**
  * How a service is told how hard to reason. OpenAI-compatible services don't agree on it:
- * - reasoning_effort: a top-level "reasoning_effort" (OpenAI, Groq, xAI, Fireworks, Mistral, Ollama, vLLM).
+ * - reasoning_effort: a top-level "reasoning_effort" (OpenAI, Z.ai, Groq, xAI, Fireworks, Mistral, Ollama, vLLM).
  * - openrouter: a "reasoning": { effort } object.
  * - thinking_type: a "thinking": { type: "enabled" | "disabled" } object, plus "reasoning_effort" for models
- *   that list levels (Z.ai GLM, DeepSeek).
+ *   that list levels (DeepSeek).
  * - reasoning_enabled: "reasoning_effort" for the level, and "reasoning": { enabled: false } to switch it off
  *   (Together).
  * - enable_thinking: "chat_template_kwargs": { enable_thinking } (Qwen-style servers).
