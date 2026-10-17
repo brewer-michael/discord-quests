@@ -141,7 +141,7 @@ export function campaignSettings(c: CampaignRow) {
   const s = c.settings as Record<string, unknown>;
   return {
     epilogueStyle: (s.epilogueStyle as EpilogueStyle) ?? "subtle",
-    /** Table rules for fights (partialHits is a placeholder for now). Off unless the campaign switches it on. */
+    /** Table rules for fights. Off unless the campaign switches them on. */
     combatRules: { partialHits: s.partialHits === true } satisfies CombatRules,
   };
 }
@@ -184,7 +184,7 @@ export class TurnService {
       party,
       heroesFor(index, party, await this.inventoryFor(party)),
       this.dice(loom.masterSeed, seq, "encounter"),
-      { intensity: told.story.intensity, avoid: told.story.lines },
+      { intensity: told.story.intensity, avoid: told.story.lines, combat: campaignSettings(c).combatRules },
     );
 
     const view = this.publicView({
@@ -640,7 +640,7 @@ export class TurnService {
           party,
           heroesFor(index, party, inventory),
           this.dice(loom.masterSeed, seq, "encounter"),
-          { intensity: told.story.intensity, avoid: told.story.lines },
+          { intensity: told.story.intensity, avoid: told.story.lines, combat: settings.combatRules },
         )
       : null;
     const mode: NarrationMode = !closing ? "continue" : nextSpec ? "close_and_open" : "finale";
@@ -2241,7 +2241,7 @@ export class TurnService {
       party,
       heroesFor(index, party, await this.inventoryFor(party)),
       this.dice(loom.masterSeed, c.turnSeq + 1, "rebuild"),
-      { intensity: told.story.intensity, avoid: told.story.lines },
+      { intensity: told.story.intensity, avoid: told.story.lines, combat: campaignSettings(c).combatRules },
     );
     if (!built.combat)
       throw new GameError("no foes", "I couldn't find foes that fit here. Try a rewind instead.");

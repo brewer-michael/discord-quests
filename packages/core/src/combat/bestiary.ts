@@ -6,7 +6,7 @@
 import type { Rng } from "../rng/index";
 import type { CreatureDef, HABITATS } from "../world/schema";
 import { creatureXp, type Difficulty, xpBudget } from "./balance";
-import { type FoeTableEntry, rollFoes } from "./index";
+import { type CombatRules, type FoeTableEntry, rollFoes } from "./index";
 
 export type Habitat = (typeof HABITATS)[number];
 export type Intensity = "light" | "classic" | "epic";
@@ -61,6 +61,8 @@ export function regionHabitats(region: { biome: string; terrain: readonly string
 export interface TableRules {
   intensity: Intensity;
   avoid: readonly string[];
+  /** Its fight rules, for the balance's test fights. */
+  combat?: CombatRules;
 }
 
 export function creatureAllowed(c: CreatureDef, rules: TableRules): boolean {

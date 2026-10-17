@@ -12,6 +12,7 @@ import {
   buildEncounter,
   type CombatState,
   defenseOf,
+  GRAZE_BAND,
   type HeroCombatant,
   heroCombatant,
   resolveCombatRound,
@@ -250,7 +251,7 @@ describe("defenses and misses", () => {
     expect(defenseOf(creature("mage"))).toBe("ward");
   });
 
-  it("plays misses as the SRD has them, with or without the partial-hits flag until it's built", () => {
+  it("plays misses as the SRD has them, unless the table switches on partial hits", () => {
     const h = hero("a");
     const wolfFight = buildEncounter({
       foes: [{ creature: creature("shadow-wolf"), count: 1 }],
@@ -275,8 +276,13 @@ describe("defenses and misses", () => {
         expect(swing.roll.against).toBe(`defense ${foe.ac}`);
         if (!swing.roll.success) {
           misses++;
-          expect(swing.roll.damage).toBeUndefined();
-          expect(r.state.foes[0]?.hp).toBe(foe.hp);
+          const near = swing.roll.natural !== 1 && foe.ac - swing.roll.total <= GRAZE_BAND;
+          if (partialHits && near) expect(swing.roll.graze).toBe(true);
+          else {
+            expect(swing.roll.graze).toBeUndefined();
+            expect(swing.roll.damage).toBeUndefined();
+            expect(r.state.foes[0]?.hp).toBe(foe.hp);
+          }
         }
       }
     }

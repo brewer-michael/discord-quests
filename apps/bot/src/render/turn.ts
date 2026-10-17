@@ -14,7 +14,8 @@ import { clip, divider, esc, SCENE_COLOR, text, V2 } from "./common";
 
 /**
  * One roll: "🎲 Cuthbert: Longbow: 15 +7 = 22 vs defense 13 ✅ 9 damage", with a foe's attacks marked 👾. A
- * passed saving throw shows the damage it still took.
+ * passed saving throw shows the damage it still took. Under partial hits, a near miss shows its graze and a miss
+ * that Courage rerolled shows both rolls.
  */
 const DICE = (r: TurnView["rolls"][number]) => {
   const modeNote =
@@ -27,20 +28,23 @@ const DICE = (r: TurnView["rolls"][number]) => {
       ? `💥 **critical hit!**${r.damage ? ` **${r.damage} damage**` : ""}`
       : attack && r.natural === 1
         ? "❌ natural 1, an automatic miss"
-        : r.success
-          ? r.damage
-            ? `✅ **${r.damage} damage**`
-            : attack
-              ? "✅ hit"
-              : "✅"
-          : r.damage
-            ? attack
-              ? `❌ miss · **${r.damage} damage**`
-              : `❌ · **${r.damage} damage**`
-            : attack
-              ? "❌ miss"
-              : "❌";
-  return `${r.foe ? "👾" : "🎲"} **${esc(r.characterName)}**: ${r.label}${modeNote}: ${r.rolls.join("/")} ${mod} = **${r.total}** vs ${r.difficulty} ${result}`;
+        : r.graze
+          ? `🩹 close! grazed it for **${r.damage ?? 0} damage**`
+          : r.success
+            ? r.damage
+              ? `✅ **${r.damage} damage**`
+              : attack
+                ? "✅ hit"
+                : "✅"
+            : r.damage
+              ? attack
+                ? `❌ miss · **${r.damage} damage**`
+                : `❌ · **${r.damage} damage**`
+              : attack
+                ? "❌ miss"
+                : "❌";
+  const courage = r.rerolled ? `~~${r.rerolled.join("/")}~~ ✨ Courage! ` : "";
+  return `${r.foe ? "👾" : "🎲"} **${esc(r.characterName)}**: ${r.label}${modeNote}: ${courage}${r.rolls.join("/")} ${mod} = **${r.total}** vs ${r.difficulty} ${result}`;
 };
 
 export interface TurnRenderOptions {
@@ -184,7 +188,7 @@ function battlePanel(cb: NonNullable<TurnView["combat"]>): string {
   const heroes = cb.heroes
     .map(
       (h) =>
-        `${h.down ? "💫" : "🛡️"} **${esc(h.name)}** ${bar(h.hp, h.hpMax)} ${h.hp}/${h.hpMax}${h.down ? " · dazed" : ""}`,
+        `${h.down ? "💫" : "🛡️"} **${esc(h.name)}** ${bar(h.hp, h.hpMax)} ${h.hp}/${h.hpMax}${h.down ? " · dazed" : ""}${h.courage ? " · ✨ Courage" : ""}`,
     )
     .join("\n");
   return `### ⚔️ ${fighting ? `Battle · round ${cb.round + 1}` : "The fight is over"}\n${foes}\n\n${heroes}`;

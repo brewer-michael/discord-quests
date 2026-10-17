@@ -95,6 +95,14 @@ describe("balancing a fight", () => {
     ).toBeLessThan(0.8);
   });
 
+  it("plays its test fights by the table's rules", () => {
+    const hero = archer();
+    const wolf = [{ creature: creature("shadow-wolf"), count: 1, hpScale: 1 }];
+    const srd = testFights(wolf, [hero], creatures, 400);
+    const partial = testFights(wolf, [hero], creatures, 400, { partialHits: true });
+    expect(partial).toBeGreaterThan(srd);
+  });
+
   it("swaps in a weaker creature of the same side when even a weakened one is too much", () => {
     const r = balanceEncounter({
       foes: [{ creature: creature("gloam-knight"), count: 1 }],

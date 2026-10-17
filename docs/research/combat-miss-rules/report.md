@@ -223,6 +223,9 @@ Other combat findings worth carrying into later design (`notes/combat_mechanics.
 
 **Plan to build, measure and tune.**
 
+Steps 1 to 3 are done: the band is 1–2 and Courage is automatic and for attacks only, as the owner chose on
+2026-10-17, and the engine results are in `engine-run.md`.
+
 1. Fix the two engine gaps above. They are small and independent of the flag.
 2. Build the band and Courage behind `settings.partialHits`, and add them to the balancer's test fights.
 3. Re-run the shadow-wolf, wolf and owlbear fights through the TypeScript engine, which is faithful where `sim/` is

@@ -1,13 +1,14 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { starterIndex } from "../loom/test-helpers";
-import { createRng, sequenceRng } from "../rng/index";
+import { createRng, faceValue, sequenceRng } from "../rng/index";
 import type { Ability } from "../rules/abilities";
 import {
   buildEncounter,
   type CombatAction,
   type CombatState,
   canCast,
+  GRAZE_BAND,
   type HeroCombatant,
   heroCombatant,
   isDownHero,
@@ -261,6 +262,111 @@ describe("conditions foes put on heroes", () => {
     expect(res.state.phase).toBe("over");
     expect(res.heroes[0]!.conditions).toEqual(["poisoned"]);
     expect(res.state.heroConditionRounds).toEqual({});
+  });
+});
+
+describe("partial hits", () => {
+  // Armor class 13 and never hits back: the foe's d20s below all come up 1.
+  const dummy = {
+    ...creature("shadow-wolf"),
+    id: "dummy",
+    name: "Dummy",
+    hp: "100",
+    morale: "brave" as const,
+    traits: [],
+    attacks: [{ name: "Swat", bonus: 0, damage: "1", damageType: "bludgeoning" }],
+  };
+  const table = new Map([...creatures, [dummy.id, dummy]]);
+  const on = { partialHits: true };
+  const d20 = (face: number) => faceValue(face, 20);
+  /** The hero's d20s in turn, then 1s for everything else. */
+  const rolls = (...faces: number[]) => sequenceRng([...faces.map(d20), ...Array(40).fill(0)]);
+
+  function fight(hero: HeroCombatant, ac = 13): CombatState {
+    const foe = { ...dummy, ac };
+    const s = buildEncounter({ foes: [{ creature: foe, count: 1 }], heroes: [hero], rng: createRng("ph") });
+    s.order = [
+      { id: hero.id, side: "hero", initiative: 30 },
+      { id: s.foes[0]!.id, side: "foe", initiative: 1 },
+    ];
+    return s;
+  }
+  const swing = (s: CombatState, h: HeroCombatant, rng: ReturnType<typeof rolls>, rules = on) =>
+    resolveCombatRound(s, [h], { [h.id]: { kind: "attack" } }, table, rng, rules);
+  const heroRoll = (res: ReturnType<typeof swing>, h: HeroCombatant) =>
+    res.events.find((e) => e.actorId === h.id)?.roll;
+
+  it("grazes on a miss by 1 or 2, for the attack's ability modifier", () => {
+    const f = fighter(); // Longsword +5, Strength +3.
+    expect(GRAZE_BAND).toBe(2);
+    for (const face of [7, 6]) {
+      const res = swing(fight(f), f, rolls(face));
+      expect(heroRoll(res, f)).toMatchObject({ success: false, graze: true, damage: 3 });
+      expect(res.state.foes[0]!.hp).toBe(97);
+      expect(res.state.courage).toEqual([]);
+    }
+  });
+
+  it("earns Courage on a plain miss, and spends it to reroll the next miss", () => {
+    const f = fighter();
+    let res = swing(fight(f), f, rolls(5)); // 10 against 13: too far to graze.
+    expect(heroRoll(res, f)).toMatchObject({ success: false });
+    expect(heroRoll(res, f)?.graze).toBeUndefined();
+    expect(res.state.courage).toEqual([f.id]);
+
+    res = swing(res.state, f, rolls(2, 15)); // A miss, rerolled into a hit.
+    expect(heroRoll(res, f)).toMatchObject({ rerolled: [2], rolls: [15], total: 20, success: true });
+    expect(res.events.find((e) => e.actorId === f.id)?.text).toMatch(/courage/);
+    expect(res.state.courage).toEqual([]);
+  });
+
+  it("keeps Courage through a hit, and earns it back when the reroll misses too", () => {
+    const f = fighter();
+    let res = swing(fight(f), f, rolls(5));
+    res = swing(res.state, f, rolls(15));
+    expect(heroRoll(res, f)?.rerolled).toBeUndefined();
+    expect(res.state.courage).toEqual([f.id]);
+    res = swing(res.state, f, rolls(3, 4));
+    expect(heroRoll(res, f)).toMatchObject({ rerolled: [3], rolls: [4], success: false });
+    expect(res.state.courage).toEqual([f.id]);
+  });
+
+  it("never grazes on a natural 1", () => {
+    const f = fighter();
+    const res = swing(fight(f, 7), f, rolls(1)); // 6 against 7, but a natural 1.
+    expect(heroRoll(res, f)?.graze).toBeUndefined();
+    expect(res.state.foes[0]!.hp).toBe(100);
+    expect(res.state.courage).toEqual([f.id]);
+  });
+
+  it("works the same for spell attacks", () => {
+    const w = wizard(); // Fire Bolt +5, Intelligence +3.
+    const res = resolveCombatRound(
+      fight(w),
+      [w],
+      { [w.id]: { kind: "cast", spellId: "fire-bolt" } },
+      table,
+      rolls(6),
+      on,
+    );
+    expect(heroRoll(res, w)).toMatchObject({ graze: true, damage: 3 });
+  });
+
+  it("changes nothing when the table hasn't switched it on", () => {
+    const f = fighter();
+    const res = swing(fight(f), f, rolls(7), { partialHits: false });
+    expect(heroRoll(res, f)).toMatchObject({ success: false });
+    expect(heroRoll(res, f)?.damage).toBeUndefined();
+    expect(res.state.foes[0]!.hp).toBe(100);
+    expect(res.state.courage).toBeUndefined();
+  });
+
+  it("lets Courage end with the fight", () => {
+    const f = fighter();
+    const s = { ...fight(f), round: MAX_COMBAT_ROUNDS - 1 };
+    const res = swing(s, f, rolls(5));
+    expect(res.state.phase).toBe("over");
+    expect(res.state.courage).toBeUndefined();
   });
 });
 

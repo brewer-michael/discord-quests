@@ -16,6 +16,7 @@ below describes the first pass.
   https://claude.ai/code/artifact/c9af71c0-8209-4267-bfc3-80f2ab9a640d
 - Notes so far: [`notes/`](notes/) (one file per research area)
 - Simulations: [`sim/`](sim/) (Python 3, standard library only)
+- The same fights through the real engine, with the chosen rules: [`engine-run.md`](engine-run.md) (`pnpm fight-rules`)
 
 ## The problem, in one paragraph
 

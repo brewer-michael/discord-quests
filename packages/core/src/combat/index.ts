@@ -61,6 +61,8 @@ export interface CombatState {
    * Missing from fights saved before it was added.
    */
   heroConditionRounds?: Record<string, Partial<Record<Condition, number>>>;
+  /** Heroes holding Courage, under partial hits. It ends with the fight. */
+  courage?: string[];
 }
 
 export interface HeroAttack {
@@ -70,6 +72,8 @@ export interface HeroAttack {
   damage: string;
   damageType: string;
   ranged: boolean;
+  /** The ability modifier the attack uses, which is what a graze deals. */
+  abilityMod: number;
 }
 
 export interface HeroSpell {
@@ -148,8 +152,12 @@ export interface CombatRoll {
   against: string;
   success: boolean;
   mode: RollMode;
-  /** Hit points it took, when it landed. */
+  /** Hit points it took, when it landed or grazed. */
   damage?: number;
+  /** A miss close enough to graze, under partial hits. */
+  graze?: boolean;
+  /** The dice of the miss that Courage rerolled, under partial hits. */
+  rerolled?: number[];
 }
 
 export interface CombatEvent {
@@ -335,6 +343,7 @@ export function heroCombatant(args: {
       damage: signed(srd.damage, abilityMod),
       damageType: srd.damageType,
       ranged,
+      abilityMod,
     });
   }
   if (attacks.length === 0)
@@ -345,6 +354,7 @@ export function heroCombatant(args: {
       damage: String(Math.max(1, 1 + mod("str"))),
       damageType: "bludgeoning",
       ranged: false,
+      abilityMod: mod("str"),
     });
   attacks.sort((a, b) => averageDice(b.damage) + b.bonus - (averageDice(a.damage) + a.bonus));
 
@@ -403,16 +413,22 @@ export function defenseOf(c: Pick<CreatureDef, "defense" | "kind" | "ac" | "abil
 /**
  * Table rules a campaign can switch on. Off, a fight plays as the SRD has it.
  *
- * partialHits: partial hits and momentum, after the degrees of success in Pathfinder 2e and Blades in the
- * Dark and the Battle Master's Studied Attacks in 5e, so that a miss still moves the fight along. Not built
- * yet: the flag is in place, and what it will do is set out where attacks miss, to be tuned before it does
- * anything.
+ * partialHits: so that a hero's miss still moves the fight along, as set out in
+ * docs/research/combat-miss-rules/report.md. Heroes only; foes' misses stay as the SRD has them.
+ * - Graze: an attack that misses by no more than GRAZE_BAND, and isn't a natural 1, deals the attack's ability
+ *   modifier (at least 1). That is the payoff of the SRD's Graze mastery, with 13th Age's natural-1 exception.
+ * - Courage: an attack turn that does nothing earns the hero Courage, one at most. Their next miss spends it on a
+ *   reroll, and the new roll stands, as with the SRD's Heroic Inspiration. The bot spends it, so play by post
+ *   needs no extra reply. Attacks only, and it ends with the fight.
  */
 export interface CombatRules {
   partialHits: boolean;
 }
 
 export const STANDARD_RULES: CombatRules = { partialHits: false };
+
+/** How far short an attack can fall and still graze, under partial hits. */
+export const GRAZE_BAND = 2;
 
 export const isDownHero = (h: Pick<HeroCombatant, "hp" | "conditions">) =>
   h.hp <= 0 || h.conditions.includes("dazed");
@@ -444,6 +460,7 @@ function toRoll(
   against: string,
   success: boolean,
   damage = 0,
+  extra: Pick<CombatRoll, "graze" | "rerolled"> = {},
 ): CombatRoll {
   return {
     label,
@@ -455,6 +472,8 @@ function toRoll(
     success,
     mode: d20.mode,
     ...(damage > 0 ? { damage } : {}),
+    ...(extra.graze ? { graze: true } : {}),
+    ...(extra.rerolled ? { rerolled: extra.rerolled } : {}),
   };
 }
 
@@ -523,6 +542,24 @@ export function resolveCombatRound(
       }
     }
     if (Object.keys(clock).length === 0) delete clocks[h.id];
+  };
+
+  const courage = new Set(state.courage ?? []);
+  /**
+   * A hero's attack roll. Under partial hits, Courage rerolls a miss, a near miss grazes, and an attack that does
+   * nothing earns Courage. Without them it's one plain roll.
+   */
+  const heroAttackRoll = (h: HeroCombatant, bonus: number, ac: number, mode: RollMode) => {
+    let roll = rollAttack(bonus, ac, mode, rng);
+    if (!rules.partialHits) return { roll, graze: false };
+    let rerolled: number[] | undefined;
+    if (!roll.hit && courage.delete(h.id)) {
+      rerolled = roll.rolls;
+      roll = rollAttack(bonus, ac, mode, rng);
+    }
+    const graze = !roll.hit && !roll.fumble && ac - roll.total <= GRAZE_BAND;
+    if (!roll.hit && !graze) courage.add(h.id);
+    return { roll, graze, ...(rerolled ? { rerolled } : {}) };
   };
 
   const firstFighting = (preferId?: string) => {
@@ -635,8 +672,9 @@ export function resolveCombatRound(
         const upperHand = mode === "advantage" || foe.distracted;
         foe.distracted = false;
         const bless = state.blessed.includes(h.id) ? rng.int(1, 4) : 0;
-        const roll = rollAttack(atk.bonus + bless, foe.ac, mode, rng);
+        const { roll, graze, rerolled } = heroAttackRoll(h, atk.bonus + bless, foe.ac, mode);
         let text = `${h.name} ${atk.ranged ? "shoots" : "swings"} ${atk.name} at ${foe.name}`;
+        if (rerolled) text += ", misses, finds their courage and tries again,";
         let dmg = 0;
         if (roll.hit) {
           dmg = rollDamage(atk.damage, roll.critical, rng).total;
@@ -646,16 +684,11 @@ export function resolveCombatRound(
           text += roll.critical
             ? ` and lands a mighty hit for ${dmg}!${note}`
             : ` and hits for ${dmg}.${note}`;
-        } else {
-          text += " but misses.";
-          if (rules.partialHits) {
-            // Partial hits and momentum (placeholder, to be tuned):
-            // - Near miss: missing by no more than the hero's edge against this foe lands a glancing blow for
-            //   the attack's ability modifier. The edge comes from the hero's stats; it's never guaranteed.
-            // - Clean miss: +1 on the hero's next attack against the same foe, so misses build toward a hit.
-            // - A natural 1 is always a clean miss, with no momentum.
-          }
-        }
+        } else if (graze) {
+          const { dealt, note } = dealtTo(foe, Math.max(1, atk.abilityMod), atk.damageType);
+          dmg = dealt;
+          text += ` and only just grazes it for ${dmg}.${note}`;
+        } else text += " but misses.";
         events.push({
           actorId: h.id,
           actor: h.name,
@@ -663,7 +696,10 @@ export function resolveCombatRound(
           targetId: foe.id,
           target: foe.name,
           text,
-          roll: toRoll(atk.name, roll, atk.bonus + bless, roll.total, `defense ${foe.ac}`, roll.hit, dmg),
+          roll: toRoll(atk.name, roll, atk.bonus + bless, roll.total, `defense ${foe.ac}`, roll.hit, dmg, {
+            graze,
+            ...(rerolled ? { rerolled } : {}),
+          }),
         });
         if (dmg > 0) hurtFoe(foe, dmg);
         return;
@@ -809,26 +845,29 @@ export function resolveCombatRound(
         });
         foe.distracted = false;
         const bonus = h.spellAttack ?? 0;
-        const roll = rollAttack(bonus, foe.ac, mode, rng);
+        const { roll, graze, rerolled } = heroAttackRoll(h, bonus, foe.ac, mode);
         let text = `${h.name} casts ${spell.name} at ${foe.name}`;
+        if (rerolled) text += ", misses, finds their courage and tries again,";
         let dmg = 0;
         if (roll.hit) {
           const raw = rollDamage(scaleCantrip(e.damage, h.level, e.scalesAtLevels), roll.critical, rng).total;
           const { dealt, note } = dealtTo(foe, raw, e.damageType);
           dmg = dealt;
           text += ` and hits for ${dmg}.${note}`;
-        } else {
-          text += " but it goes wide.";
-          if (rules.partialHits) {
-            // Partial hits and momentum (placeholder): spell attacks follow the same rule as weapon attacks.
-          }
-        }
+        } else if (graze) {
+          const { dealt, note } = dealtTo(foe, Math.max(1, h.spellMod), e.damageType);
+          dmg = dealt;
+          text += ` and only just grazes it for ${dmg}.${note}`;
+        } else text += " but it goes wide.";
         events.push({
           ...base,
           targetId: foe.id,
           target: foe.name,
           text,
-          roll: toRoll(spell.name, roll, bonus, roll.total, `defense ${foe.ac}`, roll.hit, dmg),
+          roll: toRoll(spell.name, roll, bonus, roll.total, `defense ${foe.ac}`, roll.hit, dmg, {
+            graze,
+            ...(rerolled ? { rerolled } : {}),
+          }),
         });
         if (dmg > 0) hurtFoe(foe, dmg);
         return;
@@ -1125,6 +1164,8 @@ export function resolveCombatRound(
     state.outcome = "party_down";
     state.phase = "over";
   }
+  if (rules.partialHits && state.phase === "fighting") state.courage = [...courage];
+  else delete state.courage;
   if (state.phase !== "fighting") {
     // Whatever the foes did to the heroes ends with the fight.
     for (const [id, clock] of Object.entries(clocks)) {

@@ -16,10 +16,12 @@ import type { CreatureDef } from "../world/schema";
 import {
   buildEncounter,
   type CombatAction,
+  type CombatRules,
   type CombatState,
   type HeroCombatant,
   MAX_COMBAT_ROUNDS,
   resolveCombatRound,
+  STANDARD_RULES,
 } from "./index";
 
 export type Difficulty = "low" | "moderate" | "high";
@@ -109,8 +111,11 @@ export function balanceEncounter(args: {
   creatures: ReadonlyMap<string, CreatureDef>;
   /** Which stand-ins the table allows (its intensity and the topics it left out). */
   allowed?: (c: CreatureDef) => boolean;
+  /** The table's fight rules, so test fights play as the real one will. */
+  rules?: CombatRules;
 }): BalanceResult {
   const { heroes, difficulty, creatures } = args;
+  const rules = args.rules ?? STANDARD_RULES;
   const allowed = (c: CreatureDef) => !c.friendly && (args.allowed?.(c) ?? true);
   const budget = xpBudget(
     heroes.map((h) => h.level),
@@ -142,13 +147,13 @@ export function balanceEncounter(args: {
 
   let bestTried: { foes: BalancedFoe[]; xp: number; winRate: number } | undefined;
   for (const c of ranked.slice(0, 60)) {
-    const { passed, winRate } = trial(c.foes, heroes, creatures, TRIALS, MUST_WIN[difficulty]);
+    const { passed, winRate } = trial(c.foes, heroes, creatures, TRIALS, MUST_WIN[difficulty], rules);
     if (passed) return { foes: c.foes, difficulty, budget, xp: c.xp, winRate };
     if (!bestTried || winRate > bestTried.winRate) bestTried = { ...c, winRate };
   }
   // Nothing tested well enough: the smallest fight that fits, unless one already tried did better.
   const smallest = ranked.reduce((a, b) => (b.xp < a.xp ? b : a));
-  const smallestRate = testFights(smallest.foes, heroes, creatures);
+  const smallestRate = testFights(smallest.foes, heroes, creatures, TRIALS, rules);
   const pick =
     bestTried && bestTried.winRate > smallestRate ? bestTried : { ...smallest, winRate: smallestRate };
   return { foes: pick.foes, difficulty, budget, xp: pick.xp, winRate: pick.winRate };
@@ -204,8 +209,9 @@ export function testFights(
   heroes: readonly HeroCombatant[],
   creatures: ReadonlyMap<string, CreatureDef>,
   trials = TRIALS,
+  rules: CombatRules = STANDARD_RULES,
 ): number {
-  return trial(foes, heroes, creatures, trials, 0).winRate;
+  return trial(foes, heroes, creatures, trials, 0, rules).winRate;
 }
 
 /** Whether the heroes come through often enough, stopping as soon as they can't (then winRate is a bound). */
@@ -215,6 +221,7 @@ function trial(
   creatures: ReadonlyMap<string, CreatureDef>,
   trials: number,
   mustWin: number,
+  rules: CombatRules,
 ): { passed: boolean; winRate: number } {
   // Seeded from the fight itself, so the same party and foes always test the same.
   const key = [
@@ -225,7 +232,7 @@ function trial(
   const allowedLosses = trials - Math.ceil(trials * mustWin - 1e-9);
   let lost = 0;
   for (let t = 0; t < trials; t++) {
-    if (playOut(foes, heroes, creatures, rng) === "party_down") lost++;
+    if (playOut(foes, heroes, creatures, rng, rules) === "party_down") lost++;
     if (lost > allowedLosses) return { passed: false, winRate: (trials - lost) / trials };
   }
   return { passed: true, winRate: (trials - lost) / trials };
@@ -236,13 +243,14 @@ function playOut(
   heroList: readonly HeroCombatant[],
   creatures: ReadonlyMap<string, CreatureDef>,
   rng: Rng,
+  rules: CombatRules,
 ): CombatState["outcome"] {
   let state = buildEncounter({ foes, heroes: heroList, rng });
   let heroes = [...heroList];
   for (let round = 0; round < MAX_COMBAT_ROUNDS && state.phase === "fighting"; round++) {
     const actions: Record<string, CombatAction> = {};
     for (const h of heroes) actions[h.id] = plainAction(h);
-    const result = resolveCombatRound(state, heroes, actions, creatures, rng);
+    const result = resolveCombatRound(state, heroes, actions, creatures, rng, rules);
     state = result.state;
     heroes = result.heroes;
   }

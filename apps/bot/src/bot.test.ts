@@ -460,6 +460,32 @@ describe("renderers stay within Discord's limits", () => {
     );
     expect(crits).toContain("20/7 +7 = **27** vs defense 13 💥 **critical hit!** **15 damage**");
     expect(crits).toContain("❌ natural 1, an automatic miss");
+    // Under partial hits: a near miss shows its graze, Courage shows the roll it replaced, and who holds it.
+    const partial = JSON.stringify(
+      renderTurn({
+        ...battle,
+        combat: {
+          ...battle.combat!,
+          heroes: battle.combat!.heroes.map((h, i) => (i === 1 ? { ...h, courage: true } : h)),
+        },
+        rolls: [
+          {
+            ...(rolls[0] as TurnView["rolls"][number]),
+            mode: "normal",
+            rolls: [5],
+            natural: 5,
+            total: 12,
+            success: false,
+            damage: 3,
+            graze: true,
+          },
+          { ...(rolls[0] as TurnView["rolls"][number]), mode: "normal", rolls: [15], rerolled: [2] },
+        ],
+      }).components.map((c) => c.toJSON()),
+    );
+    expect(partial).toContain("5 +7 = **12** vs defense 13 🩹 close! grazed it for **3 damage**");
+    expect(partial).toContain("Longbow: ~~2~~ ✨ Courage! 15 +7 = **22** vs defense 13 ✅ **9 damage**");
+    expect(partial).toContain("**Hero Number 1** ▰▱▱▱▱ 1/12 · ✨ Courage");
     expect(json).toContain("Gloam Skulker A** ▰▰▰▱▱ nearly done");
     expect(json).not.toContain("What do you do?");
     const over = JSON.stringify(

@@ -130,6 +130,7 @@ export function withEncounter(
     difficulty,
     creatures: index.creatures,
     allowed,
+    ...(rules.combat ? { rules: rules.combat } : {}),
   });
   const combat = buildEncounter({ foes, heroes, rng });
   const entities: SceneEntityState[] = [
@@ -257,6 +258,8 @@ export function rollViewsFrom(events: readonly CombatEvent[], heroIds: ReadonlyS
         success: r.success,
         mode: r.mode,
         ...(r.damage ? { damage: r.damage } : {}),
+        ...(r.graze ? { graze: true } : {}),
+        ...(r.rerolled ? { rerolled: r.rerolled } : {}),
         ...(heroIds.has(e.actorId) ? {} : { foe: true }),
       };
     });
@@ -268,7 +271,8 @@ export interface CombatView {
   round: number;
   /** health: the share of its hit points a foe has left, 0 to 1. */
   foes: Array<{ id: string; name: string; condition: string; status: string; health: number }>;
-  heroes: Array<{ id: string; name: string; hp: number; hpMax: number; down: boolean }>;
+  /** courage: holding Courage, under partial hits. */
+  heroes: Array<{ id: string; name: string; hp: number; hpMax: number; down: boolean; courage?: boolean }>;
   order: string[];
   log: string[];
 }
@@ -298,6 +302,7 @@ export function combatView(
       hp: p.hp,
       hpMax: p.hpMax,
       down: isDownHero({ hp: p.hp, conditions: p.conditions.filter(isCondition) as Condition[] }),
+      ...(combat.courage?.includes(p.id) ? { courage: true } : {}),
     })),
     order: combat.order.map((o) => names.get(o.id) ?? o.id).filter((n, i, a) => a.indexOf(n) === i),
     log: [...log],

@@ -37,8 +37,12 @@ export interface RollView {
   difficulty: string;
   success: boolean;
   mode: "normal" | "advantage" | "disadvantage";
-  /** Hit points it took, when it was an attack that landed. */
+  /** Hit points it took, when it was an attack that landed or grazed. */
   damage?: number;
+  /** A miss close enough to graze, under partial hits. */
+  graze?: boolean;
+  /** The dice of the miss that Courage rerolled, under partial hits. */
+  rerolled?: number[];
   /** A foe's attack on a hero, rather than a hero's roll. */
   foe?: boolean;
 }
