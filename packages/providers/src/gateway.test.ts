@@ -123,6 +123,22 @@ describe.skipIf(!TEST_DATABASE_URL)("provider gateway", () => {
     expect(refused.calls.every((c) => c.url.hostname === "flaky.example")).toBe(true);
   });
 
+  it("calls a custom endpoint at a documented service's address the way that service documents", async () => {
+    await addConfig("g-zai", "zai", "https://api.z.ai/api/coding/paas/v4", "k", 0, "glm-5.3");
+    const store = new ProviderStore(db.db, { MASTER_KEYS: masterKeys });
+    const z = fakeFetch(() => chat("told"));
+    expect(
+      await new ProviderGateway(store, new BudgetGuard(db.db, {}), { fetch: z.fetch }).structured(
+        { ...call, effort: "medium" },
+        { guildId: "g-zai" },
+      ),
+    ).toMatchObject({ ok: true });
+    expect(z.calls[0]?.url.toString()).toBe("https://api.z.ai/api/coding/paas/v4/chat/completions");
+    // GLM-5.3 takes low, high or max; medium goes to the nearest, deeper one. No thinking object.
+    expect(z.calls[0]?.body).toMatchObject({ reasoning_effort: "high", max_tokens: 131072 });
+    expect(z.calls[0]?.body).not.toHaveProperty("thinking");
+  });
+
   it("falls back to server defaults, and says so when there are none", async () => {
     const none = new ProviderGateway(new ProviderStore(db.db, {}), new BudgetGuard(db.db, {}), {
       fetch: fakeFetch(() => chat("x")).fetch,

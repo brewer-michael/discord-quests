@@ -2,7 +2,7 @@ import { type Db, guilds, providerConfigs, secrets, taskRoutes } from "@dq/db";
 import { decryptSecret, type MasterKey, parseMasterKeys } from "@dq/db/crypto";
 import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { type EnvDefaults, envDefaults, type ProviderEnv, type Route, type RouteTask } from "./env";
-import { preset } from "./presets";
+import { documentedPresetFor, preset } from "./presets";
 import type { GenericHttpSpec, ResolvedProviderConfig } from "./types";
 
 export interface GuildProviderSettings {
@@ -78,7 +78,9 @@ export class ProviderStore {
     if (hit && Date.now() - hit.at < 30_000) return hit.cfg;
     const [row] = await this.db.select().from(providerConfigs).where(eq(providerConfigs.id, configId));
     if (!row?.enabled) return null;
-    const p = preset(row.presetId);
+    const chosen = preset(row.presetId);
+    // A custom endpoint at a documented service's address takes that service's documented settings.
+    const p = chosen?.id.startsWith("custom-") ? (documentedPresetFor(row.baseUrl) ?? chosen) : chosen;
     let apiKey: string | null = null;
     if (row.secretId) {
       if (!this.keys) throw new Error("MASTER_KEYS is not configured, so stored API keys can't be decrypted");
@@ -90,13 +92,13 @@ export class ProviderStore {
       name: row.name,
       presetId: row.presetId,
       adapterId: row.adapterId as ResolvedProviderConfig["adapterId"],
-      baseUrl: row.baseUrl ?? p?.baseUrl ?? null,
+      baseUrl: row.baseUrl ?? chosen?.baseUrl ?? null,
       auth: (Object.keys(row.auth).length > 0
         ? row.auth
-        : (p?.auth ?? { type: "bearer" })) as ResolvedProviderConfig["auth"],
+        : (chosen?.auth ?? { type: "bearer" })) as ResolvedProviderConfig["auth"],
       apiKey,
       extraHeaders: row.extraHeaders,
-      selfHosted: (p?.selfHosted ?? false) || row.selfHosted,
+      selfHosted: (chosen?.selfHosted ?? false) || row.selfHosted,
       capabilities: { ...(p?.capabilities ?? {}), ...(row.capabilityOverrides as object) },
       pricing: {
         ...Object.fromEntries((p?.models ?? []).filter((m) => m.pricing).map((m) => [m.id, m.pricing ?? {}])),
@@ -118,7 +120,7 @@ export class ProviderStore {
         ]),
       ),
       genericSpec: (row.genericSpec ??
-        (p?.genericSpec as GenericHttpSpec | undefined) ??
+        (chosen?.genericSpec as GenericHttpSpec | undefined) ??
         null) as GenericHttpSpec | null,
     };
     this.cache.set(configId, { at: Date.now(), cfg });

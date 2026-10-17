@@ -129,3 +129,25 @@ export function presets(kind?: "llm" | "image"): Preset[] {
 export function preset(id: string): Preset | undefined {
   return presets().find((p) => p.id === id);
 }
+
+/**
+ * The hosted story service whose address this is (any path on the same host, such as Z.ai's Coding Plan
+ * endpoint), so a custom endpoint pointed at it is called the way that service documents.
+ */
+export function documentedPresetFor(baseUrl: string | null): Preset | undefined {
+  if (!baseUrl) return undefined;
+  let host: string;
+  try {
+    host = new URL(baseUrl).host;
+  } catch {
+    return undefined;
+  }
+  return presets("llm").find(
+    (p) =>
+      p.adapter === "openai_compat" &&
+      !p.selfHosted &&
+      !p.id.startsWith("custom-") &&
+      p.baseUrl !== null &&
+      new URL(p.baseUrl).host === host,
+  );
+}

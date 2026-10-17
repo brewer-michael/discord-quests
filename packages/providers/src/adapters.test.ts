@@ -12,7 +12,7 @@ import {
 } from "./adapters/images";
 import { openAiCompatAdapter } from "./adapters/openai-compat";
 import { extractJson, strictJsonSchema } from "./json-schema";
-import { presets } from "./presets";
+import { documentedPresetFor, presets } from "./presets";
 import { budgetFor, effortFor, reasoningFields, withoutThinking } from "./reasoning";
 import { getPath, renderTemplate, validateTemplate } from "./template";
 import { fakeFetch, json, PNG, PNG_B64 } from "./test-fetch";
@@ -626,6 +626,14 @@ describe("presets", () => {
     expect(style("deepseek")).toBe("thinking_type");
     expect(style("together")).toBe("reasoning_enabled");
     expect(style("lmstudio")).toBe("none");
+  });
+
+  it("recognize a documented service's address on a custom endpoint", () => {
+    expect(documentedPresetFor("https://api.z.ai/api/coding/paas/v4")?.id).toBe("zai");
+    expect(documentedPresetFor("https://api.openai.com/v1")?.id).toBe("openai");
+    expect(documentedPresetFor("http://localhost:1234/v1")).toBeUndefined();
+    expect(documentedPresetFor("https://llm.example/v1")).toBeUndefined();
+    expect(documentedPresetFor(null)).toBeUndefined();
   });
 
   it("steer away from Anthropic", () => {

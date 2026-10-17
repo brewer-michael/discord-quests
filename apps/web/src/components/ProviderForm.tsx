@@ -405,7 +405,7 @@ export function ProviderForm({
                   name="reasoning"
                   hint={
                     p.custom
-                      ? "Check the service's docs for the reasoning parameter its chat API takes."
+                      ? "At a known service's address (like api.z.ai), Automatic uses that service's own way. Otherwise check its docs for the reasoning parameter its chat API takes."
                       : "Pick “Not at all” for a model that doesn't reason."
                   }
                 >
@@ -422,7 +422,10 @@ export function ProviderForm({
                         <option value="none">Not at all (the model's default)</option>
                       </>
                     ) : (
-                      <option value="preset">Not at all (the model's default)</option>
+                      <>
+                        <option value="preset">Automatic</option>
+                        <option value="none">Not at all (the model's default)</option>
+                      </>
                     )}
                     <option value="reasoning_effort">
                       reasoning_effort (OpenAI, Z.ai, Groq, Ollama, vLLM…)

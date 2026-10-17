@@ -26,9 +26,11 @@ export class ProviderGateway implements LlmGateway {
     private readonly budget: BudgetGuard,
     private readonly opts: GatewayOptions = {},
   ) {
-    this.safeFetch = opts.fetch ?? createSafeFetch();
+    // A reasoning model can think for minutes; ten minutes is the official OpenAI SDK's default timeout.
+    const timeoutMs = 600_000;
+    this.safeFetch = opts.fetch ?? createSafeFetch({ timeoutMs });
     const allowPrivate = store.env.ALLOW_PRIVATE_ENDPOINTS === "true";
-    this.privateFetch = opts.fetch ?? createSafeFetch({ allowPrivate });
+    this.privateFetch = opts.fetch ?? createSafeFetch({ allowPrivate, timeoutMs });
   }
 
   fetchFor(cfg: ResolvedProviderConfig): typeof fetch {

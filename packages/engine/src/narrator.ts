@@ -68,7 +68,7 @@ export async function narrate(opts: {
         schema: NarratorOutput,
         schemaName: "narration",
         expectTokens: 2000,
-        effort: attempt === 0 ? undefined : "low",
+        effort: attempt === 0 ? "medium" : "low",
       },
       scope,
     );
