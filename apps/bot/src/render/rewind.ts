@@ -19,7 +19,7 @@ export interface RewindInfo {
   campaignName: string;
   turnSeq: number;
   fighting: boolean;
-  /** Whether near misses graze and misses earn Courage. */
+  /** Whether the new fight rules are on: partial hits and the defense mix. */
   partialHits: boolean;
   party: Array<{ name: string; hp: number; hpMax: number }>;
   points: Array<{
@@ -98,8 +98,8 @@ export function renderRewindCard(info: RewindInfo, problem?: string) {
   c.addTextDisplayComponents(
     text(
       info.partialHits
-        ? "**⚔️ Fight rules: partial hits.** A hero's attack that misses by 1 or 2 grazes for a little damage, and a miss earns ✨ Courage: a second try on their next miss."
-        : "**⚔️ Fight rules: standard.** A miss is a miss, as in the SRD. Partial hits let near misses graze and turn misses into ✨ Courage for a second try.",
+        ? "**⚔️ Fight rules: new.** A near miss grazes, a miss earns ✨ Courage for a second try, and every foe has a weak spot. What a hero tries in their own words (shoving it, tricking it, scaring it) is matched against how sturdy, quick or brave that foe is."
+        : "**⚔️ Fight rules: standard.** As in the SRD: a miss is a miss, and armor is a foe's only defense. The new rules add grazes, ✨ Courage, and weak spots that heroes' own ideas can find.",
     ),
   );
   c.addActionRowComponents(
@@ -109,7 +109,7 @@ export function renderRewindCard(info: RewindInfo, problem?: string) {
             .setLabel("Back to standard rules")
             .setStyle(ButtonStyle.Secondary)
         : button(info.campaignId, "graze-on")
-            .setLabel("Turn on partial hits")
+            .setLabel("Turn on the new fight rules")
             .setEmoji("✨")
             .setStyle(ButtonStyle.Primary),
       button(info.campaignId, "cancel").setLabel("Never mind").setStyle(ButtonStyle.Secondary),

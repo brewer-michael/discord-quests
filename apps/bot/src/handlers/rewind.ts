@@ -191,7 +191,7 @@ export async function rewindInteraction(
           ctx,
           campaignId,
           on
-            ? "⚔️ **New fight rules:** an attack that only just misses still grazes the foe, and a miss builds ✨ Courage for a second try on the next one."
+            ? "⚔️ **New fight rules:** an attack that only just misses still grazes, a miss builds ✨ Courage for a second try, and every foe has a weak spot. Watch for it: shoving, tricking or scaring a foe each works on a different weakness."
             : "⚔️ **The fight rules are back to standard:** a miss is a miss.",
         );
         await i.editReply((await card()) as never);

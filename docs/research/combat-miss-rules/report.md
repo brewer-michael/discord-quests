@@ -129,6 +129,19 @@ its AC + 2; tied pairs share their tiers' average. The owner chose this even spa
 | Level 10 (CR 5–10) | 72% | 81% | 89% |
 | Level 15 (CR 10–15) | 70% | 79% | 89% |
 
+**Built (2026-10-17): the player chooses the weak spot.** Attacks stay against armor class, as in the SRD. The
+owner rejected both new buttons (clutter) and attacks that exploit a weak spot on their own (easy mode). Players go
+after a weak spot through what they already do: a typed turn. The skill the intent reader picks decides the
+defense (Strength against Fortitude, Dexterity or Intelligence against Reflex, Wisdom or Charisma against Will),
+replacing the fixed difficulty, which got easier as heroes levelled. Success does what that defense is about, with
+SRD conditions and timings: Prone until the foe stands on its turn (Shove), the next attack on it with advantage
+(Help), or Frightened until the end of its next turn, with a skittish foe running. An idea the intent reader
+says needs no roll no longer succeeds for free against a foe; in a fight it's told that anything done against a foe
+needs a roll. The narrator is told each foe's
+weak spot in story words ("easily scared") and asked to hint at it in the fiction, never in game terms. It's on
+the same DM-room switch as partial hits. The balancer's test fights don't play typed ideas, since those depend on
+what players choose.
+
 ## Proposal 2: partial hits and momentum
 
 - **The band: a miss by 1–2 is a graze.** A miss that isn't a natural 1 and falls short by 1 or 2 deals damage equal

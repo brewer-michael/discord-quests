@@ -5,11 +5,14 @@ import {
   type CombatRules,
   type CombatState,
   canCast,
+  DEFENSE_FOR,
+  defensesOf,
   fightingFoes,
   foeCondition,
   foesAtMercy,
   isDownHero,
   resolveCombatRound,
+  weakSpotWords,
 } from "@dq/core/combat";
 import { type DeltaContext, type DeltaProposal, validateDeltas } from "@dq/core/deltas";
 import {
@@ -141,8 +144,14 @@ export function campaignSettings(c: CampaignRow) {
   const s = c.settings as Record<string, unknown>;
   return {
     epilogueStyle: (s.epilogueStyle as EpilogueStyle) ?? "subtle",
-    /** Table rules for fights. Off unless the campaign switches them on. */
-    combatRules: { partialHits: s.partialHits === true } satisfies CombatRules,
+    /**
+     * Table rules for fights. The DM room's fight-rules switch (stored as partialHits) turns on the new rules
+     * together: partial hits and the defense mix. Off unless the campaign switches them on.
+     */
+    combatRules: {
+      partialHits: s.partialHits === true,
+      defenseMix: s.partialHits === true,
+    } satisfies CombatRules,
   };
 }
 
@@ -681,10 +690,12 @@ export class TurnService {
             battle: {
               round: fight.result.state.round,
               log: fight.result.events.map((e) => e.text),
-              foes: fightingFoes(fight.result.state).map((f) => ({
-                name: f.name,
-                condition: foeCondition(f),
-              })),
+              foes: fightingFoes(fight.result.state).map((f) => {
+                const creature = index.creatures.get(f.creatureId);
+                const weakSpot =
+                  settings.combatRules.defenseMix && creature ? weakSpotWords(creature, f.ac) : null;
+                return { name: f.name, condition: foeCondition(f), ...(weakSpot ? { weakSpot } : {}) };
+              }),
               outcome: fight.result.state.outcome ?? "ongoing",
               atMercy: foesAtMercy(fight.result.state).map((f) => f.name),
             },
@@ -823,10 +834,18 @@ export class TurnService {
         const targetId =
           ra.targetRef && combat.foes.some((f) => f.id === ra.targetRef) ? ra.targetRef : undefined;
         if (ra.skill || ra.ability) {
+          // Under the defense mix, the way the player chose to go about it decides which of the foe's defenses
+          // it meets: the ability behind it (Strength to shove, Charisma to scare) pairs with Fortitude, Reflex
+          // or Will. The foe's defenses grow with it, unlike a fixed difficulty.
+          const ability = ra.ability ?? (ra.skill ? SKILLS[ra.skill] : null);
+          const foe = fightingFoes(combat).find((f) => f.id === targetId) ?? fightingFoes(combat)[0];
+          const creature = foe ? index.creatures.get(foe.creatureId) : undefined;
+          const against = rules.defenseMix && foe && creature && ability ? DEFENSE_FOR[ability] : null;
+          const defense = against && foe && creature ? defensesOf(creature, foe.ac)[against] : null;
           const check = resolveCheck(
             {
               modifier: this.modifierFor(index, p, ra.skill, ra.ability),
-              dc: DIFFICULTY_DC[ra.difficulty],
+              dc: defense ?? DIFFICULTY_DC[ra.difficulty],
               mode: checkRollMode(p.conditions.filter(isCondition)),
             },
             this.dice(seed, seq, `trick:${h.id}`),
@@ -836,25 +855,24 @@ export class TurnService {
             kind: "trick",
             summary: ra.summary,
             success: check.success,
-            ...(targetId ? { targetId } : {}),
+            ...(against && foe ? { targetId: foe.id, defense: against } : targetId ? { targetId } : {}),
             roll: {
               label: v.label,
               natural: v.natural,
               rolls: v.rolls,
               modifier: v.modifier,
               total: v.total,
-              against: v.difficulty,
+              against: defense !== null ? `defense ${defense}` : v.difficulty,
               success: v.success,
               mode: v.mode,
             },
           };
-        } else
-          chosen[h.id] = {
-            kind: "trick",
-            summary: ra.summary,
-            success: true,
-            ...(targetId ? { targetId } : {}),
-          };
+        }
+        // With no roll there's no defense to get past: under the defense mix it's only told, not a free trick.
+        else
+          chosen[h.id] = rules.defenseMix
+            ? { kind: "none", summary: ra.summary }
+            : { kind: "trick", summary: ra.summary, success: true, ...(targetId ? { targetId } : {}) };
       } else chosen[h.id] = { kind: "defend" };
     }
     const result = resolveCombatRound(
@@ -1507,6 +1525,7 @@ export class TurnService {
             this.sceneSpecView(index, spec),
             party.map((p) => ({ ref: p.id, name: p.name })),
             freeform.map((a) => ({ characterRef: a.characterId, text: String(a.payload.text ?? "") })),
+            { fight: spec.combat?.phase === "fighting" && campaignSettings(c).combatRules.defenseMix },
           ),
           schema: IntentOutput,
           schemaName: "actions",

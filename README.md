@@ -25,8 +25,9 @@ It can be the dungeon master itself (**AI-DM mode**) or help a human dungeon mas
   intensity, but they never turn gory: heroes at zero are only Dazed, and a beaten foe can be spared.
 - **Undo for grown-ups.** If a turn goes wrong, the host or DM mentions the bot in the private DM room ("rewind 2
   turns") and the game goes back to how it stood, hit points, packs and all. The table just sees the scene again.
-- **Partial hits, if the table wants them.** Switched on from the DM room: an attack that misses by 1 or 2 still
-  grazes, and a miss earns Courage, a second try on the hero's next miss. Off, fights play as the SRD has them.
+- **New fight rules, if the table wants them.** Switched on from the DM room: an attack that misses by 1 or 2
+  still grazes, a miss earns Courage (a second try on the hero's next miss), and every foe has a weak spot that
+  players find by what they try: shove it, trick it or scare it. Off, fights play as the SRD has them.
 - **Game night or play by post.** Quick rounds with everyone online, or turns over days with pings and
   reminders. A campaign can switch whenever it suits the group, and pausing stops the clock.
 - **Two rooms per server.** Play happens in a table room everyone can see; human DMs get private screens in a

@@ -8,6 +8,7 @@ import {
   type CombatAction,
   type CombatState,
   canCast,
+  defensesOf,
   GRAZE_BAND,
   type HeroCombatant,
   heroCombatant,
@@ -15,6 +16,7 @@ import {
   MAX_COMBAT_ROUNDS,
   resolveCombatRound,
   rollFoes,
+  weakSpotWords,
 } from "./index";
 
 const index = starterIndex();
@@ -277,7 +279,7 @@ describe("partial hits", () => {
     attacks: [{ name: "Swat", bonus: 0, damage: "1", damageType: "bludgeoning" }],
   };
   const table = new Map([...creatures, [dummy.id, dummy]]);
-  const on = { partialHits: true };
+  const on = { partialHits: true, defenseMix: false };
   const d20 = (face: number) => faceValue(face, 20);
   /** The hero's d20s in turn, then 1s for everything else. */
   const rolls = (...faces: number[]) => sequenceRng([...faces.map(d20), ...Array(40).fill(0)]);
@@ -354,7 +356,7 @@ describe("partial hits", () => {
 
   it("changes nothing when the table hasn't switched it on", () => {
     const f = fighter();
-    const res = swing(fight(f), f, rolls(7), { partialHits: false });
+    const res = swing(fight(f), f, rolls(7), { partialHits: false, defenseMix: false });
     expect(heroRoll(res, f)).toMatchObject({ success: false });
     expect(heroRoll(res, f)?.damage).toBeUndefined();
     expect(res.state.foes[0]!.hp).toBe(100);
@@ -367,6 +369,147 @@ describe("partial hits", () => {
     const res = swing(s, f, rolls(5));
     expect(res.state.phase).toBe("over");
     expect(res.state.courage).toBeUndefined();
+  });
+});
+
+describe("the defense mix", () => {
+  const scores = (str: number, dex: number, wis: number) => ({
+    abilities: { str, dex, con: 10, int: 10, wis, cha: 10 },
+  });
+
+  it("sets Fortitude, Reflex and Will by rank from armor class, two apart", () => {
+    // Strongest pair Str/Con, then Dex/Int, then Wis/Cha.
+    expect(defensesOf(scores(16, 12, 6), 13)).toEqual({ ac: 13, fortitude: 15, reflex: 13, will: 11 });
+    // Tied pairs share their ranks: the shadow wolf's Str/Con and Wis/Cha are both +1, its Dex +2.
+    expect(defensesOf(creature("shadow-wolf"), 13)).toEqual({ ac: 13, fortitude: 12, reflex: 15, will: 12 });
+    expect(defensesOf(scores(10, 10, 10), 15)).toEqual({ ac: 15, fortitude: 15, reflex: 15, will: 15 });
+  });
+
+  it("names a creature's weak spot in story words, if it has one", () => {
+    expect(weakSpotWords(scores(16, 12, 6), 13)).toBe("easily scared");
+    expect(weakSpotWords(creature("shadow-wolf"), 13)).toBe("easy to knock off its feet and easily scared");
+    expect(weakSpotWords(scores(10, 10, 10), 13)).toBeNull();
+  });
+
+  // Hits nothing (its d20s come up 1), so only the heroes' ideas matter.
+  const foeDef = {
+    ...creature("shadow-wolf"),
+    id: "target",
+    name: "Target",
+    hp: "100",
+    morale: "brave" as "brave" | "normal" | "skittish",
+    traits: [],
+    attacks: [{ name: "Swat", bonus: 0, damage: "1", damageType: "bludgeoning" }],
+  };
+  const rules = { partialHits: false, defenseMix: true };
+
+  function fight(foe: typeof foeDef, heroes: HeroCombatant[]) {
+    const table = new Map([...creatures, [foe.id, foe]]);
+    const s = buildEncounter({ foes: [{ creature: foe, count: 1 }], heroes, rng: createRng("dm") });
+    s.order = [
+      ...heroes.map((h, i) => ({ id: h.id, side: "hero" as const, initiative: 30 - i })),
+      { id: s.foes[0]!.id, side: "foe" as const, initiative: 1 },
+    ];
+    return { s, table, foeId: s.foes[0]!.id };
+  }
+  const trick = (
+    defense: "fortitude" | "reflex" | "will",
+    targetId: string,
+    success = true,
+  ): CombatAction => ({
+    kind: "trick",
+    summary: "a clever idea",
+    success,
+    targetId,
+    defense,
+  });
+
+  it("leaves attacks against armor: a hero's stats don't find weak spots on their own", () => {
+    const f = fighter();
+    const { s, table } = fight(foeDef, [f]);
+    const res = resolveCombatRound(s, [f], { [f.id]: { kind: "attack" } }, table, createRng("a"), rules);
+    expect(res.events.find((e) => e.actorId === f.id)?.roll?.against).toBe("defense 13");
+  });
+
+  it("knocks a foe down past Fortitude: the next melee attack has advantage, and it stands on its turn", () => {
+    const [w, f] = [wizard(), fighter()];
+    const { s, table, foeId } = fight(foeDef, [w, f]);
+    const res = resolveCombatRound(
+      s,
+      [w, f],
+      { [w.id]: trick("fortitude", foeId), [f.id]: { kind: "attack" } },
+      table,
+      createRng("k"),
+      rules,
+    );
+    expect(res.events.find((e) => e.actorId === w.id)?.text).toMatch(/knocked down/);
+    expect(res.events.find((e) => e.actorId === f.id)?.roll?.mode).toBe("advantage");
+    expect(res.state.foes[0]!.conditions).not.toContain("prone");
+  });
+
+  it("leaves a foe open past Reflex, for the next attack", () => {
+    const [w, f] = [wizard(), fighter()];
+    const { s, table, foeId } = fight(foeDef, [w, f]);
+    const res = resolveCombatRound(
+      s,
+      [w, f],
+      { [w.id]: trick("reflex", foeId), [f.id]: { kind: "attack" } },
+      table,
+      createRng("r"),
+      rules,
+    );
+    expect(res.events.find((e) => e.actorId === w.id)?.text).toMatch(/wide open/);
+    expect(res.events.find((e) => e.actorId === f.id)?.roll?.mode).toBe("advantage");
+  });
+
+  it("frightens a foe past Will until the end of its next turn", () => {
+    const w = wizard();
+    const { s, table, foeId } = fight(foeDef, [w]);
+    const res = resolveCombatRound(s, [w], { [w.id]: trick("will", foeId) }, table, createRng("w"), rules);
+    expect(res.events.find((e) => e.actorId === w.id)?.text).toMatch(/frightened/);
+    expect(res.events.find((e) => e.actorId === foeId)?.roll?.mode).toBe("disadvantage");
+    expect(res.state.foes[0]!.conditions).not.toContain("frightened");
+    // A skittish foe runs from it.
+    const skittish = fight({ ...foeDef, morale: "skittish" as const }, [w]);
+    const ran = resolveCombatRound(
+      skittish.s,
+      [w],
+      { [w.id]: trick("will", skittish.foeId) },
+      skittish.table,
+      createRng("w"),
+      rules,
+    );
+    expect(ran.state.foes[0]!.status).toBe("fled");
+  });
+
+  it("respects what a creature can't suffer, and a foe already gone", () => {
+    const w = wizard();
+    const sturdy = fight({ ...foeDef, conditionImmune: ["prone" as const] }, [w]);
+    const res = resolveCombatRound(
+      sturdy.s,
+      [w],
+      { [w.id]: trick("fortitude", sturdy.foeId) },
+      sturdy.table,
+      createRng("i"),
+      rules,
+    );
+    expect(res.events.find((e) => e.actorId === w.id)?.text).toMatch(/can't be knocked down/);
+    expect(res.state.foes[0]!.conditions).not.toContain("prone");
+
+    const gone = fight(foeDef, [w]);
+    gone.s.foes[0]!.status = "at_mercy";
+    gone.s.foes.push({ ...gone.s.foes[0]!, id: "foe-2", status: "fighting" });
+    gone.s.order.push({ id: "foe-2", side: "foe", initiative: 0 });
+    const late = resolveCombatRound(
+      gone.s,
+      [w],
+      { [w.id]: trick("will", gone.foeId) },
+      gone.table,
+      createRng("g"),
+      rules,
+    );
+    expect(late.events.find((e) => e.actorId === w.id)?.text).toMatch(/already out of the fight/);
+    expect(late.state.foes[1]!.conditions).not.toContain("frightened");
   });
 });
 

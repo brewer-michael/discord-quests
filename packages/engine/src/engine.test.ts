@@ -942,6 +942,26 @@ describe.skipIf(!TEST_DATABASE_URL)("rewinding", () => {
     await expect(engine.turns.rewind(c.id, "host", kept.seq + 1)).rejects.toThrow(/undone/);
   });
 
+  it("matches a typed idea in a fight against the foe's defense, under the new fight rules", async () => {
+    const { llm, engine, c, step, view } = await playing("g-defense");
+    await engine.turns.setPartialHits(c.id, "host", true);
+    for (let i = 0; i < 20 && view().combat?.phase !== "fighting"; i++) await step();
+    expect(view().combat?.phase).toBe("fighting");
+    const roundId = (await engine.turns.currentRound(c.id))?.id as string;
+    // The scripted AI reads a jump as Athletics: Strength, so Fortitude.
+    await engine.turns.submitAction({
+      roundId,
+      userId: "host",
+      kind: "freeform",
+      text: "I jump at it and knock it off its feet",
+    });
+    const r = await engine.turns.resolveRound(roundId);
+    const rolls = (r as { kind: "turn"; view: ReturnType<typeof view> }).view.rolls;
+    expect(rolls.find((x) => x.label === "Athletics")?.difficulty).toMatch(/^defense \d+$/);
+    // The intent reader was told that anything done against a foe needs a roll.
+    expect(llm.calls.filter((x) => x.task === "intent").at(-1)?.user).toContain("A fight is on.");
+  });
+
   it("mends the party and rebuilds a fight, for campaigns from before restore points too", async () => {
     const { engine, c, step, view } = await playing("g-mend");
     const hero = (await db.db.select().from(characters).where(eq(characters.campaignId, c.id)))[0];

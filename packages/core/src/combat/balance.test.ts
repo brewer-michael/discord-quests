@@ -99,7 +99,7 @@ describe("balancing a fight", () => {
     const hero = archer();
     const wolf = [{ creature: creature("shadow-wolf"), count: 1, hpScale: 1 }];
     const srd = testFights(wolf, [hero], creatures, 400);
-    const partial = testFights(wolf, [hero], creatures, 400, { partialHits: true });
+    const partial = testFights(wolf, [hero], creatures, 400, { partialHits: true, defenseMix: false });
     expect(partial).toBeGreaterThan(srd);
   });
 

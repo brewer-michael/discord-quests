@@ -142,7 +142,7 @@ for (const scene of SCENES) {
   for (const hitter of Object.keys(STRENGTH) as Hitter[]) {
     for (const [label, rules] of [
       ["SRD", STANDARD_RULES],
-      ["partial hits", { partialHits: true }],
+      ["partial hits", { partialHits: true, defenseMix: false }],
     ] as const) {
       const t = play(scene, hitter, rules, `fight-rules|${scene.name}|${hitter}`);
       rows.push(

@@ -96,7 +96,8 @@ export interface PublicSceneData {
   battle?: {
     round: number;
     log: string[];
-    foes: Array<{ name: string; condition: string }>;
+    /** weakSpot: under the defense mix, what the foe is weak against, in story words. */
+    foes: Array<{ name: string; condition: string; weakSpot?: string }>;
     outcome: "ongoing" | "victory" | "party_down";
     /** Beaten foes waiting to see what the heroes will do. */
     atMercy: string[];
@@ -301,8 +302,12 @@ export function narratorUser(
       `## The fight, round ${b.round} (already decided by the dice: describe it, don't change it)`,
       BATTLE_TONE[view.story.intensity],
       ...b.log.map((l) => `- ${l}`),
-      `Foes now: ${b.foes.map((f) => `${f.name} (${f.condition})`).join(", ") || "none"}.`,
+      `Foes now: ${b.foes.map((f) => `${f.name} (${f.condition}${f.weakSpot ? `; weak spot: ${f.weakSpot}` : ""})`).join(", ") || "none"}.`,
     );
+    if (b.foes.some((f) => f.weakSpot))
+      turn.push(
+        "Let the heroes notice a foe's weak spot through what they see and hear, never in game words, and never say what to do about it.",
+      );
     if (b.outcome === "ongoing")
       turn.push("The fight goes on. End just before everyone acts again. Choices can be short battle ideas.");
     else if (b.outcome === "party_down")
@@ -365,9 +370,16 @@ export function intentUser(
   scene: SceneSpecView,
   party: Array<{ ref: string; name: string }>,
   typed: Array<{ characterRef: string; text: string }>,
+  opts: { fight?: boolean } = {},
 ): PromptBlock[] {
   const lines = [
     formatScene(scene, "Scene"),
+    ...(opts.fight
+      ? [
+          "",
+          "A fight is on. Anything a hero does to or against a foe is uncertain: it needs a roll, with the skill (or ability) it really relies on, and the foe it's aimed at as targetRef.",
+        ]
+      : []),
     "",
     "## Heroes",
     ...party.map((p) => `- ${p.name} [ref: ${p.ref}]`),

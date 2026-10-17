@@ -197,11 +197,24 @@ bugged`. The bot replies with a card:
   fight** draws the fight in progress again, balanced for the party as it stands. Both work at any time, including
   in campaigns from before restore points existed: restore points are saved from the first turn played after the
   update that added them.
-- **Fight rules** switches partial hits on or off. With them on, a hero's attack (weapon or spell) that misses by
-  1 or 2, and isn't a natural 1, grazes for the attack's ability modifier, and an attack that does nothing earns
-  ✨ Courage: on the hero's next miss the bot rerolls it for them, and the new roll stands. Foes' misses stay
-  misses. The change applies from the next round, and the table gets a short note saying what changed. New
-  campaigns start with standard SRD rules. The research behind it is in `docs/research/combat-miss-rules/`.
+- **Fight rules** switches the new fight rules on or off. New campaigns start with standard SRD rules. With the new
+  rules on:
+  - A hero's attack (weapon or spell) that misses by 1 or 2, and isn't a natural 1, grazes for the attack's ability
+    modifier. An attack that does nothing earns ✨ Courage: on the hero's next miss the bot rerolls it for them,
+    and the new roll stands.
+  - Every foe has a weak spot. Besides its armor class it has Fortitude, Reflex and Will, set from its armor
+    class by its stats: its weakest pair of abilities 2 below, the middle one equal, the strongest 2 above.
+    Attacks still go against armor. What a hero tries in their own words is matched against the defense it works
+    on: shoving or tackling (Strength) against Fortitude, feints and tricks (Dexterity, Intelligence) against
+    Reflex, scaring or taunting (Wisdom, Charisma) against Will. The hero rolls the skill the bot picks. Past
+    Fortitude the foe is knocked prone until it gets up on its turn; past Reflex the next attack on it has
+    advantage; past Will it's frightened until the end of its next turn, and a skittish foe runs. An idea that
+    needs no roll is part of the story but doesn't affect the foe. Nothing picks the weak spot for the players:
+    the storyteller hints at it in the story, and choosing well is up to them.
+  - Foes' attacks and misses stay as the SRD has them.
+
+  The change applies from the next round, and the table gets a short note saying what changed. The research
+  behind it is in `docs/research/combat-miss-rules/`.
 
 The bot reads only messages that mention it. It needs no extra permissions or intents switched on in the
 Developer Portal.

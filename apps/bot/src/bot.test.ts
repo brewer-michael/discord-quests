@@ -879,13 +879,13 @@ describe("rewinding from the DM room", () => {
     expect(card).toContain("Rebuild this fight");
     expect(JSON.stringify(checkLimits(renderRewindConfirm(info, 97)))).toContain("Go back 2 turns?");
     expect(card).toContain("Fight rules: standard");
-    expect(card).toContain("Turn on partial hits");
+    expect(card).toContain("Turn on the new fight rules");
     const none = JSON.stringify(
       checkLimits(renderRewindCard({ ...info, points: [], fighting: false, partialHits: true })),
     );
     expect(none).toContain("No restore points yet");
     expect(none).not.toContain("Rebuild this fight");
-    expect(none).toContain("Fight rules: partial hits");
+    expect(none).toContain("Fight rules: new");
     expect(none).toContain("Back to standard rules");
     checkLimits(renderRewindDone("Done."));
   });
@@ -1018,6 +1018,6 @@ describe("rewind mentions", () => {
     await rewindInteraction(ctx(), off.i, { kind: "rewind", campaignId: UUID, action: "graze-off" });
     expect(setPartialHits).toHaveBeenLastCalledWith(UUID, "host", false);
     expect(JSON.stringify(tableSend.mock.calls)).toContain("back to standard");
-    expect(JSON.stringify(off.editReply.mock.calls)).toContain("Turn on partial hits");
+    expect(JSON.stringify(off.editReply.mock.calls)).toContain("Turn on the new fight rules");
   });
 });

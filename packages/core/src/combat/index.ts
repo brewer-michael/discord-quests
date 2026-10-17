@@ -42,6 +42,8 @@ export interface Foe {
   distracted: boolean;
   /** Specials it has used that haven't recharged yet (a dragon's breath), by name. */
   spent?: string[];
+  /** Conditions heroes' moves put on it, which end with its next turn. */
+  untilItsTurn?: Condition[];
 }
 
 export interface CombatState {
@@ -139,6 +141,8 @@ export type CombatAction =
       success: boolean;
       targetId?: string;
       roll?: CombatRoll;
+      /** The defense it was rolled against, under the defense mix; it decides what success does. */
+      defense?: Exclude<keyof Defenses, "ac">;
     }
   | { kind: "none"; summary?: string };
 
@@ -401,6 +405,62 @@ export function heroCombatant(args: {
 
 export type Defense = "agile" | "hide" | "armor" | "ward";
 
+export interface Defenses {
+  ac: number;
+  fortitude: number;
+  reflex: number;
+  will: number;
+}
+
+/** The defense each ability works against, as 4e pairs them: Str/Con, Dex/Int, Wis/Cha. */
+export const DEFENSE_FOR: Record<Ability, Exclude<keyof Defenses, "ac">> = {
+  str: "fortitude",
+  con: "fortitude",
+  dex: "reflex",
+  int: "reflex",
+  wis: "will",
+  cha: "will",
+};
+
+/**
+ * A creature's four defenses. Fortitude, Reflex and Will go by rank from its armor class: its weakest pair of
+ * abilities (Str/Con, Dex/Int, Wis/Cha) is AC - 2, the middle one AC, the strongest AC + 2, and tied pairs share
+ * their ranks' average. That is Pathfinder 2e's way of giving every creature one high, one moderate and one low
+ * save, on the creature's own armor curve, so a weak spot stays the same amount easier than armor at every level
+ * (docs/research/combat-miss-rules/sim/scaled_defenses.py).
+ */
+export function defensesOf(c: Pick<CreatureDef, "abilities">, ac: number): Defenses {
+  const a = c.abilities;
+  const pairs = [
+    Math.max(abilityModifier(a.str), abilityModifier(a.con)),
+    Math.max(abilityModifier(a.dex), abilityModifier(a.int)),
+    Math.max(abilityModifier(a.wis), abilityModifier(a.cha)),
+  ];
+  const ranked = [...pairs].sort((x, y) => x - y);
+  const offset = (p: number) => {
+    const ranks = ranked.flatMap((q, i) => (q === p ? [(i - 1) * 2] : []));
+    return ranks.reduce((sum, r) => sum + r, 0) / ranks.length;
+  };
+  const [fortitude, reflex, will] = pairs.map((p) => ac + offset(p)) as [number, number, number];
+  return { ac, fortitude, reflex, will };
+}
+
+/** Story words for each defense being a creature's weak spot, for the narrator to hint at. */
+const WEAK_SPOT_WORDS: Record<Exclude<keyof Defenses, "ac">, string> = {
+  fortitude: "easy to knock off its feet",
+  reflex: "slow to see a trick coming",
+  will: "easily scared",
+};
+
+/** A creature's weak spot in story words, or null when its defenses are all alike. */
+export function weakSpotWords(c: Pick<CreatureDef, "abilities">, ac: number): string | null {
+  const d = defensesOf(c, ac);
+  const kinds = ["fortitude", "reflex", "will"] as const;
+  const low = Math.min(...kinds.map((k) => d[k]));
+  const weak = kinds.filter((k) => d[k] === low);
+  return weak.length === kinds.length ? null : weak.map((k) => WEAK_SPOT_WORDS[k]).join(" and ");
+}
+
 /** Where a creature's armor class comes from, as its stat block says or as its numbers suggest. */
 export function defenseOf(c: Pick<CreatureDef, "defense" | "kind" | "ac" | "abilities">): Defense {
   if (c.defense) return c.defense;
@@ -411,10 +471,10 @@ export function defenseOf(c: Pick<CreatureDef, "defense" | "kind" | "ac" | "abil
 }
 
 /**
- * Table rules a campaign can switch on. Off, a fight plays as the SRD has it.
+ * Table rules a campaign can switch on. Off, a fight plays as the SRD has it. Both come from
+ * docs/research/combat-miss-rules/report.md, and apply to heroes only; foes attack as the SRD has them.
  *
- * partialHits: so that a hero's miss still moves the fight along, as set out in
- * docs/research/combat-miss-rules/report.md. Heroes only; foes' misses stay as the SRD has them.
+ * partialHits: so that a hero's miss still moves the fight along.
  * - Graze: an attack that misses by no more than GRAZE_BAND, and isn't a natural 1, deals the attack's ability
  *   modifier (at least 1). That is the payoff of the SRD's Graze mastery, with 13th Age's natural-1 exception.
  * - Courage: an attack turn that does nothing earns the hero Courage, one at most. Their next miss spends it on a
@@ -423,9 +483,18 @@ export function defenseOf(c: Pick<CreatureDef, "defense" | "kind" | "ac" | "abil
  */
 export interface CombatRules {
   partialHits: boolean;
+  /**
+   * defenseMix: armor isn't a creature's only defense. Attacks still go against armor class, but what a hero
+   * tries in their own words is matched against the defense it works on (see defensesOf), and does what that
+   * defense is about: past Fortitude the foe is knocked Prone, as by the SRD's Shove; past Reflex it's left open
+   * and the next attack on it has advantage, as with Help; past Will it's Frightened until the end of its next
+   * turn. Picking the approach that fits the foe is the player's call: its weak spot is 2 easier than its armor,
+   * its strong one 2 harder.
+   */
+  defenseMix: boolean;
 }
 
-export const STANDARD_RULES: CombatRules = { partialHits: false };
+export const STANDARD_RULES: CombatRules = { partialHits: false, defenseMix: false };
 
 /** How far short an attack can fall and still graze, under partial hits. */
 export const GRAZE_BAND = 2;
@@ -627,6 +696,36 @@ export function resolveCombatRound(
     return wasDown && !isDownHero(target);
   };
 
+  /** What a hero's idea does to a foe once it works, by the defense it got past. Returns the words for it. */
+  const outwit = (foe: Foe, defense: Exclude<keyof Defenses, "ac"> | undefined): string => {
+    const creature = creatures.get(foe.creatureId);
+    const immune = (c: Condition) => creature?.conditionImmune.includes(c) ?? false;
+    const until = (c: Condition) => {
+      foe.conditions = [...new Set([...foe.conditions, c])];
+      foe.untilItsTurn = [...new Set([...(foe.untilItsTurn ?? []), c])];
+    };
+    if (defense === "fortitude") {
+      if (immune("prone")) return `But ${foe.name} can't be knocked down.`;
+      until("prone");
+      return `${foe.name} is knocked down.`;
+    }
+    if (defense === "will") {
+      if (immune("frightened")) return `But ${foe.name} can't be frightened.`;
+      until("frightened");
+      if (creature?.morale === "skittish") {
+        foe.status = "fled";
+        foe.exit = "fled in fear";
+      }
+      return `${foe.name} is frightened.`;
+    }
+    foe.distracted = true;
+    if (!defense && creature?.morale === "skittish") {
+      foe.status = "fled";
+      foe.exit = "fled in fear";
+    }
+    return defense === "reflex" ? `${foe.name} is left wide open.` : `${foe.name} is thrown off balance.`;
+  };
+
   const heroTurn = (h: HeroCombatant, action: CombatAction) => {
     if (isDownHero(h)) {
       const r = rollRally({ hp: h.hp, hpMax: h.hpMax, tempHp: h.tempHp, conditions: h.conditions }, rng);
@@ -792,16 +891,18 @@ export function resolveCombatRound(
         return;
       }
       case "trick": {
-        const foe = firstFighting(action.targetId);
+        // An idea rolled against one foe's defense only works on that foe, if it's still in the fight.
+        const aimed = action.defense ? foeById.get(action.targetId ?? "") : undefined;
+        const foe = action.defense
+          ? aimed?.status === "fighting"
+            ? aimed
+            : undefined
+          : firstFighting(action.targetId);
         let text = `${h.name} tries something clever: ${action.summary}`;
-        if (action.success && foe) {
-          foe.distracted = true;
-          text += ` It works! ${foe.name} is thrown off balance.`;
-          if (creatures.get(foe.creatureId)?.morale === "skittish") {
-            foe.status = "fled";
-            foe.exit = "fled in fear";
-          }
-        } else text += " It doesn't quite work.";
+        if (action.success && foe) text += ` It works! ${outwit(foe, action.defense)}`;
+        else if (action.success && action.defense)
+          text += ` But ${aimed?.name ?? "the foe"} is already out of the fight.`;
+        else text += " It doesn't quite work.";
         events.push({
           actorId: h.id,
           actor: h.name,
@@ -1121,7 +1222,17 @@ export function resolveCombatRound(
     if (fightingFoes(state).length === 0) break;
     if (entry.side === "foe") {
       const f = foeById.get(entry.id);
-      if (f?.status === "fighting") foeTurn(f);
+      if (f?.status === "fighting") {
+        // A foe a hero knocked down gets back up first, as heroes do.
+        if (f.untilItsTurn?.includes("prone")) f.conditions = f.conditions.filter((c) => c !== "prone");
+        foeTurn(f);
+        // What heroes' ideas did to it lasts until the end of its turn.
+        if (f.untilItsTurn?.length) {
+          const ending = new Set(f.untilItsTurn);
+          f.conditions = f.conditions.filter((c) => !ending.has(c) || f.conditionRounds[c] !== undefined);
+          delete f.untilItsTurn;
+        }
+      }
     } else {
       const h = heroes.get(entry.id);
       if (h) {

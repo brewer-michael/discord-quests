@@ -152,6 +152,23 @@ describe("prompts", () => {
       .join("\n");
     expect(light).toContain("No injuries");
     expect(light).not.toContain("clashing steel");
+    expect(user).not.toContain("weak spot");
+    // Under the defense mix the narrator hears each foe's weak spot, to hint at in the story.
+    const base = view(story());
+    const hinted = narratorUser(
+      publicSceneView({
+        ...base,
+        battle: {
+          ...base.battle!,
+          foes: [{ name: "Shadow Wolf", condition: "fresh", weakSpot: "easily scared" }],
+        },
+      }),
+      [],
+    )
+      .map((b) => b.text)
+      .join("\n");
+    expect(hinted).toContain("Shadow Wolf (fresh; weak spot: easily scared)");
+    expect(hinted).toContain("never in game words");
   });
 
   it("have the reviewer check the limits, the intensity and the table's topics, not 'young children'", () => {

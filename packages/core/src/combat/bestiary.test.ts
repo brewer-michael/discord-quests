@@ -268,7 +268,7 @@ describe("defenses and misses", () => {
           { a: { kind: "attack" } },
           index.creatures,
           createRng(`n${i}`),
-          { partialHits },
+          { partialHits, defenseMix: false },
         );
         // The wolf may get there first and knock the hero down before they swing.
         const swing = r.events.find((e) => e.kind === "attack");
