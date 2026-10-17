@@ -21,8 +21,6 @@ export interface TurnView {
   imageBrief: ImageBrief | null;
   levelUps: Array<{ characterId: string; userId: string; name: string; toLevel: number }>;
   campaignEnded: boolean;
-  /** True when the narrator was unavailable and the engine told the turn itself. */
-  fallback: boolean;
   /** The fight in this scene, if any. When it's on, players pick battle actions instead of choices. */
   combat: CombatView | null;
 }
@@ -104,7 +102,11 @@ export interface PreparedTurn {
   view: PublicSceneData;
   choicesFor: SceneSpecView;
   narration: NarratorOutput;
-  fallback: boolean;
+  /**
+   * Why the AI storyteller couldn't finish this turn, when it couldn't. Then a person in the DM room tells it,
+   * and the narration above is empty until they do.
+   */
+  handoff: string[] | null;
   /** Results of a fight round, applied on commit. */
   combat: {
     heroes: Array<{ id: string; hp: number; tempHp: number; conditions: string[] }>;
@@ -115,7 +117,20 @@ export interface PreparedTurn {
   } | null;
 }
 
-/** What the human DM sees before a turn goes out in Assist mode. */
+/**
+ * What a person needs to tell a turn the AI storyteller couldn't: why it couldn't, the scene and where the
+ * story goes next, and what's already been decided. The heroes' actions and the dice are in the draft itself.
+ */
+export interface DraftHandoff {
+  reasons: string[];
+  scene: { title: string; summary: string; goals: string[] };
+  /** The scene this turn moves the story to, when it closes this one. */
+  next: { title: string; summary: string; goals: string[] } | null;
+  /** Settled already: the fight, the decisive moment, what may be found, how the adventure ends. */
+  decisions: string[];
+}
+
+/** What the human DM sees before a turn goes out: an Assist-mode draft, or a turn handed over. */
 export interface DmDraft {
   approvalId: string;
   campaignId: string;
@@ -128,7 +143,8 @@ export interface DmDraft {
   actions: string[];
   /** Spoilers for the DM only: what the hidden hand is doing this turn. */
   dmNotes: string[];
-  fallback: boolean;
+  /** Set when the AI storyteller couldn't finish the turn and a person has to tell it. */
+  handoff: DraftHandoff | null;
 }
 
 export type ResolveResult = { kind: "turn"; view: TurnView } | { kind: "draft"; draft: DmDraft };

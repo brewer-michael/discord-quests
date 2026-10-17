@@ -1,3 +1,4 @@
+import type { NarratorOutput } from "@dq/core/narration";
 import {
   campaigns,
   chapterSummaries,
@@ -18,7 +19,7 @@ import { loadLoom } from "./loom-store";
 import { describeTimer, paceOf, reminderAt, whenTimeIsUp } from "./pace";
 import { planChapter } from "./planner";
 import { asStory } from "./story-state";
-import { FakeLlm, UnconfiguredLlm } from "./testing";
+import { FakeLlm } from "./testing";
 import { WorldCache } from "./world-cache";
 
 const worlds = new WorldCache();
@@ -654,28 +655,129 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
     expect(plan?.theme).not.toMatch(/karma/i);
   });
 
-  it("keeps playing when no AI is configured", async () => {
-    const engine = createEngine({ db: db.db, worlds, llm: new UnconfiguredLlm() });
+  it("hands a turn the AI can't tell to a person in the DM room, with everything they need", async () => {
+    // The storyteller is down until it comes back below; the action reader works.
+    let down = true;
+    const told: NarratorOutput = {
+      narration: "Footprints in the soot lead from the square towards the lamp-house.",
+      npcLines: [],
+      proposedDeltas: [],
+      choices: [
+        {
+          label: "Follow the footprints",
+          intent: {
+            approach: "follow",
+            skill: "survival",
+            difficulty: "medium",
+            deed: "none",
+            targetRef: null,
+            shortcutId: null,
+          },
+        },
+        {
+          label: "Ask Hattie about them",
+          intent: {
+            approach: "ask",
+            skill: "none",
+            difficulty: "easy",
+            deed: "none",
+            targetRef: null,
+            shortcutId: null,
+          },
+        },
+      ],
+      sceneOver: false,
+      imageBrief: null,
+      significance: "minor",
+    };
+    const llm = new FakeLlm({ narrator: () => (down ? new Error("service down") : told) });
+    const engine = createEngine({ db: db.db, worlds, llm });
     const c = await engine.campaigns.create({
       guildId: "g3",
       channelId: "ch5",
-      name: "Offline",
+      name: "Handed over",
       mode: "ai_dm",
       createdBy: "solo",
     });
+    await engine.campaigns.join(c.id, "gran", "guardian");
     await makeHero(engine, c.id, "solo", "scout", "Quill Swift");
-    const view = await engine.turns.openCampaign(c.id, "solo");
-    expect(view.fallback).toBe(true);
-    expect(view.narration).toContain("The Last Flame");
-    const res = await engine.turns.submitAction({
+
+    // The opening: nothing is made up; it waits for a person, and the adventure starts when they've told it.
+    const started = await engine.turns.startCampaign(c.id, "solo");
+    if (started.kind !== "draft") throw new Error("expected the opening to be handed over");
+    const opening = started.draft;
+    expect(opening.narration).toBe("");
+    expect(opening.handoff?.reasons.join(" ")).toMatch(/returned an error.*service down/);
+    expect(opening.handoff?.scene.title).toBe("The Last Flame");
+    expect((await engine.campaigns.require(c.id)).status).toBe("setup");
+    await expect(
+      engine.turns.approveDraft(opening.approvalId, "stranger", { narration: "Hello there, everyone." }),
+    ).rejects.toMatchObject({ userMessage: expect.stringMatching(/host, the DM or a guardian/) });
+    await expect(engine.turns.approveDraft(opening.approvalId, "solo")).rejects.toMatchObject({
+      userMessage: expect.stringMatching(/Write what happens first/),
+    });
+    const view = await engine.turns.approveDraft(opening.approvalId, "solo", {
+      narration: "Lanterns gutter all over Hearthmoor as the heroes gather in the square.",
+      choices: ["Look for the lamplighter", "Search the square"],
+    });
+    expect(view.narration).toContain("Lanterns gutter");
+    expect(view.choices.map((x) => x.label)).toEqual(["Look for the lamplighter", "Search the square"]);
+    expect((await engine.campaigns.require(c.id)).status).toBe("active");
+
+    // A turn: the dice are rolled and on the draft with what's settled, and nothing moves until it's told.
+    await engine.turns.submitAction({
       roundId: view.roundId as string,
       userId: "solo",
       kind: "freeform",
       text: "I search the square for footprints",
     });
-    expect(res.ok).toBe(true);
     const next = await engine.turns.resolveRound(view.roundId as string);
-    expect(next?.kind === "turn" && next.view.narration.length).toBeGreaterThan(10);
+    if (next?.kind !== "draft") throw new Error("expected the turn to be handed over");
+    expect(next.draft.actions).toEqual([expect.stringMatching(/search/)]);
+    expect(next.draft.rolls.map((r) => r.label)).toEqual(["Investigation"]);
+    expect(next.draft.handoff?.decisions).toContain("The heroes stay in this scene.");
+    expect(next.draft.handoff?.scene.goals.length).toBeGreaterThan(0);
+    expect((await engine.campaigns.require(c.id)).turnSeq).toBe(1);
+
+    // Once the storyteller is back, asking again fills the draft in; a guardian can send it.
+    down = false;
+    const again = await engine.turns.regenerateDraft(next.draft.approvalId, "gran", "");
+    expect(again.handoff).toBeNull();
+    const sent = await engine.turns.approveDraft(next.draft.approvalId, "gran");
+    expect(sent.narration).toContain("Footprints in the soot");
+    expect((await engine.campaigns.require(c.id)).turnSeq).toBe(2);
+  });
+
+  it("never guesses at what a player typed when the action reader can't read it", async () => {
+    const engine = createEngine({
+      db: db.db,
+      worlds,
+      llm: new FakeLlm({ intent: () => new Error("reader down") }),
+    });
+    const c = await engine.campaigns.create({
+      guildId: "g3b",
+      channelId: "ch5b",
+      name: "Unread",
+      mode: "ai_dm",
+      createdBy: "solo",
+    });
+    await makeHero(engine, c.id, "solo", "scout", "Quill Swift");
+    const view = await engine.turns.openCampaign(c.id, "solo");
+    await engine.turns.submitAction({
+      roundId: view.roundId as string,
+      userId: "solo",
+      kind: "freeform",
+      text: "I climb the bell tower to look around",
+    });
+    const next = await engine.turns.resolveRound(view.roundId as string);
+    if (next?.kind !== "draft") throw new Error("expected the turn to be handed over");
+    const reasons = next.draft.handoff?.reasons.join("\n") ?? "";
+    expect(reasons).toMatch(/action reader didn't answer.*reader down/);
+    expect(reasons).toContain('Not read: Quill Swift tries this: "I climb the bell tower to look around"');
+    expect(next.draft.rolls).toEqual([]);
+    // Asking the storyteller again doesn't change that: a person has to say what came of it.
+    const again = await engine.turns.regenerateDraft(next.draft.approvalId, "solo", "");
+    expect(again.handoff?.reasons.join("\n")).toContain("Not read: Quill Swift");
   });
 
   it("blocks unsafe text and deflects questions about hidden luck", async () => {

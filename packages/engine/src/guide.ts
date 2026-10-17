@@ -47,7 +47,7 @@ export const GUIDE: GuideSection[] = [
     title: "4. Choose the storyteller AI (optional)",
     steps: [
       "On the setup site, sign in with Discord and pick your server. Add a story service (Claude is the default; OpenAI-compatible services, Gemini, models you run yourself and custom endpoints all work) and, if you like, a picture service for scene art.",
-      "Set a daily budget there too. Without any AI, the bot still runs the game and tells a simpler story on its own.",
+      "Set a daily budget there too. When the storyteller can't tell a turn (no service set, the budget used up, or the service down), the bot hands it to a person in the DM room with the dice already rolled.",
       "Added a picture service after the adventure began? The host or DM runs `/campaign pictures` in the campaign's thread to paint the places the story has already been. Anyone can look through them with `/campaign gallery`.",
     ],
   },

@@ -145,7 +145,7 @@ campaigns are on the setup page's Settings.
 With a picture service set up on the setup page, each new place or challenge gets its own scene art (choose how
 often under **Settings & budget** → **Scene art**). The host or DM can run `/campaign pictures` in a campaign's
 thread to paint the places the story had already been: up to 10 at a time, oldest first, each posted in the thread
-with the scene's name. Scenes told by the AI are painted from its own picture notes; scenes told without AI, from
+with the scene's name. Scenes told by the AI are painted from its own picture notes; scenes without picture notes, from
 the world's description of the place. Pictures count against the server's daily picture limit.
 
 Going back to a place shows the picture the campaign already has of it instead of painting a new one (decisive
@@ -176,6 +176,28 @@ bot opens a private **DM screen** thread that only the DM is added to.
 - `/loom view` lists the deeds waiting to matter, the shortcuts that will come back around, and who is being kept
   safe for later. `/loom plant` adds a deed by hand. `/loom mode` switches the hidden hand off if the DM would
   rather handle it themselves.
+
+### When the storyteller can't tell a turn
+
+The AI is the storyteller. Nothing stands in for it: there is no canned or engine-written narration. When it can't
+tell a turn (no story service set for the Storyteller job, the daily budget used up, the service down or returning
+errors, or its passages repeatedly turned back by the content reviewer), or when it couldn't read what a player
+typed, the turn goes to a person in the DM room:
+
+- The bot posts it to the campaign's DM screen, or to the DM room itself for campaigns without one, and pings the
+  DM (or the host).
+- It holds everything needed to tell it: why the storyteller couldn't, the scene and its goals, what each hero did,
+  every dice roll already rolled, what's already settled (the fight, the decisive moment, what may be found, and
+  whether the scene closes and where the story goes next), and the hidden hand's notes.
+- **Tell this turn** opens a form for the narration and the players' next choices. **Ask the storyteller again**
+  tries the AI once more, for when it was only down for a moment. Players see nothing until it's sent, and the
+  table is told a person is telling this turn.
+- The host, the DM or a guardian can take it. The campaign's opening is handed over the same way, and the
+  adventure starts once it's told.
+
+A scene ends when its story does: the storyteller judges when what the scene is about has been settled and the
+heroes are moving on, or the players choose to leave. A failed roll changes the situation but doesn't end the
+scene. There's no turn limit.
 
 ### DM room tools: rewinding, fixes and fight rules
 

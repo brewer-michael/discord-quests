@@ -15,11 +15,11 @@ import { checkNarration } from "@dq/core/safety";
 import type { World } from "@dq/core/world";
 import type { Logger } from "./deps";
 
-export interface NarrationResult {
-  output: NarratorOutput;
-  fallback: boolean;
-  problems: string[];
-}
+/**
+ * The storyteller's passage, or why it couldn't write one. Nothing stands in for it: a turn it can't finish goes
+ * to a person in the DM room, with these reasons.
+ */
+export type NarrationResult = { ok: true; output: NarratorOutput } | { ok: false; reasons: string[] };
 
 const PROSE_DIRECTIVES = new Set<NarrativeDirective["kind"]>([
   "convergence",
@@ -31,9 +31,8 @@ const PROSE_DIRECTIVES = new Set<NarrativeDirective["kind"]>([
 ]);
 
 /**
- * Asks the configured AI to narrate, checks the result, retries once with
- * feedback, and falls back to a plain engine-written turn if the AI is
- * unavailable or keeps getting it wrong. The table never stalls.
+ * Asks the configured AI to narrate, checks the result (and has the reviewer read it when the story calls for
+ * it), and retries once with feedback. If the AI can't be reached or keeps getting it wrong, it says why.
  */
 export async function narrate(opts: {
   llm: LlmGateway;
@@ -51,9 +50,10 @@ export async function narrate(opts: {
   const review = view.story.intensity !== "light" || directives.some((d) => PROSE_DIRECTIVES.has(d.kind));
 
   let problems: string[] = [];
+  let reasons: string[] = [];
   for (let attempt = 0; attempt < 2; attempt++) {
     const feedback =
-      attempt === 0
+      attempt === 0 || problems.length === 0
         ? []
         : [
             {
@@ -74,6 +74,8 @@ export async function narrate(opts: {
     );
     if (!res.ok) {
       log.warn("narrator unavailable", { stop: res.stop, error: res.error });
+      reasons = [STOPPED[res.stop] ?? `The storyteller stopped (${res.stop}).`];
+      if (res.error) reasons.push(`What the service said: ${res.error.slice(0, 300)}`);
       problems = [`narrator ${res.stop}`];
       if (res.stop === "unconfigured" || res.stop === "budget" || res.stop === "error") break;
       continue;
@@ -93,21 +95,38 @@ export async function narrate(opts: {
         },
         scope,
       );
-      if (judged.ok) {
-        if (judged.value.revealsHiddenMechanic) problems.push("It mentions a hidden mechanic. Don't.");
-        if (judged.value.explainsCauseOfLuck)
-          problems.push(
-            "It explains that the good outcome was caused by an earlier kindness. Show what happens; don't explain why.",
-          );
-        if (judged.value.crossesLimits)
-          problems.push(`It goes beyond what this story allows: ${judged.value.note}`);
+      if (!judged.ok) {
+        // A passage that needs reading before the table sees it never goes out unread.
+        log.warn("reviewer unavailable", { stop: judged.stop, error: judged.error });
+        reasons = [
+          `The reviewer that reads each passage before the table sees it didn't answer (${judged.stop}).`,
+        ];
+        continue;
       }
+      if (judged.value.revealsHiddenMechanic) problems.push("It mentions a hidden mechanic. Don't.");
+      if (judged.value.explainsCauseOfLuck)
+        problems.push(
+          "It explains that the good outcome was caused by an earlier kindness. Show what happens; don't explain why.",
+        );
+      if (judged.value.crossesLimits)
+        problems.push(`It goes beyond what this story allows: ${judged.value.note}`);
     }
-    if (problems.length === 0) return { output: cleaned, fallback: false, problems: [] };
+    if (problems.length === 0) return { ok: true, output: cleaned };
     log.warn("narration rejected", { problems });
+    reasons = problems.map((p) => `The storyteller's draft was turned back: ${p}`);
   }
-  return { output: fallbackNarration(view, directives, opts.choicesFor), fallback: true, problems };
+  return { ok: false, reasons };
 }
+
+/** Why the storyteller didn't answer, for the person taking over. */
+const STOPPED: Record<string, string> = {
+  unconfigured: "No storyteller service is set for this server (the setup page's “Who does what”).",
+  budget: "Today's spending limit for AI services has been reached.",
+  error: "The storyteller service returned an error.",
+  invalid: "The storyteller's answer wasn't in the shape the game needs.",
+  refusal: "The storyteller declined to write this turn.",
+  max_tokens: "The storyteller ran out of room before finishing.",
+};
 
 function clip(s: string, n: number): string {
   const t = s.trim();
@@ -175,100 +194,4 @@ function checkOutput(out: NarratorOutput, world: World, view: PublicSceneView): 
   if (view.mode !== "finale" && out.choices.length < NARRATION_LIMITS.minChoices)
     problems.push("Offer at least two choices.");
   return problems;
-}
-
-/** A plain, safe turn the engine can always tell on its own. */
-export function fallbackNarration(
-  view: PublicSceneView,
-  directives: readonly NarrativeDirective[],
-  choicesFor: SceneSpecView,
-): NarratorOutput {
-  const parts: string[] = [];
-  if (view.mode === "opening") parts.push(`${view.scene.title}. ${view.scene.summary}`);
-  if (view.battle) {
-    parts.push(...view.battle.log);
-    if (view.battle.outcome === "party_down")
-      parts.push(
-        "The heroes are overwhelmed and knocked senseless. When they come to, they are battered but whole, and the story goes on.",
-      );
-    else if (view.battle.atMercy.length > 0)
-      parts.push(
-        `${view.battle.atMercy.join(", ")} ${view.battle.atMercy.length === 1 ? "waits" : "wait"} to see what the heroes will do.`,
-      );
-  } else for (const a of view.actions) parts.push(`${a.characterName} ${a.summary.replace(/\.$/, "")}.`);
-  for (const r of view.battle ? [] : view.rolls)
-    parts.push(
-      r.success
-        ? `${r.characterName}'s ${r.label.toLowerCase()} works!`
-        : `${r.characterName}'s ${r.label.toLowerCase()} doesn't go to plan.`,
-    );
-  for (const d of directives) if (PROSE_DIRECTIVES.has(d.kind)) parts.push(d.text);
-  if (view.nextScene && view.mode === "close_and_open")
-    parts.push(`${view.nextScene.title}. ${view.nextScene.summary}`);
-  for (const line of view.epilogue) parts.push(line);
-  const narration = clip(parts.join(" "), NARRATION_LIMITS.narration);
-
-  const choices: NarratorOutput["choices"] = [];
-  if (view.mode !== "finale") {
-    for (const o of choicesFor.opportunities.slice(0, 2)) {
-      choices.push({
-        label: clip(o.text.split(":")[0] ?? o.text, NARRATION_LIMITS.choiceLabel),
-        intent: {
-          approach: o.text,
-          skill: "none",
-          difficulty: "medium",
-          deed: o.kind === "virtue" ? o.key : "none",
-          targetRef: o.targetRef ?? null,
-          shortcutId: o.kind === "shortcut" ? o.key : null,
-        },
-      });
-    }
-    const npc = choicesFor.entities.find((e) => e.kind === "npc");
-    if (npc) {
-      choices.push({
-        label: clip(`Talk with ${npc.name}`, NARRATION_LIMITS.choiceLabel),
-        intent: {
-          approach: `talk with ${npc.name}`,
-          skill: "persuasion",
-          difficulty: "easy",
-          deed: "none",
-          targetRef: npc.ref,
-          shortcutId: null,
-        },
-      });
-    }
-    choices.push({
-      label: "Look around carefully",
-      intent: {
-        approach: "look around carefully",
-        skill: "perception",
-        difficulty: "medium",
-        deed: "none",
-        targetRef: null,
-        shortcutId: null,
-      },
-    });
-    if (choices.length < 3) {
-      choices.push({
-        label: "Press on together",
-        intent: {
-          approach: "press on together",
-          skill: "none",
-          difficulty: "easy",
-          deed: "none",
-          targetRef: null,
-          shortcutId: null,
-        },
-      });
-    }
-  }
-  return {
-    narration,
-    npcLines: [],
-    proposedDeltas: [],
-    choices: choices.slice(0, NARRATION_LIMITS.maxChoices),
-    goalMet: view.mode !== "continue",
-    imageBrief: null,
-    significance: "minor",
-  };
 }

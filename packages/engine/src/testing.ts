@@ -31,7 +31,7 @@ export class FakeLlm implements LlmGateway {
   }
 }
 
-/** Always unavailable: exercises the engine's fallback paths. */
+/** Always unavailable: for what happens when no AI answers (turns go to a person in the DM room). */
 export class UnconfiguredLlm implements LlmGateway {
   async structured<T>(): Promise<StructuredOutcome<T>> {
     return { ok: false, stop: "unconfigured" };
@@ -129,7 +129,7 @@ const DEFAULTS: Record<string, Handler> = {
       npcLines: [],
       proposedDeltas: [],
       choices: finale ? [] : choices.slice(0, 4),
-      goalMet: true,
+      sceneOver: true,
       imageBrief: {
         setting: title || "a winding road",
         subjects: ["three young heroes"],

@@ -103,12 +103,20 @@ import {
 import { type EngineDeps, GameError, realDice, silentLogger } from "./deps";
 import { nextSceneSpec, type SceneEntityState, type SceneSpec } from "./director";
 import { clearPendingLoom, loadLoom, loadPendingLoom, saveLoom, savePendingLoom } from "./loom-store";
-import { narrate } from "./narrator";
+import { type NarrationResult, narrate } from "./narrator";
 import { applyPlan, latestPlan, planChapter } from "./planner";
 import { applyRestorePoint, loadRestorePoint, restorePointSeqs, saveRestorePoint } from "./restore-points";
 import { campaignStory } from "./story-profile";
 import { asStory, isRewound, type StoryState } from "./story-state";
-import type { DmDraft, PreparedTurn, ResolveResult, RollView, SubmitResult, TurnView } from "./views";
+import type {
+  DmDraft,
+  DraftHandoff,
+  PreparedTurn,
+  ResolveResult,
+  RollView,
+  SubmitResult,
+  TurnView,
+} from "./views";
 
 type CharacterRow = typeof characters.$inferSelect;
 type CampaignRow = typeof campaigns.$inferSelect;
@@ -132,6 +140,8 @@ interface ResolvedAction {
   keepsPromiseTo: string | null;
   makesPromiseTo: string | null;
   passed: boolean;
+  /** Why what the player typed couldn't be read into an action, when it couldn't. */
+  unread?: string;
 }
 
 const SHORTCUT_EVIDENCE: DeedCandidate["evidence"] = {};
@@ -168,8 +178,12 @@ export class TurnService {
 
   // ------------------------------------------------------------ opening
 
-  /** Starts the adventure: plans the first scene and narrates the opening. */
-  async openCampaign(campaignId: string, userId: string): Promise<TurnView> {
+  /**
+   * Starts the adventure: plans the first scene and has the AI storyteller tell the opening. If it can't, the
+   * opening goes to a person in the DM room with everything they need, and the adventure starts when they've
+   * told it.
+   */
+  async startCampaign(campaignId: string, userId: string): Promise<ResolveResult> {
     const db = this.deps.db;
     const [c] = await db.select().from(campaigns).where(eq(campaigns.id, campaignId));
     if (!c) throw new GameError("no campaign", "That campaign doesn't exist.");
@@ -220,11 +234,82 @@ export class TurnService {
       log: this.log,
       choicesFor: view.scene,
     });
+    if (!narration.ok) {
+      const opening: OpeningDraft = {
+        opening: true,
+        campaignId,
+        seq,
+        mode: "opening",
+        spec,
+        view,
+        choicesFor: view.scene,
+        narration: blankNarration(),
+        handoff: narration.reasons,
+      };
+      return { kind: "draft", draft: await this.handOffOpening(c, opening) };
+    }
+    return { kind: "turn", view: await this.commitOpening(campaignId, spec, narration.output) };
+  }
 
+  /** Starts the adventure and returns its opening, for callers that only go on once it's been told. */
+  async openCampaign(campaignId: string, userId: string): Promise<TurnView> {
+    const started = await this.startCampaign(campaignId, userId);
+    if (started.kind === "turn") return started.view;
+    throw new GameError(
+      "handed off",
+      "The storyteller couldn't tell the opening, so it's waiting for a person in the DM room.",
+    );
+  }
+
+  /** Saves an opening the AI couldn't tell for a person in the DM room. */
+  private async handOffOpening(c: CampaignRow, opening: OpeningDraft): Promise<DmDraft> {
+    const approvalId = await this.deps.db.transaction(async (tx) => {
+      await tx
+        .insert(turns)
+        .values({
+          campaignId: c.id,
+          seq: opening.seq,
+          status: "awaiting_approval",
+          stage: "opening",
+          data: opening as unknown as Record<string, unknown>,
+        })
+        .onConflictDoUpdate({
+          target: [turns.campaignId, turns.seq],
+          set: {
+            status: "awaiting_approval",
+            stage: "opening",
+            data: opening as unknown as Record<string, unknown>,
+          },
+        });
+      const [turnRow] = await tx
+        .select()
+        .from(turns)
+        .where(and(eq(turns.campaignId, c.id), eq(turns.seq, opening.seq)));
+      const [req] = await tx
+        .insert(approvalRequests)
+        .values({
+          campaignId: c.id,
+          turnId: turnRow?.id as string,
+          dmUserId: c.dmUserId ?? c.createdBy,
+          draft: { seq: opening.seq, handoff: true },
+        })
+        .returning();
+      return req?.id as string;
+    });
+    return this.draftFor(approvalId, opening, null);
+  }
+
+  /** Commits the opening scene and its first round, with the opening as told. */
+  private async commitOpening(campaignId: string, spec: SceneSpec, out: NarratorOutput): Promise<TurnView> {
+    const db = this.deps.db;
     return db.transaction(async (tx) => {
       const [locked] = await tx.select().from(campaigns).where(eq(campaigns.id, campaignId)).for("update");
       if (locked?.status !== "setup")
         throw new GameError("already started", "This campaign has already started.");
+      const { index } = this.deps.worlds.get(locked.worldId);
+      const story = asStory(locked.story);
+      const party = await this.partyTx(tx, campaignId);
+      const seq = locked.turnSeq + 1;
       const sceneId = await this.insertScene(tx, campaignId, spec, seq);
       const fightStarts = spec.combat?.phase === "fighting";
       const roundId = await this.insertRound(
@@ -232,7 +317,7 @@ export class TurnService {
         campaignId,
         sceneId,
         1,
-        fightStarts ? [] : narration.output.choices,
+        fightStarts ? [] : out.choices,
         fightStarts ? "combat" : "exploration",
       );
       const nextStory: StoryState = {
@@ -250,7 +335,7 @@ export class TurnService {
         locked,
         nextStory,
         party,
-        narration.output.proposedDeltas,
+        out.proposedDeltas,
         new Map(),
         seq,
         spec,
@@ -260,14 +345,25 @@ export class TurnService {
           .update(scenes)
           .set({ state: spec as unknown as Record<string, unknown> })
           .where(eq(scenes.id, sceneId));
-      await tx.insert(turns).values({
-        campaignId,
-        seq,
-        status: "committed",
-        stage: "committed",
-        data: { mode: "opening", narration: narration.output, fallback: narration.fallback },
-        committedAt: new Date(),
-      });
+      const turnData = { mode: "opening", narration: out } as unknown as Record<string, unknown>;
+      const [draftRow] = await tx
+        .select()
+        .from(turns)
+        .where(and(eq(turns.campaignId, campaignId), eq(turns.seq, seq)));
+      if (draftRow)
+        await tx
+          .update(turns)
+          .set({ status: "committed", stage: "committed", data: turnData, committedAt: new Date() })
+          .where(eq(turns.id, draftRow.id));
+      else
+        await tx.insert(turns).values({
+          campaignId,
+          seq,
+          status: "committed",
+          stage: "committed",
+          data: turnData,
+          committedAt: new Date(),
+        });
       await tx
         .insert(events)
         .values({ campaignId, turnSeq: seq, type: "campaign_started", payload: { sceneId } });
@@ -286,20 +382,17 @@ export class TurnService {
         index,
         seq,
         spec,
-        out: narration.output,
+        out,
         rolls: [],
         roundId,
         sceneChanged: true,
         levelUps: [],
         ended: false,
-        fallback: narration.fallback,
         combat: spec.combat ? combatView(spec.combat, party) : null,
         ...(fightStarts ? { choices: [] } : {}),
       });
     });
   }
-
-  // ------------------------------------------------------------ actions
 
   async currentRound(campaignId: string) {
     const [r] = await this.deps.db
@@ -474,8 +567,9 @@ export class TurnService {
   /**
    * Resolves a round: intents, dice, the loom, narration, validation, and one
    * transaction that commits it all. In Assist campaigns the result is a draft
-   * for the human DM instead. Returns null if someone else is already
-   * resolving this round.
+   * for the human DM instead, and in any campaign a turn the AI couldn't finish
+   * is a draft for a person in the DM room to tell. Returns null if someone
+   * else is already resolving this round.
    */
   async resolveRound(roundId: string): Promise<ResolveResult | null> {
     const db = this.deps.db;
@@ -493,8 +587,9 @@ export class TurnService {
         return null;
       }
       const prepared = await this.prepare(claimed);
-      if (c?.mode === "assist" && c.dmUserId)
-        return { kind: "draft", draft: await this.saveDraft(prepared, c.dmUserId) };
+      // Assist campaigns send every turn to their DM; any campaign sends a turn the AI couldn't finish to a person.
+      if (prepared.turn.handoff || (c.mode === "assist" && c.dmUserId))
+        return { kind: "draft", draft: await this.saveDraft(prepared, c.dmUserId ?? c.createdBy) };
       const view = await this.commit(prepared.turn, prepared.loom, prepared.inputHash);
       await this.afterCommit(prepared.turn);
       return { kind: "turn", view };
@@ -549,12 +644,11 @@ export class TurnService {
           )
         : null;
     const sceneSpec = fight ? syncEntities(spec, fight.result.state) : spec;
+    // A scene ends when its story does: when the storyteller judged it over last turn and the heroes have
+    // now made their move, when a crux is decided, or when a fight is. Never on a count of turns.
     const closing = fight
       ? fight.result.state.phase === "over"
-      : spec.isCrux ||
-        story.closeNextRound ||
-        story.roundsInScene + 1 >= spec.targetRounds ||
-        spec.combat?.phase === "aftermath";
+      : spec.isCrux || story.closeNextRound || spec.combat?.phase === "aftermath";
     const { rollViews, failures, crux } = fight
       ? { rollViews: fight.rolls, failures: [], crux: null }
       : this.rollDice(index, loom.masterSeed, seq, spec, story, party, actions, loom.state, closing);
@@ -703,15 +797,26 @@ export class TurnService {
         : {}),
     });
     const choicesFor = nextSpec ? this.sceneSpecView(index, nextSpec) : view.scene;
-    const narration = await narrate({
-      llm: this.deps.llm,
-      world,
-      view,
-      directives: loomResult.directives,
-      scope: { guildId: c.guildId, campaignId: c.id },
-      log: this.log,
-      choicesFor,
-    });
+    // What a player typed but the reader couldn't make sense of is never guessed at: the turn goes to a person.
+    const unread = actions.filter((a) => a.unread);
+    const narration: NarrationResult =
+      unread.length > 0
+        ? {
+            ok: false,
+            reasons: [
+              ...new Set(unread.map((a) => a.unread as string)),
+              ...unread.map((a) => `${NOT_READ}${a.name} ${a.summary}`),
+            ],
+          }
+        : await narrate({
+            llm: this.deps.llm,
+            world,
+            view,
+            directives: loomResult.directives,
+            scope: { guildId: c.guildId, campaignId: c.id },
+            log: this.log,
+            choicesFor,
+          });
 
     return {
       turn: {
@@ -739,8 +844,8 @@ export class TurnService {
         promisesKept,
         view,
         choicesFor,
-        narration: narration.output,
-        fallback: narration.fallback,
+        narration: narration.ok ? narration.output : blankNarration(),
+        handoff: narration.ok ? null : narration.reasons,
         combat: fight
           ? {
               heroes: fight.result.heroes.map((h) => ({
@@ -828,6 +933,9 @@ export class TurnService {
       if (a?.kind === "combat") {
         const parsed = CombatActionSchema.safeParse(a.payload.action);
         chosen[h.id] = parsed.success ? parsed.data : { kind: "defend" };
+      } else if (a?.kind === "freeform" && ra?.unread) {
+        // Unread: it does nothing on its own; the person telling the turn decides what came of it.
+        chosen[h.id] = { kind: "none", summary: ra.summary };
       } else if (a?.kind === "freeform" && ra && !ra.passed) {
         // A clever idea of the player's own. A skill check decides whether it works.
         const p = party.find((x) => x.id === h.id) as CharacterRow;
@@ -982,7 +1090,7 @@ export class TurnService {
   private async commit(prepared: PreparedTurn, loomResult: LoomResult, inputHash: string): Promise<TurnView> {
     const db = this.deps.db;
     const { seq, spec, nextSpec, closing, mode } = prepared;
-    const narration = { output: prepared.narration, fallback: prepared.fallback };
+    const narration = { output: prepared.narration };
     const ruledHp = new Map<string, number>();
     return db.transaction(async (tx) => {
       const [locked] = await tx
@@ -1005,7 +1113,7 @@ export class TurnService {
         branches: prepared.branchesAfter,
         roundsInScene: story.roundsInScene + 1,
         // Only the dice end a fight, never the narrator.
-        closeNextRound: !closing && !prepared.combat && !spec.combat && narration.output.goalMet,
+        closeNextRound: !closing && !prepared.combat && !spec.combat && narration.output.sceneOver,
         steerAway: false,
       };
       if (closing && spec.kind === "travel")
@@ -1165,7 +1273,6 @@ export class TurnService {
         })),
         rolls: prepared.rolls,
         narration: narration.output,
-        fallback: narration.fallback,
       } as unknown as Record<string, unknown>;
       const [draftRow] = await tx
         .select()
@@ -1222,7 +1329,6 @@ export class TurnService {
         sceneChanged: Boolean(nextSpec),
         levelUps,
         ended,
-        fallback: narration.fallback,
         combat:
           shown.combat && !ended
             ? combatView(shown.combat, partyNow, nextSpec ? [] : (prepared.combat?.log ?? []))
@@ -1308,9 +1414,12 @@ export class TurnService {
     }
   }
 
-  // ------------------------------------------------------------ assist mode
+  // ------------------------------------------------------------ the DM room: Assist drafts and handed-over turns
 
-  /** Saves a prepared turn as a draft for the human DM. The hidden part stays in the loom schema. */
+  /**
+   * Saves a prepared turn as a draft for a person in the DM room: every turn in Assist campaigns, and any turn
+   * the AI couldn't finish. The hidden part stays in the loom schema.
+   */
   private async saveDraft(
     prepared: { turn: PreparedTurn; loom: LoomResult; inputHash: string },
     dmUserId: string,
@@ -1350,7 +1459,7 @@ export class TurnService {
           campaignId: prepared.turn.campaignId,
           turnId: turnRow?.id as string,
           dmUserId,
-          draft: { seq: prepared.turn.seq },
+          draft: { seq: prepared.turn.seq, handoff: Boolean(prepared.turn.handoff) },
         })
         .returning();
       return req?.id as string;
@@ -1358,9 +1467,9 @@ export class TurnService {
     return this.draftFor(approvalId, prepared.turn, prepared.loom);
   }
 
-  private draftFor(approvalId: string, turn: PreparedTurn, loom: LoomResult): DmDraft {
-    const notes = loom.directives.map((d) => `${d.kind.replaceAll("_", " ")}: ${d.text}`);
-    if (loom.crux) {
+  private draftFor(approvalId: string, turn: PreparedTurn | OpeningDraft, loom: LoomResult | null): DmDraft {
+    const notes = (loom?.directives ?? []).map((d) => `${d.kind.replaceAll("_", " ")}: ${d.text}`);
+    if (loom?.crux) {
       notes.unshift(
         `Decisive moment: ${loom.crux.outcome.replaceAll("_", " ")}${loom.crux.socket ? ` (${loom.crux.socket.replaceAll("_", " ")})` : ""}${
           loom.crux.withheldSockets.length
@@ -1369,42 +1478,64 @@ export class TurnService {
         }`,
       );
     }
+    const prepared = isOpening(turn) ? null : turn;
     return {
       approvalId,
       campaignId: turn.campaignId,
       seq: turn.seq,
-      sceneTitle: (turn.nextSpec ?? turn.spec).title,
+      sceneTitle: (prepared?.nextSpec ?? turn.spec).title,
       narration: turn.narration.narration,
       npcLines: turn.narration.npcLines.map((l) => l.line),
-      rolls: turn.rolls,
+      rolls: prepared?.rolls ?? [],
       choices: turn.narration.choices.map((c) => c.label),
-      actions: turn.actions.map((a) => a.summary),
+      actions: prepared?.actions.map((a) => a.summary) ?? [],
       dmNotes: notes,
-      fallback: turn.fallback,
+      handoff: turn.handoff ? handoffFor(turn, turn.handoff) : null,
     };
   }
 
-  private async loadDraft(approvalId: string, dmUserId: string) {
+  /** The host, the DM or a guardian: who may tell a turn the AI couldn't. */
+  private async canTakeOver(c: CampaignRow, userId: string): Promise<boolean> {
+    if (c.createdBy === userId || c.dmUserId === userId) return true;
+    const [m] = await this.deps.db
+      .select()
+      .from(campaignMembers)
+      .where(and(eq(campaignMembers.campaignId, c.id), eq(campaignMembers.userId, userId)));
+    return m?.role === "guardian";
+  }
+
+  private async loadDraft(approvalId: string, userId: string) {
     const db = this.deps.db;
     const [req] = await db.select().from(approvalRequests).where(eq(approvalRequests.id, approvalId));
     if (!req) throw new GameError("no draft", "That draft doesn't exist anymore.");
-    if (req.dmUserId !== dmUserId) throw new GameError("not dm", "Only this campaign's DM can do that.");
+    if (req.dmUserId !== userId) {
+      const [c] = await db.select().from(campaigns).where(eq(campaigns.id, req.campaignId));
+      const handedOver = (req.draft as { handoff?: boolean }).handoff === true;
+      if (!handedOver || !c || !(await this.canTakeOver(c, userId)))
+        throw new GameError(
+          "not dm",
+          handedOver
+            ? "Only the host, the DM or a guardian can tell this turn."
+            : "Only this campaign's DM can do that.",
+        );
+    }
     if (req.status !== "pending") throw new GameError("decided", "That draft has already been decided.");
     const [turnRow] = await db.select().from(turns).where(eq(turns.id, req.turnId));
     if (turnRow?.status !== "awaiting_approval") throw new GameError("stale", "That draft is out of date.");
+    const turn = turnRow.data as unknown as PreparedTurn | OpeningDraft;
+    if (isOpening(turn)) return { req, turn, pending: null };
     const pending = await loadPendingLoom(db, req.campaignId);
-    const turn = turnRow.data as unknown as PreparedTurn;
     if (!pending || pending.seq !== turn.seq) throw new GameError("stale", "That draft is out of date.");
     return { req, turn, pending };
   }
 
   /** The current draft, for the DM's edit form. */
-  async getDmDraft(approvalId: string, dmUserId: string): Promise<DmDraft> {
-    const { turn, pending } = await this.loadDraft(approvalId, dmUserId);
-    return this.draftFor(approvalId, turn, pending.result);
+  async getDmDraft(approvalId: string, userId: string): Promise<DmDraft> {
+    const { turn, pending } = await this.loadDraft(approvalId, userId);
+    return this.draftFor(approvalId, turn, pending?.result ?? null);
   }
 
-  /** Which round (and campaign) a draft belongs to. */
+  /** Which round (and campaign) a draft belongs to. The opening has no round yet. */
   async draftRound(approvalId: string): Promise<{ roundId: string; campaignId: string } | null> {
     const [req] = await this.deps.db
       .select()
@@ -1415,76 +1546,104 @@ export class TurnService {
     return turnRow?.roundId ? { roundId: turnRow.roundId, campaignId: req.campaignId } : null;
   }
 
-  /** The DM approves a draft, optionally with their own narration or choices. */
+  /**
+   * The DM approves a draft, optionally with their own narration or choices. A turn the AI couldn't tell needs
+   * the person's own narration.
+   */
   async approveDraft(
     approvalId: string,
-    dmUserId: string,
+    userId: string,
     edits: { narration?: string; choices?: string[] } = {},
   ): Promise<TurnView> {
-    const { req, turn, pending } = await this.loadDraft(approvalId, dmUserId);
-    const final =
-      edits.narration !== undefined || edits.choices !== undefined ? this.applyDmEdits(turn, edits) : turn;
-    const view = await this.commit(final, pending.result, pending.inputHash);
-    await this.afterCommit(final);
+    const { req, turn, pending } = await this.loadDraft(approvalId, userId);
+    const edited = edits.narration !== undefined || edits.choices !== undefined;
+    if (turn.handoff && edits.narration === undefined)
+      throw new GameError(
+        "needs telling",
+        "Write what happens first: the storyteller couldn't tell this turn.",
+      );
+    let view: TurnView;
+    if (isOpening(turn)) {
+      const final = edited ? this.applyDmEdits(turn, edits) : turn;
+      view = await this.commitOpening(turn.campaignId, turn.spec, final.narration);
+    } else {
+      if (!pending) throw new GameError("stale", "That draft is out of date.");
+      const final = edited ? this.applyDmEdits(turn, edits) : turn;
+      view = await this.commit(final, pending.result, pending.inputHash);
+      await this.afterCommit(final);
+    }
     await this.deps.db
       .update(approvalRequests)
-      .set({
-        status: edits.narration !== undefined || edits.choices !== undefined ? "edited" : "approved",
-        dmEdits: edits,
-        decidedAt: new Date(),
-      })
+      .set({ status: edited ? "edited" : "approved", dmEdits: edits, decidedAt: new Date() })
       .where(eq(approvalRequests.id, req.id));
-    await clearPendingLoom(this.deps.db, req.campaignId);
+    if (!isOpening(turn)) await clearPendingLoom(this.deps.db, req.campaignId);
     return view;
   }
 
-  /** Writes the narration again, with the DM's guidance. Dice and the hidden hand stay as they were. */
-  async regenerateDraft(approvalId: string, dmUserId: string, guidance: string): Promise<DmDraft> {
-    const { req, turn, pending } = await this.loadDraft(approvalId, dmUserId);
+  /**
+   * Asks the AI storyteller to write the turn again, with the DM's guidance. Dice and the hidden hand stay as they
+   * were. If it still can't, the draft says why and stays with the person.
+   */
+  async regenerateDraft(approvalId: string, userId: string, guidance: string): Promise<DmDraft> {
+    const { req, turn, pending } = await this.loadDraft(approvalId, userId);
     const [c] = await this.deps.db.select().from(campaigns).where(eq(campaigns.id, req.campaignId));
     if (!c) throw new GameError("no campaign", "That campaign doesn't exist.");
     const { index } = this.deps.worlds.get(c.worldId);
+    const directives = pending?.result.directives ?? [];
     const guided: NarrativeDirective[] = guidance.trim()
       ? [
-          ...pending.result.directives,
+          ...directives,
           {
             kind: "dm_note",
             text: `The DM's note for this turn: ${guidance.trim().slice(0, 500)}`,
             mustNot: [],
           },
         ]
-      : pending.result.directives;
-    const narration = await narrate({
-      llm: this.deps.llm,
-      world: index.world,
-      view: turn.view as PublicSceneView,
-      directives: guided,
-      scope: { guildId: c.guildId, campaignId: c.id },
-      log: this.log,
-      choicesFor: turn.choicesFor,
-    });
-    const next: PreparedTurn = { ...turn, narration: narration.output, fallback: narration.fallback };
+      : directives;
+    const unread = isOpening(turn) ? [] : (turn.handoff ?? []).filter((r) => r.startsWith(NOT_READ));
+    // An action nobody could read still can't be narrated by the AI: that stays with the person.
+    const narration: NarrationResult =
+      unread.length > 0
+        ? { ok: false, reasons: turn.handoff ?? [] }
+        : await narrate({
+            llm: this.deps.llm,
+            world: index.world,
+            view: turn.view as PublicSceneView,
+            directives: guided,
+            scope: { guildId: c.guildId, campaignId: c.id },
+            log: this.log,
+            choicesFor: turn.choicesFor,
+          });
+    const next = narration.ok
+      ? { ...turn, narration: narration.output, handoff: null }
+      : { ...turn, handoff: narration.reasons };
     await this.deps.db
       .update(turns)
       .set({ data: next as unknown as Record<string, unknown> })
       .where(eq(turns.id, req.turnId));
-    return this.draftFor(approvalId, next, pending.result);
+    return this.draftFor(approvalId, next, pending?.result ?? null);
   }
 
-  private applyDmEdits(turn: PreparedTurn, edits: { narration?: string; choices?: string[] }): PreparedTurn {
+  private applyDmEdits<T extends PreparedTurn | OpeningDraft>(
+    turn: T,
+    edits: { narration?: string; choices?: string[] },
+  ): T {
     const out = { ...turn, narration: { ...turn.narration } };
     if (edits.narration !== undefined) {
       const text = edits.narration.trim();
       if (text.length < 10) throw new GameError("too short", "The narration needs at least a sentence.");
       out.narration.narration = text.slice(0, NARRATION_LIMITS.narration);
-      out.fallback = false;
+      out.handoff = null;
     }
     if (edits.choices !== undefined && turn.mode !== "finale") {
       const labels = edits.choices
         .map((l) => l.trim())
         .filter(Boolean)
         .slice(0, 4);
-      if (labels.length === 0) throw new GameError("no choices", "Give the players at least one choice.");
+      // In a fight the battle buttons are the choices.
+      const shown = isOpening(turn) ? turn.spec : (turn.nextSpec ?? turn.spec);
+      if (labels.length === 0 && shown.combat?.phase !== "fighting")
+        throw new GameError("no choices", "Give the players at least one choice.");
       out.narration.choices = labels.map((label) => {
         const existing = turn.narration.choices.find((c) => c.label.toLowerCase() === label.toLowerCase());
         return (
@@ -1516,6 +1675,7 @@ export class TurnService {
     const byChar = new Map(acted.map((a) => [a.characterId, a]));
     const freeform = acted.filter((a) => a.kind === "freeform");
     let parsed: IntentOutput["actions"] = [];
+    let unreadBecause = "The action reader left this out of its answer.";
     if (freeform.length > 0) {
       const res = await this.deps.llm.structured(
         {
@@ -1535,7 +1695,10 @@ export class TurnService {
         { guildId: c.guildId, campaignId: c.id },
       );
       if (res.ok) parsed = res.value.actions;
-      else this.log.warn("intent parse unavailable", { stop: res.stop });
+      else {
+        this.log.warn("intent parse unavailable", { stop: res.stop });
+        unreadBecause = `The action reader didn't answer (${res.stop}${res.error ? `: ${res.error.slice(0, 200)}` : ""}).`;
+      }
     }
 
     const entityAnchor = (ref: string | null) => {
@@ -1610,7 +1773,13 @@ export class TurnService {
       }
       const pa = parsed.find((x) => x.characterRef === p.id);
       const text = String(a.payload.text ?? "");
-      if (!pa) return { ...base, summary: `tries this: "${text.slice(0, 200)}"`, passed: false };
+      if (!pa)
+        return {
+          ...base,
+          summary: `tries this: "${text.slice(0, 200)}"`,
+          passed: false,
+          unread: unreadBecause,
+        };
       const deeds: DeedCandidate[] = pa.deeds.map((d) => ({
         tag: d.tag as DeedCandidate["tag"],
         actorIds: [p.id],
@@ -2200,7 +2369,6 @@ export class TurnService {
         sceneChanged: true,
         levelUps: [],
         ended: false,
-        fallback: false,
         combat: spec.combat ? combatView(spec.combat, party) : null,
         choices: fighting ? [] : ((point.round?.choices ?? []) as Array<{ label: string }>),
       });
@@ -2323,7 +2491,6 @@ export class TurnService {
         sceneChanged: false,
         levelUps: [],
         ended: false,
-        fallback: false,
         combat: spec.combat ? combatView(spec.combat, partyNow) : null,
         choices: [],
       });
@@ -2494,7 +2661,6 @@ export class TurnService {
     sceneChanged: boolean;
     levelUps: TurnView["levelUps"];
     ended: boolean;
-    fallback: boolean;
     combat?: CombatView | null;
     /** Overrides the narrator's choices (battle rounds have none; the mercy moment has its own). */
     choices?: Array<{ label: string }>;
@@ -2520,7 +2686,6 @@ export class TurnService {
       imageBrief: args.out.imageBrief,
       levelUps: args.levelUps,
       campaignEnded: args.ended,
-      fallback: args.fallback,
       combat: args.combat ?? null,
     };
   }
@@ -2568,8 +2733,77 @@ function quietNarration(narration: string): NarratorOutput {
     npcLines: [],
     proposedDeltas: [],
     choices: [],
-    goalMet: false,
+    sceneOver: false,
     imageBrief: null,
     significance: "minor",
+  };
+}
+
+/** An opening the AI couldn't tell, waiting for a person in the DM room. */
+interface OpeningDraft {
+  opening: true;
+  campaignId: string;
+  seq: number;
+  mode: "opening";
+  spec: SceneSpec;
+  view: PublicSceneData;
+  choicesFor: SceneSpecView;
+  narration: NarratorOutput;
+  handoff: string[] | null;
+}
+
+function isOpening(turn: PreparedTurn | OpeningDraft): turn is OpeningDraft {
+  return "opening" in turn && turn.opening === true;
+}
+
+/** How a handed-over turn lists a player's words the action reader couldn't read. */
+const NOT_READ = "Not read: ";
+
+/** What a handed-over turn carries until a person tells it. */
+function blankNarration(): NarratorOutput {
+  return {
+    narration: "",
+    npcLines: [],
+    proposedDeltas: [],
+    choices: [],
+    sceneOver: false,
+    imageBrief: null,
+    significance: "minor",
+  };
+}
+
+const sceneBrief = (s: SceneSpec) => ({ title: s.title, summary: s.summary, goals: s.goals });
+
+/** Everything a person needs to tell a turn the AI couldn't, besides the actions and dice already on the draft. */
+function handoffFor(turn: PreparedTurn | OpeningDraft, reasons: string[]): DraftHandoff {
+  const decisions: string[] = [];
+  if (isOpening(turn)) {
+    decisions.push("This is the start of the adventure: introduce the heroes and set the first scene.");
+    if (turn.spec.combat?.phase === "fighting")
+      decisions.push(`A fight starts at once: ${listFoes(turn.spec.combat)}.`);
+    return { reasons, scene: sceneBrief(turn.spec), next: null, decisions };
+  }
+  if (turn.mode === "finale") decisions.push("This turn ends the adventure.");
+  else if (turn.nextSpec) decisions.push("This turn closes the scene; the story moves on to the next scene.");
+  else decisions.push("The heroes stay in this scene.");
+  if (turn.cruxLabel)
+    decisions.push(
+      `Decisive moment, ${turn.cruxLabel}: ${turn.cruxSuccess ? "it worked" : "it didn't work"}.`,
+    );
+  if (turn.combat) {
+    decisions.push(...turn.combat.log.map((l) => `Fight: ${l}`));
+    if (turn.combat.outcome === "victory") decisions.push("The heroes won the fight.");
+    if (turn.combat.outcome === "party_down")
+      decisions.push("Every hero was knocked out: they wake up safe, battered but whole, somewhere else.");
+  }
+  const view = turn.view as PublicSceneData;
+  if (view.allowedLoot.length > 0)
+    decisions.push(`May be found here: ${view.allowedLoot.map((l) => l.name).join(", ")}.`);
+  if (view.epilogue.length > 0) decisions.push(...view.epilogue.map((l) => `Epilogue to weave in: ${l}`));
+  return {
+    reasons,
+    scene: sceneBrief(turn.spec),
+    next: turn.nextSpec ? sceneBrief(turn.nextSpec) : null,
+    decisions,
   };
 }

@@ -45,7 +45,8 @@ export default async function Settings({ params }: { params: Promise<{ guildId: 
               placeholder="No limit"
             />
             <span className="hint">
-              Covers your own keys. When it's used up, the story keeps going without AI until tomorrow (UTC).
+              Covers your own keys. When it's used up, turns go to a person in the DM room until tomorrow
+              (UTC).
             </span>
           </div>
           <div className="field">

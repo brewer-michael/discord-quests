@@ -41,7 +41,7 @@ describe("engine output schemas", () => {
           },
         },
       ],
-      goalMet: false,
+      sceneOver: false,
       imageBrief: null,
       significance: "minor",
     };

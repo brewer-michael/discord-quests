@@ -62,7 +62,7 @@ export default async function Routing({ params }: { params: Promise<{ guildId: s
             : task === "image"
               ? "no scene art"
               : task === "narrator"
-                ? "the engine telling the story on its own"
+                ? "every turn goes to the DM room for a person to tell"
                 : "skipping this job";
         return (
           <section key={task} className="card" aria-labelledby={`t-${task}`}>

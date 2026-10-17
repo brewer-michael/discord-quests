@@ -73,7 +73,7 @@ export function renderTurn(view: TurnView, opts: TurnRenderOptions = {}) {
       ),
     );
   }
-  const header = `## ${view.sceneTitle}\n-# ${view.locationName}${view.fallback ? " · told by the engine while the storyteller rests" : ""}`;
+  const header = `## ${view.sceneTitle}\n-# ${view.locationName}`;
   const narration = clip(view.narration, NARRATION_LIMITS.narration);
   // The story always shows in full; everything else shares what's left, most useful first.
   let left = TEXT_BUDGET - header.length - narration.length;

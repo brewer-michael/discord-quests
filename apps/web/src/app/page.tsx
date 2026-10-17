@@ -29,7 +29,7 @@ const FEATURES = [
   {
     icon: "🪙",
     title: "Budgets that hold",
-    text: "Daily spending and picture caps per server. When the money runs out, the engine keeps the game going on its own.",
+    text: "Daily spending and picture caps per server. When the money runs out, turns go to a person in the DM room until the next day.",
   },
 ];
 

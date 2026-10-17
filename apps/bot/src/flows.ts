@@ -236,10 +236,13 @@ export async function resolveAndPost(
     const result = await ctx.engine.turns.resolveRound(roundId);
     if (!result) return;
     if (result.kind === "draft") {
-      await postDraft(ctx, result.draft);
-      await channel
-        .send({ content: "-# 🕯️ The DM is looking over what happens next…", allowedMentions: { parse: [] } })
-        .catch(() => {});
+      const posted = await postDraft(ctx, result.draft);
+      const line = !result.draft.handoff
+        ? "-# 🕯️ The DM is looking over what happens next…"
+        : posted
+          ? "-# 🕯️ The storyteller has handed this turn to a person in the DM room. The story goes on as soon as they've told it."
+          : "-# 🕯️ The storyteller couldn't tell this turn, and there's no DM room to hand it to. The host can set one up with `/setup`.";
+      await channel.send({ content: line, allowedMentions: { parse: [] } }).catch(() => {});
       return;
     }
     await freezeRound(ctx, roundId, channel);
@@ -296,14 +299,30 @@ export async function freezeRound(ctx: BotContext, roundId: string, channel: Sen
       .catch(() => {});
 }
 
-/** Sends an Assist-mode draft to the DM's private screen. */
-export async function postDraft(ctx: BotContext, draft: DmDraft) {
+/**
+ * Sends a draft to the DM room: the campaign's DM screen, or the server's DM room for campaigns without one (an
+ * AI-DM campaign's turn handed over). A handed-over turn pings whoever can tell it. Says whether it got there.
+ */
+export async function postDraft(ctx: BotContext, draft: DmDraft): Promise<boolean> {
   const campaign = await ctx.engine.campaigns.get(draft.campaignId);
-  const screen = await sendableChannel(ctx, campaign?.dmThreadId ?? null);
+  if (!campaign) return false;
+  const screen =
+    (await sendableChannel(ctx, campaign.dmThreadId)) ??
+    (await sendableChannel(ctx, (await ctx.engine.campaigns.rooms(campaign.guildId)).dm?.id ?? null));
   if (!screen) {
-    ctx.log.warn("no DM screen for draft", { campaignId: draft.campaignId });
-    return;
+    ctx.log.warn("no DM room for draft", { campaignId: draft.campaignId });
+    return false;
+  }
+  if (draft.handoff) {
+    const who = campaign.dmUserId ?? campaign.createdBy;
+    await screen
+      .send({
+        content: `<@${who}>, the storyteller couldn't tell ${draft.seq === 1 ? "the opening" : "a turn"} of **${campaign.name.replace(/[*_`~|]/g, "")}**. It's here for you (or another DM, host or guardian) to tell.`,
+        allowedMentions: { users: [who] },
+      })
+      .catch(() => {});
   }
   const msg = await screen.send(renderDraft(draft) as never);
   await ctx.engine.dm.setApprovalMessage(draft.approvalId, msg.id);
+  return true;
 }

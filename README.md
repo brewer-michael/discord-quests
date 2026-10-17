@@ -23,6 +23,8 @@ It can be the dungeon master itself (**AI-DM mode**) or help a human dungeon mas
   party's levels and size with the SRD's encounter XP budget, then played out against your heroes' own sheets
   before it starts and toned down until they can win it. How fierce fights read depends on the story's
   intensity, but they never turn gory: heroes at zero are only Dazed, and a beaten foe can be spared.
+- **No canned story.** The AI tells every turn. When it can't, the turn goes to a person in the private DM room
+  with the dice already rolled and everything needed to tell it; the table waits for them, never for filler.
 - **Undo for grown-ups.** If a turn goes wrong, the host or DM mentions the bot in the private DM room ("rewind 2
   turns") and the game goes back to how it stood, hit points, packs and all. The table just sees the scene again.
 - **New fight rules, if the table wants them.** Switched on from the DM room: an attack that misses by 1 or 2

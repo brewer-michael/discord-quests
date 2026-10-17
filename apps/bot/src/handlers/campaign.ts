@@ -8,7 +8,7 @@ import {
   ThreadAutoArchiveDuration,
 } from "discord.js";
 import type { BotContext } from "../context";
-import { postTurn, restartClock, sendableChannel, stopClock } from "../flows";
+import { postDraft, postTurn, restartClock, sendableChannel, stopClock } from "../flows";
 import { describePace, renderHub } from "../render/hub";
 import { renderScenePicture, sceneAttachment } from "../render/turn";
 import { canSeeRoom, checkRoom, fetchRoom } from "../rooms";
@@ -182,9 +182,27 @@ export async function campaignStart(
 ) {
   const c = campaignId ? await ctx.engine.campaigns.require(campaignId) : await campaignHere(ctx, i);
   await i.deferReply({ flags: ["Ephemeral"] });
-  const view = await ctx.engine.turns.openCampaign(c.id, i.user.id);
+  const started = await ctx.engine.turns.startCampaign(c.id, i.user.id);
   const ch = await sendableChannel(ctx, c.threadId);
-  if (ch) await postTurn(ctx, ch, view);
+  if (started.kind === "draft") {
+    // The storyteller couldn't tell the opening: a person in the DM room tells it, and the adventure starts then.
+    const posted = await postDraft(ctx, started.draft);
+    if (posted && ch)
+      await ch
+        .send({
+          content:
+            "-# 🕯️ A person in the DM room is telling the opening. The adventure begins as soon as they have.",
+          allowedMentions: { parse: [] },
+        })
+        .catch(() => {});
+    await i.editReply({
+      content: posted
+        ? "The storyteller couldn't tell the opening, so it's waiting in the DM room for you to tell."
+        : "The storyteller couldn't tell the opening, and there's no DM room to hand it to. Set one up with `/setup`, then start again.",
+    });
+    return;
+  }
+  if (ch) await postTurn(ctx, ch, started.view);
   await i.editReply({ content: "The adventure has begun! 🏮" });
   await refreshHub(ctx, c.id);
 }

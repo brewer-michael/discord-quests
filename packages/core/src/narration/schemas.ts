@@ -39,7 +39,8 @@ export const NarratorOutput = z.object({
   npcLines: z.array(z.object({ npcRef: z.string(), line: z.string() })),
   proposedDeltas: z.array(DeltaProposal),
   choices: z.array(z.object({ label: z.string(), intent: IntentHint })),
-  goalMet: z.boolean(),
+  /** This scene's story is done and the heroes are moving on (see the narrator's rules). */
+  sceneOver: z.boolean(),
   imageBrief: ImageBriefSchema.nullable(),
   significance: z.enum(["minor", "notable", "major"]),
 });

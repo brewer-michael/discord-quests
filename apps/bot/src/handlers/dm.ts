@@ -6,7 +6,7 @@ import { freezeRound, postTurn, sendableChannel } from "../flows";
 import type { ApprovalAction } from "../ids";
 import { COLORS, esc, text, V2 } from "../render/common";
 import { draftModal, renderDecided, renderDraft } from "../render/draft";
-import { campaignHere, say } from "./shared";
+import { campaignHere, refreshHub, say } from "./shared";
 
 async function sendApproved(ctx: BotContext, view: TurnView, roundId: string | null) {
   const campaign = await ctx.engine.campaigns.get(view.campaignId);
@@ -14,6 +14,8 @@ async function sendApproved(ctx: BotContext, view: TurnView, roundId: string | n
   if (!table) return;
   if (roundId) await freezeRound(ctx, roundId, table);
   await postTurn(ctx, table, view);
+  // An opening told in the DM room has just started the adventure.
+  if (!roundId) await refreshHub(ctx, view.campaignId).catch(() => {});
 }
 
 export async function approvalButton(

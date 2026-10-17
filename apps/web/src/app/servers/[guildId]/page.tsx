@@ -71,7 +71,7 @@ export default async function Overview({ params }: { params: Promise<{ guildId: 
                 ? "Your own story service is set up."
                 : platformStory
                   ? "Using this bot's built-in storyteller for now. Add your own service to choose the model or lift the shared daily limit."
-                  : "Add a story service below. Until then the engine tells a simpler story on its own."}
+                  : "Add a story service below. Until then, every turn goes to the DM room for a person to tell."}
             </span>
           </Check>
           <Check done={hasImages || platformImages || settings.game.imagePolicy === "off"}>

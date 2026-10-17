@@ -3,13 +3,14 @@ import { scenes, turns } from "@dq/db";
 import { createTestDb, TEST_DATABASE_URL } from "@dq/db/testing";
 import {
   createEngine,
+  type DmDraft,
   type DraftView,
   GUIDE,
   pictureSearchWords,
   type TurnView,
   WorldCache,
 } from "@dq/engine";
-import { FakeLlm, UnconfiguredLlm } from "@dq/engine/testing";
+import { FakeLlm } from "@dq/engine/testing";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { commandsJson } from "./commands";
 import { battleMenu } from "./handlers/battle";
@@ -332,7 +333,6 @@ describe("renderers stay within Discord's limits", () => {
     imageBrief: null,
     levelUps: [],
     campaignEnded: false,
-    fallback: false,
     combat: null,
   };
 
@@ -361,7 +361,7 @@ describe("renderers stay within Discord's limits", () => {
       choices: Array.from({ length: 4 }, () => "z".repeat(80)),
       actions: Array.from({ length: 6 }, () => "a".repeat(200)),
       dmNotes: Array.from({ length: 6 }, () => "n".repeat(500)),
-      fallback: true,
+      handoff: null,
     };
     const json = JSON.stringify(checkLimits(renderDraft(draft)));
     expect(json).toContain("Send it");
@@ -386,6 +386,58 @@ describe("renderers stay within Discord's limits", () => {
     expect(inputs(draftModal({ ...draft, narration: "Short.", choices: [] }, UUID, "edit").toJSON())).toEqual(
       { narration: undefined, choices: undefined },
     );
+  });
+
+  it("a turn the storyteller couldn't tell, with everything a person needs, even at maximum length", () => {
+    const scene = {
+      title: "The Lost River Child",
+      summary: "s".repeat(600),
+      goals: ["Help Tumble, one way or another."],
+    };
+    const handed: DmDraft = {
+      approvalId: UUID,
+      campaignId: UUID,
+      seq: 7,
+      sceneTitle: "The Hollow Oak",
+      narration: "",
+      npcLines: [],
+      rolls: view.rolls,
+      choices: [],
+      actions: [
+        "takes Tumble by the hand and sets off for the Reedmarsh",
+        ...Array.from({ length: 5 }, () => "a".repeat(200)),
+      ],
+      dmNotes: Array.from({ length: 6 }, () => "n".repeat(500)),
+      handoff: {
+        reasons: [
+          "The storyteller service returned an error.",
+          "What the service said: 429 too many requests",
+        ],
+        scene,
+        next: { ...scene, title: "The Hollow Oak" },
+        decisions: [
+          "This turn closes the scene; the story moves on to the next scene.",
+          ...Array.from({ length: 8 }, () => "d".repeat(150)),
+        ],
+      },
+    };
+    const json = JSON.stringify(checkLimits(renderDraft(handed)));
+    for (const part of [
+      "Over to you",
+      "The storyteller service returned an error.",
+      "The Lost River Child",
+      "Help Tumble",
+      "takes Tumble by the hand",
+      "The dice (already rolled)",
+      "Already settled",
+      "Then the story moves to",
+      "Tell this turn",
+      "Ask the storyteller again",
+    ])
+      expect(json).toContain(part);
+    // It can't be sent untold.
+    expect(json).not.toContain("Send it");
+    expect(draftModal(handed, UUID, "write").toJSON().title).toBe("Tell this turn");
   });
 
   it("battles, even with a crowd", () => {
@@ -803,8 +855,29 @@ describe.skipIf(!TEST_DATABASE_URL)("a whole campaign renders cleanly", () => {
       );
   });
 
-  it("scenes told without AI are painted from the world's own description of the place", async () => {
-    const engine = createEngine({ db: db.db, worlds, llm: new UnconfiguredLlm() });
+  it("scenes the storyteller gave no picture notes for are painted from the world's own description", async () => {
+    const llm = new FakeLlm({
+      narrator: () => ({
+        narration: "The heroes gather in the square as the last lanterns gutter out one by one.",
+        npcLines: [],
+        proposedDeltas: [],
+        choices: ["Look around", "Find Hattie"].map((label) => ({
+          label,
+          intent: {
+            approach: label,
+            skill: "none",
+            difficulty: "easy",
+            deed: "none",
+            targetRef: null,
+            shortcutId: null,
+          },
+        })),
+        sceneOver: false,
+        imageBrief: null,
+        significance: "minor",
+      }),
+    });
+    const engine = createEngine({ db: db.db, worlds, llm });
     const c = await engine.campaigns.create({
       guildId: "g",
       channelId: "c3",

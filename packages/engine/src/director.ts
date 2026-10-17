@@ -37,8 +37,6 @@ export interface SceneSpec {
   entities: SceneEntityState[];
   offeredShortcuts: string[];
   opportunities: OpportunityView[];
-  /** Rounds before the scene closes on its own. */
-  targetRounds: number;
   isCrux: boolean;
   chapterNumber: number;
   actNumber: number;
@@ -47,16 +45,6 @@ export interface SceneSpec {
   /** The story planner's note on how this scene should echo the heroes' earlier choices. */
   directorNote?: string;
 }
-
-const TARGET_ROUNDS: Record<SceneKind, number> = {
-  exploration: 2,
-  social: 2,
-  combat: 2,
-  travel: 1,
-  rest: 1,
-  crux: 1,
-  choice: 1,
-};
 
 export function npcAnchor(index: WorldIndex, npcId: string): AnchorRef {
   const npc = index.namedNpcs.get(npcId);
@@ -97,7 +85,6 @@ function travelScene(index: WorldIndex, story: StoryState, ref: BeatRef): SceneS
     entities: [],
     offeredShortcuts: [],
     opportunities: [],
-    targetRounds: TARGET_ROUNDS.travel,
     isCrux: false,
     chapterNumber: ref.chapter.number,
     actNumber: ref.act.number,
@@ -165,7 +152,6 @@ function beatScene(index: WorldIndex, ref: BeatRef, loom: LoomState): SceneSpec 
     entities,
     offeredShortcuts,
     opportunities,
-    targetRounds: TARGET_ROUNDS[beat.kind],
     isCrux: Boolean(beat.crux),
     chapterNumber: ref.chapter.number,
     actNumber: ref.act.number,

@@ -516,7 +516,7 @@ export class CampaignService {
 
   /**
    * The scenes the table has played, oldest first, with what to paint for each: the narrator's picture brief from
-   * the turn that opened the scene, or the place's own description when that turn was told without AI.
+   * the turn that opened the scene, or the place's own description when that turn had none.
    */
   async sceneGallery(campaignId: string): Promise<SceneGalleryEntry[]> {
     const c = await this.require(campaignId);
@@ -704,7 +704,7 @@ const SCENE_MOODS: Record<string, string> = {
   choice: "thoughtful",
 };
 
-/** A picture brief from the world's own description of the place, for scenes told without AI. */
+/** A picture brief from the world's own description of the place, for scenes whose turn gave no picture notes. */
 function placeBrief(
   index: WorldIndex,
   s: { title: string; kind: string; regionId: string; poiId: string | null },
