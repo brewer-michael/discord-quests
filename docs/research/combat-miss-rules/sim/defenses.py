@@ -13,23 +13,27 @@ def saves(m):
 TIERS = {"L1 average": dict(atk=5, dc=13, crmax=1), "L5 average": dict(atk=7, dc=15, crmax=5)}
 hit = lambda atk, ac: min(.95, max(.05, (21 + atk - ac) / 20))
 fails = lambda dc, save: min(1, max(0, (dc - 1 - save) / 20))
+# EASE shifts the move's odds: 0 is the SRD-exact constant (a move rolls against 14 + save), 1 is 13 + save, 2 is 12 + save.
+EASES = [0, 1, 2]
 rows = []
-for tier, t in TIERS.items():
+for ease, (tier, t) in [(e, kv) for e in EASES for kv in TIERS.items()]:
     pool = [srd[h["id"]] for h in hostile if crv(h["cr"]) <= t["crmax"] and crv(h["cr"]) >= (0.125 if tier.startswith("L1") else 1)]
     best_counts = collections.Counter(); gaps = []
     for m in pool:
         s = saves(m); ac = m["armor_class"][0]["value"]
         d = {"AC": hit(t["atk"], ac),
-             "Fortitude": fails(t["dc"], max(s["str"], s["con"])),
-             "Reflex": fails(t["dc"], max(s["dex"], s["int"])),
-             "Will": fails(t["dc"], max(s["wis"], s["cha"]))}
+             "Fortitude": fails(t["dc"] + ease, max(s["str"], s["con"])),
+             "Reflex": fails(t["dc"] + ease, max(s["dex"], s["int"])),
+             "Will": fails(t["dc"] + ease, max(s["wis"], s["cha"]))}
         best = max(d, key=d.get); best_counts[best] += 1
         gaps.append(max(v for k, v in d.items() if k != "AC") - d["AC"])
-        rows.append(dict(tier=tier, id=m["index"], ac=ac, **{k: round(v, 2) for k, v in d.items()}))
+        rows.append(dict(constant=14 - ease, tier=tier, id=m["index"], ac=ac, **{k: round(v, 2) for k, v in d.items()}))
     n = len(pool)
-    print(tier, "creatures:", n, "weakest defense:", {k: f"{v/n:.0%}" for k, v in best_counts.most_common()},
+    means = {k: sum(r[k] for r in rows[-n:]) / n for k in ("AC", "Fortitude", "Reflex", "Will")}
+    print(f"{14 - ease} + save", tier, "mean landing:", {k: f"{v:.0%}" for k, v in means.items()})
+    print(f"{14 - ease} + save", tier, "creatures:", n, "weakest defense:", {k: f"{v/n:.0%}" for k, v in best_counts.most_common()},
           "| a non-AC option beats the weapon for", f"{sum(g > 0 for g in gaps)/n:.0%}", "| by 15+ points:", f"{sum(g >= .15 for g in gaps)/n:.0%}")
 for want in ["shadow-wolf", "wolf", "goblin-warrior", "owlbear", "knight", "skeleton", "ogre", "mage", "gelatinous-cube", "young-white-dragon", "brown-bear", "hobgoblin-warrior"]:
     for r in rows:
-        if r["id"] == want: print(r)
+        if r["id"] == want and r["constant"] == 14: print(r)
 json.dump(rows, open(sys.argv[3], "w"))

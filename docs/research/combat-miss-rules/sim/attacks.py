@@ -16,29 +16,42 @@ HEROES = {
     ("strong", 5): dict(bonus=9, dice=(1, 8), mod=4, edge_stat=2, prof=3, level=5),
 }
 
-VARIANTS = ["srd", "miss-damage", "partial", "momentum+2", "momentum-adv", "partial+momentum", "partial+momentum-adv"]
+VARIANTS = ["srd", "miss-damage", "partial", "momentum+2", "momentum-adv", "partial+momentum", "partial+momentum-adv",
+            "band2", "band4", "inspire", "band2+inspire", "band2+momentum-adv"]
+# band2 / band4: a fixed near-miss band (miss by 1-2, as Long War of the Chosen's +-10 on d100; miss by 1-4, as Savage
+# Worlds' raise step) instead of one keyed to the hero's stats.
+# inspire: an empty miss earns a held token (at most one, like Heroic Inspiration); the hero spends it to reroll the
+# next miss, so it waits for a miss instead of boosting the next attack whether or not it needed help.
+BANDS = {"band2": 2, "band4": 4, "band2+inspire": 2, "band2+momentum-adv": 2}
+INSPIRE = ("inspire", "band2+inspire")
 
 def attack(h, ac, variant, boosted):
     """Returns (damage, outcome, next_boosted). outcome: hit | glance | miss."""
-    adv = boosted and variant in ("momentum-adv", "partial+momentum-adv")
+    adv = boosted and variant in ("momentum-adv", "partial+momentum-adv", "band2+momentum-adv")
     plus = 2 if boosted and variant in ("momentum+2", "partial+momentum") else 0
     r1 = R.randint(1, 20)
     nat = max(r1, R.randint(1, 20)) if adv else r1
     total = nat + h["bonus"] + plus
     n, s = h["dice"]
+    if variant in INSPIRE and boosted and nat != 20 and (nat == 1 or total < ac):
+        nat = R.randint(1, 20); total = nat + h["bonus"]; boosted = False
     if nat == 20:
-        return d(2 * n, s) + h["mod"], "hit", False
+        return d(2 * n, s) + h["mod"], "hit", variant in INSPIRE and boosted
     if nat != 1 and total >= ac:
-        return d(n, s) + h["mod"], "hit", False
+        return d(n, s) + h["mod"], "hit", variant in INSPIRE and boosted
     if nat == 1:
-        return 0, "miss", False
+        return 0, "miss", variant in INSPIRE
     missed_by = ac - total
     if variant == "miss-damage":
         return h["level"], "glance", False
     edge = max(0, h["edge_stat"]) + h["prof"] // 2
     if variant in ("partial", "partial+momentum", "partial+momentum-adv") and missed_by <= edge:
         return max(1, h["mod"]), "glance", False
-    momentum = variant in ("momentum+2", "momentum-adv", "partial+momentum", "partial+momentum-adv")
+    if variant in BANDS and missed_by <= BANDS[variant]:
+        return max(1, h["mod"]), "glance", variant in INSPIRE and boosted
+    if variant in INSPIRE:
+        return 0, "miss", True
+    momentum = variant in ("momentum+2", "momentum-adv", "partial+momentum", "partial+momentum-adv", "band2+momentum-adv")
     return 0, "miss", momentum
 
 def stream(h, ac, variant, turns=6):

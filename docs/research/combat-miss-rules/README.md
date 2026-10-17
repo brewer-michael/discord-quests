@@ -5,6 +5,13 @@ should have a mix of defenses. The first round of research ran in an environment
 almost every source site, so most findings rest on search-result excerpts, not opened pages. **Your job is to finish
 the groundwork from primary sources**, then write the report and fill the design doc.
 
+**Second pass done (2026-10-16).** Six agents with open network access re-sourced every area, and
+[`report.md`](report.md) gives the answer. The design doc's pending sections are filled. `notes/combat_mechanics.md`
+is new: it covers the current engine, turn structure, fight length, conditions, defeat and foe behavior.
+`sim/attacks.py` and `sim/fights.py` gained fixed-band and held-reroll variants, and `sim/defenses.py` now compares
+the constants 14, 13 and 12 + save. What is still unverified is listed at the end of the report. The status table
+below describes the first pass.
+
 - Design doc (Claude Doc, shared with the project owner):
   https://claude.ai/code/artifact/c9af71c0-8209-4267-bfc3-80f2ab9a640d
 - Notes so far: [`notes/`](notes/) (one file per research area)

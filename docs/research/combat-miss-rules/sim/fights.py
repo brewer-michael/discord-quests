@@ -4,18 +4,26 @@ sys.path.insert(0, "")
 R = random.Random(7)
 N = 40000
 def d(n, s): return sum(R.randint(1, s) for _ in range(n))
-VARIANTS = ["srd", "miss-damage", "partial", "momentum+2", "momentum-adv", "partial+momentum", "partial+momentum-adv"]
+VARIANTS = ["srd", "miss-damage", "partial", "momentum+2", "momentum-adv", "partial+momentum", "partial+momentum-adv",
+            "band2", "band2+inspire"]
+# band2: a miss by 1-2 grazes. inspire: an empty miss earns a held reroll, spent on the hero's next miss (see attacks.py).
 
 def hero_attack(h, ac, v, boosted):
     adv = boosted and v in ("momentum-adv", "partial+momentum-adv")
     plus = 2 if boosted and v in ("momentum+2", "partial+momentum") else 0
     r1 = R.randint(1, 20); nat = max(r1, R.randint(1, 20)) if adv else r1
     total = nat + h["atk"] + plus
-    if nat == 20: return d(2, h["die"]) + h["mod"], False
-    if nat != 1 and total >= ac: return d(1, h["die"]) + h["mod"], False
-    if nat == 1: return 0, False
+    inspire = v == "band2+inspire"
+    if inspire and boosted and nat != 20 and (nat == 1 or total < ac):
+        nat = R.randint(1, 20); total = nat + h["atk"]; boosted = False
+    keep = inspire and boosted
+    if nat == 20: return d(2, h["die"]) + h["mod"], keep
+    if nat != 1 and total >= ac: return d(1, h["die"]) + h["mod"], keep
+    if nat == 1: return 0, inspire
     if v == "miss-damage": return h["level"], False
     if v in ("partial", "partial+momentum", "partial+momentum-adv") and ac - total <= h["edge"]: return max(1, h["mod"]), False
+    if v in ("band2", "band2+inspire") and ac - total <= 2: return max(1, h["mod"]), keep
+    if inspire: return 0, True
     return 0, v in ("momentum+2", "momentum-adv", "partial+momentum", "partial+momentum-adv")
 
 def fight(heroes, foes, v):
