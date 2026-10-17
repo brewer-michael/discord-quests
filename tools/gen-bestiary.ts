@@ -14,8 +14,7 @@ import { defenseOf } from "@dq/core/combat";
 import type { Ability } from "@dq/core/rules";
 import { checkNarration } from "@dq/core/safety";
 import { CreatureDef, loadWorld, type World } from "@dq/core/world";
-import { readWorldFiles } from "@dq/core/world-fs";
-import { parse } from "yaml";
+import { readWorldFiles, readYamlFile } from "@dq/core/world-fs";
 import { z } from "zod";
 
 const root = (p: string) => fileURLToPath(new URL(`../${p}`, import.meta.url));
@@ -393,10 +392,7 @@ function main() {
   if (!source) throw new Error("usage: pnpm bestiary <path to 5e-SRD-Monsters.json (2024)>");
   const srd = JSON.parse(readFileSync(source, "utf8")) as SrdMonster[];
   const byIndex = new Map(srd.map((m) => [m.index, m]));
-  const curation = parse(readFileSync(root("tools/bestiary/curation.yaml"), "utf8")) as Record<
-    string,
-    unknown
-  >;
+  const curation = readYamlFile(root("tools/bestiary/curation.yaml")) as Record<string, unknown>;
   const { world } = loadWorld(readWorldFiles(root("worlds/lanternreach")));
   if (!world) throw new Error("the starter world must load: its content rules are the safety reference");
 

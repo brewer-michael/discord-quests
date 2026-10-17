@@ -4,6 +4,12 @@
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
+import { parse } from "yaml";
+
+/** Reads one YAML file from disk, for tools that work alongside the world files (the bestiary's curation). */
+export function readYamlFile(path: string): unknown {
+  return parse(readFileSync(path, "utf8"));
+}
 
 export function readWorldFiles(dir: string): Record<string, string> {
   const files: Record<string, string> = {};

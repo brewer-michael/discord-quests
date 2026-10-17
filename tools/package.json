@@ -8,7 +8,6 @@
   },
   "dependencies": {
     "@dq/core": "workspace:*",
-    "zod": "catalog:",
-    "yaml": "catalog:"
+    "zod": "catalog:"
   }
 }
