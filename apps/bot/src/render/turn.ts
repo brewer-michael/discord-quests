@@ -21,19 +21,25 @@ const DICE = (r: TurnView["rolls"][number]) => {
     r.mode === "advantage" ? " (advantage)" : r.mode === "disadvantage" ? " (disadvantage)" : "";
   const mod = r.modifier >= 0 ? `+${r.modifier}` : `${r.modifier}`;
   const attack = r.difficulty.startsWith("defense ");
-  const result = r.success
-    ? r.damage
-      ? `✅ **${r.damage} damage**`
-      : attack
-        ? "✅ hit"
-        : "✅"
-    : r.damage
-      ? attack
-        ? `❌ miss · **${r.damage} damage**`
-        : `❌ · **${r.damage} damage**`
-      : attack
-        ? "❌ miss"
-        : "❌";
+  // A natural 20 on an attack always hits and doubles the damage dice; a natural 1 always misses.
+  const result =
+    attack && r.natural === 20
+      ? `💥 **critical hit!**${r.damage ? ` **${r.damage} damage**` : ""}`
+      : attack && r.natural === 1
+        ? "❌ natural 1, an automatic miss"
+        : r.success
+          ? r.damage
+            ? `✅ **${r.damage} damage**`
+            : attack
+              ? "✅ hit"
+              : "✅"
+          : r.damage
+            ? attack
+              ? `❌ miss · **${r.damage} damage**`
+              : `❌ · **${r.damage} damage**`
+            : attack
+              ? "❌ miss"
+              : "❌";
   return `${r.foe ? "👾" : "🎲"} **${esc(r.characterName)}**: ${r.label}${modeNote}: ${r.rolls.join("/")} ${mod} = **${r.total}** vs ${r.difficulty} ${result}`;
 };
 

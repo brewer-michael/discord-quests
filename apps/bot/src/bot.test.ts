@@ -448,6 +448,18 @@ describe("renderers stay within Discord's limits", () => {
     // Every roll shows what it did, the foes' attacks too, and foes show how hurt they are.
     expect(json).toContain("Longbow (advantage): 15/3 +7 = **22** vs defense 13 ✅ **9 damage**");
     expect(json).toContain("👾 **Shadow Wolf**: Shadow Bite: 4 +4 = **8** vs defense 13 ❌ miss");
+    // A natural 20 on an attack says so, and a natural 1 says why it missed.
+    const crits = JSON.stringify(
+      renderTurn({
+        ...battle,
+        rolls: [
+          { ...(rolls[0] as TurnView["rolls"][number]), natural: 20, rolls: [20, 7], total: 27, damage: 15 },
+          { ...(rolls[1] as TurnView["rolls"][number]), natural: 1, rolls: [1], total: 5 },
+        ],
+      }).components.map((c) => c.toJSON()),
+    );
+    expect(crits).toContain("20/7 +7 = **27** vs defense 13 💥 **critical hit!** **15 damage**");
+    expect(crits).toContain("❌ natural 1, an automatic miss");
     expect(json).toContain("Gloam Skulker A** ▰▰▰▱▱ nearly done");
     expect(json).not.toContain("What do you do?");
     const over = JSON.stringify(

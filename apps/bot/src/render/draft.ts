@@ -44,7 +44,7 @@ export function renderDraft(d: DmDraft) {
     d.rolls
       .map(
         (r) =>
-          `${r.foe ? "👾" : "🎲"} ${esc(r.characterName)}: ${r.label} ${r.total} vs ${r.difficulty} ${r.success ? "✅" : "❌"}${r.damage ? ` ${r.damage} damage` : ""}`,
+          `${r.foe ? "👾" : "🎲"} ${esc(r.characterName)}: ${r.label} ${r.total} vs ${r.difficulty} ${r.success ? "✅" : "❌"}${r.difficulty.startsWith("defense ") && r.natural === 20 ? " 💥 critical" : ""}${r.damage ? ` ${r.damage} damage` : ""}`,
       )
       .join("\n"),
     500,
