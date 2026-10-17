@@ -150,6 +150,9 @@ Run them to check or extend; edit the hero and foe tables at the top of each scr
   60% against its Will. The SRD data comes from
   `https://raw.githubusercontent.com/5e-bits/5e-database/main/src/2024/en/5e-SRD-Monsters.json`.
   `hostile.json` is the list of non-friendly ids in the generated bestiary.
+- `python3 sim/scaled_defenses.py packages/core/src/srd/bestiary.generated.ts`: fixed, proficiency-scaled,
+  AC-anchored and tiered defenses for average heroes at levels 1, 5, 10 and 15, over the engine's own bestiary. Only
+  defenses set by rank from the creature's armor class keep a move's odds level as heroes and foes grow.
 
 ## Open design questions the research should inform
 

@@ -112,6 +112,23 @@ Before any of it, fix two engine gaps the research turned up (see "Engine findin
   - Meier would rather risk "too much information". Play-by-post GMs advise "be transparent with ACs".
 - **The balancer must test-fight with moves.** It currently uses plain attacks only.
 
+**Decided (2026-10-17): defenses by rank, from the creature's own armor class.** The owner wants power to scale:
+stronger heroes face stronger foes, so their turns must not get easier as they level, and the first fights must be
+fun. A fixed constant fails that. Creatures' weaker saves fall further behind their armor as challenge rises, so with
+12 + the pair's modifier a move's best target goes from beating the weapon against 40% of foes at level 1 to 65% at level 5 and 90% at
+level 10. Scaling by proficiency bonus, or anchoring to AC by modifier, still drifts (`sim/scaled_defenses.py`). What
+holds flat is Pathfinder 2e's method, where AC and each save come from the creature's level and each save takes a tier.
+Here: the creature's weakest pair (of Str/Con, Dex/Int, Wis/Cha) is its AC − 2, the middle one its AC, the strongest
+its AC + 2; tied pairs share their tiers' average. The owner chose this even spacing over Pathfinder's own (AC − 2 /
++1 / +4).
+
+| Average hero | Weapon vs AC | Move vs weak spot | Fixed 12 + modifier: weak spot |
+| --- | --- | --- | --- |
+| Level 1 (foes CR 1/8–1) | 67% | 75% | 70% |
+| Level 5 (CR 1–5) | 70% | 78% | 79% |
+| Level 10 (CR 5–10) | 72% | 81% | 89% |
+| Level 15 (CR 10–15) | 70% | 79% | 89% |
+
 ## Proposal 2: partial hits and momentum
 
 - **The band: a miss by 1–2 is a graze.** A miss that isn't a natural 1 and falls short by 1 or 2 deals damage equal
@@ -201,11 +218,11 @@ Other combat findings worth carrying into later design (`notes/combat_mechanics.
 
 ## Open questions for the project owner
 
-1. **Band width.** Recommended 1–2. 3 is a middle ground. 4 is close to flat miss damage for strong heroes.
-2. **Courage.** Automatic on the next miss (recommended for play by post), or the player's choice? Attacks only, or
-   any d20 roll as in the SRD?
-3. **Defense constant.** Recommended 12 + save. 13 + save keeps moves rarer (49% of level-5 foes have a better
-   non-armor target, against 66%).
+1. **Band width.** Decided: 1–2. (3 was the middle ground; 4 is close to flat miss damage for strong heroes.)
+2. **Courage.** Decided: automatic on the next miss, and attacks only. (The alternatives were the player's choice,
+   and any d20 roll as in the SRD.)
+3. **Defense constant.** Decided: no constant. Defenses go by rank from the creature's armor class, AC − 2 / AC /
+   AC + 2 (see Proposal 1), because any fixed constant makes moves easier as heroes level.
 4. **Minions.** Should they come in (MCDM-style, a fifth of the XP)? If so, they take no grazes.
 5. **Foe targeting.** Should the rule be shown, so Defend and setup moves can be planned?
 
