@@ -3,12 +3,16 @@ import { type BudgetGuard, costMicros } from "./budget";
 import { llmAdapter } from "./registry";
 import { createSafeFetch } from "./safe-fetch";
 import type { ProviderStore } from "./store";
-import type { ResolvedProviderConfig } from "./types";
+import type { AdapterResult, ResolvedProviderConfig } from "./types";
+
+type LogFn = (msg: string, data?: Record<string, unknown>) => void;
 
 export interface GatewayOptions {
   /** For tests: replaces network access. */
   fetch?: typeof fetch;
-  log?: { warn(msg: string, data?: Record<string, unknown>): void };
+  log?: { info: LogFn; warn: LogFn };
+  /** Also log each answer in full, with any reasoning the service returned (LOG_AI_OUTPUT). */
+  logOutput?: boolean;
 }
 
 /**
@@ -70,6 +74,7 @@ export class ProviderGateway implements LlmGateway {
 
       // What the server chose for this job comes first; the task's usual depth only fills in when it chose nothing.
       const effort = route.params.effort ?? call.effort;
+      const started = Date.now();
       const res = await adapter.generateStructured(
         {
           task: call.task,
@@ -84,6 +89,18 @@ export class ProviderGateway implements LlmGateway {
         cfg,
         { fetch: this.fetchFor(cfg) },
       );
+      this.logCall(res, Date.now() - started, {
+        task: call.task,
+        guildId: scope.guildId,
+        ...(scope.campaignId ? { campaignId: scope.campaignId } : {}),
+        provider: cfg.name,
+        configId: cfg.id,
+        model: res.ok ? res.model : route.model,
+        ...(effort ? { effort } : {}),
+        ...(limit ? { maxOutputTokens: limit } : {}),
+        expectTokens: expected,
+        promptChars,
+      });
       if (res.usage || res.ok) {
         const usage = res.ok ? res.usage : (res.usage ?? {});
         await this.budget.record({
@@ -114,5 +131,43 @@ export class ProviderGateway implements LlmGateway {
       });
     }
     return last;
+  }
+
+  /**
+   * One line per AI call: how long it took, what it cost in tokens, how it ended, and what the service said
+   * about its own work (reasoning, timings). With logOutput, a second line has the answer and reasoning.
+   */
+  private logCall<T>(res: AdapterResult<T>, ms: number, fields: Record<string, unknown>) {
+    const log = this.opts.log;
+    if (!log) return;
+    const usage = res.usage;
+    const trace = res.trace;
+    const line = {
+      ...fields,
+      ms,
+      ok: res.ok,
+      ...(res.ok ? {} : { stop: res.stop, ...(res.error ? { error: res.error } : {}) }),
+      ...(usage
+        ? {
+            inputTokens: usage.inputTokens,
+            outputTokens: usage.outputTokens,
+            ...(usage.cacheReadTokens ? { cacheReadTokens: usage.cacheReadTokens } : {}),
+            ...(usage.cacheWriteTokens ? { cacheWriteTokens: usage.cacheWriteTokens } : {}),
+          }
+        : {}),
+      ...(trace?.answer !== undefined ? { answerChars: trace.answer.length } : {}),
+      ...(trace?.reasoning !== undefined ? { reasoningChars: trace.reasoning.length } : {}),
+      ...(trace?.reasoningTokens !== undefined ? { reasoningTokens: trace.reasoningTokens } : {}),
+      ...(trace?.timings ? { serverTimings: trace.timings } : {}),
+    };
+    if (res.ok) log.info("ai call", line);
+    else log.warn("ai call failed", line);
+    if (this.opts.logOutput && (trace?.answer !== undefined || trace?.reasoning !== undefined))
+      log.info("ai output", {
+        task: fields.task,
+        ...(fields.campaignId ? { campaignId: fields.campaignId } : {}),
+        ...(trace.reasoning !== undefined ? { reasoning: trace.reasoning } : {}),
+        ...(trace.answer !== undefined ? { answer: trace.answer } : {}),
+      });
   }
 }

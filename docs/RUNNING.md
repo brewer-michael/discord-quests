@@ -30,6 +30,8 @@ Copy `.env.example` to `.env` and fill in:
 | `OPENAI_API_KEY` / `GEMINI_API_KEY` / `ANTHROPIC_API_KEY` | Optional server defaults for the story AI, tried in that order. OpenAI and Gemini also paint scene images. Servers can bring their own keys |
 | `DEFAULT_DAILY_BUDGET_USD`, `DEFAULT_DAILY_IMAGE_CAP` | Caps on server-default keys per Discord server per day (defaults: $5, 30 images) |
 | `ALLOW_PRIVATE_ENDPOINTS` | `true` lets servers use AI running on your own network (Ollama, LM Studio, Automatic1111) |
+| `LOG_FORMAT`, `LOG_LEVEL` | `json` or `pretty` (default: `json` in production); `info` (default), `warn`, `error` or `silent` |
+| `LOG_AI_OUTPUT` | `true` also logs every AI answer in full, with any reasoning the service sent back. Off by default |
 
 Without any AI configured, every turn goes to the campaign's DM room with the dice, the decisions and the scene,
 for a person to tell.
@@ -343,7 +345,39 @@ Ready-made configs: [`render.yaml`](../render.yaml) (Render Blueprint: database,
   freely.
 - **Same `MASTER_KEYS` everywhere.** The bot decrypts the keys the setup page saved.
 - **Logs** are one JSON object per line when `NODE_ENV=production` or `LOG_FORMAT=json` (time, level, message,
-  campaign and round ids). API keys and tokens are redacted before anything is written.
+  campaign and round ids). API keys and tokens are redacted before anything is written. See
+  [Reading the logs](#reading-the-logs).
+
+### Reading the logs
+
+Each turn writes these lines (with Docker Compose: `docker compose logs bot`):
+
+- **`ai call`**, one per AI request: `task` (narrator, judge, intent, safety, summarizer, director), `model`,
+  `provider`, `ms`, `inputTokens`, `outputTokens`, `effort` and `maxOutputTokens` as sent (the answer limit, only
+  when one is set for the job or the model), `expectTokens` (the job's usual answer size, for the budget), and, when
+  the service
+  reports them, `cacheReadTokens`, `reasoningChars` and `reasoningTokens` (how much of the answer was thinking) and
+  `serverTimings` (llama.cpp's own `prompt_ms`, `predicted_ms`, `cache_n` and the rest). A request that fails is an
+  **`ai call failed`** warning with its `stop` (`error` for a timeout or an outage, `invalid`, `max_tokens`...) and
+  the service's `error`. When one service fails and another is set for the job, a **`provider failed, trying next
+  route`** warning follows, and the next service gets its own `ai call` line.
+- **`narrator unavailable`**, **`reviewer unavailable`** and **`narration rejected`** (with the `problems` sent
+  back to the storyteller), each with its `attempt`, and **`narration handed to a person`** (with the `reasons`)
+  when the storyteller couldn't tell the turn.
+- **`turn resolved`** (a turn that went out), **`turn drafted for the DM`** (an Assist draft) or **`turn handed to a
+  person`** (with its `reasons`): `seq`, `mode`, `outcome` (`committed`, `assist_draft` or `handoff`), and where the
+  time went: `prepareMs` (the action reader, the dice, the hidden hand, the storyteller and its reviewer),
+  `commitMs` (saving), `afterCommitMs` (the chapter recap and plan at a chapter's end) and `totalMs`.
+- **`turn posted`**: `resolveMs`, `postMs` (Discord) and `totalMs`, from the round closing to the turn appearing.
+
+Every line logged while a round resolves carries its `roundId`, so one turn's lines can be pulled out together:
+
+```bash
+docker compose logs --no-log-prefix bot | grep '"roundId":"<id>"'
+```
+
+`LOG_AI_OUTPUT=true` adds an **`ai output`** line after each call with the full `answer` and `reasoning`. Those
+lines are long: the Compose file keeps 5 files of 10 MB, so switch it off again once you've seen what you need.
 
 ## Backups and keys
 

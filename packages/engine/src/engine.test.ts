@@ -14,7 +14,7 @@ import { createTestDb, TEST_DATABASE_URL } from "@dq/db/testing";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { serverGameDefaults } from "./campaign-service";
-import { createEngine, createLogger, type Engine, seededDice } from "./index";
+import { createEngine, createLogger, type Engine, seededDice, withLogContext } from "./index";
 import { loadLoom } from "./loom-store";
 import { describeTimer, paceOf, reminderAt, whenTimeIsUp } from "./pace";
 import { planChapter } from "./planner";
@@ -931,6 +931,41 @@ describe("logs", () => {
     const entry = JSON.parse(lines[0] as string);
     expect(entry).toMatchObject({ level: "warn", service: "bot", campaignId: "c-1", apiKey: "[redacted]" });
     expect(lines[0]).not.toMatch(/sk-(ant|live|proj)|abcdefghijklmnop/);
+  });
+
+  it("keep token counts, which aren't secrets", () => {
+    const lines: string[] = [];
+    const log = createLogger({ format: "json", write: (l) => lines.push(l) });
+    log.info("ai call", { inputTokens: 5147, outputTokens: 4224, maxOutputTokens: 16000, token: "abc" });
+    expect(JSON.parse(lines[0] as string)).toMatchObject({
+      inputTokens: 5147,
+      outputTokens: 4224,
+      maxOutputTokens: 16000,
+      token: "[redacted]",
+    });
+  });
+
+  it("carry the fields of the work they were logged in, and skip levels below the one set", async () => {
+    const lines: string[] = [];
+    const log = createLogger({ format: "json", level: "warn", write: (l) => lines.push(l) });
+    await withLogContext({ roundId: "r-1" }, async () => {
+      await Promise.resolve();
+      log.info("not shown");
+      log.warn("inside", { seq: 2 });
+    });
+    log.warn("outside");
+    expect(lines.map((l) => JSON.parse(l))).toEqual([
+      expect.objectContaining({ msg: "inside", roundId: "r-1", seq: 2 }),
+      expect.not.objectContaining({ roundId: "r-1" }),
+    ]);
+  });
+
+  it("read as one line each while developing", () => {
+    const lines: Array<[string, string]> = [];
+    const log = createLogger({ format: "pretty", write: (l, level) => lines.push([l, level]) });
+    log.info("turn resolved", { totalMs: 1200 });
+    expect(lines[0]?.[0]).toMatch(/^\d\d:\d\d:\d\d INFO {2}turn resolved \{"totalMs":1200\}$/);
+    expect(lines[0]?.[1]).toBe("info");
   });
 });
 

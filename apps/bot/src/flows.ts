@@ -232,9 +232,11 @@ export async function resolveAndPost(
   ctx.scheduler.cancelRound(roundId);
   const typing = setInterval(() => void channel.sendTyping().catch(() => {}), 8000);
   void channel.sendTyping().catch(() => {});
+  const started = Date.now();
   try {
     const result = await ctx.engine.turns.resolveRound(roundId);
     if (!result) return;
+    const resolveMs = Date.now() - started;
     if (result.kind === "draft") {
       const posted = await postDraft(ctx, result.draft);
       const line = !result.draft.handoff
@@ -247,12 +249,21 @@ export async function resolveAndPost(
     }
     await freezeRound(ctx, roundId, channel);
     await postTurn(ctx, channel, result.view);
+    // From the round closing to the turn showing in Discord; the engine's "turn resolved" line breaks it down.
+    ctx.log.info("turn posted", {
+      roundId,
+      campaignId: result.view.campaignId,
+      seq: result.view.seq,
+      resolveMs,
+      postMs: Date.now() - started - resolveMs,
+      totalMs: Date.now() - started,
+    });
   } catch (e) {
     const msg =
       e instanceof GameError
         ? e.userMessage
         : "The storyteller lost their place for a moment. Press **Continue the story** to try again.";
-    ctx.log.error("resolve failed", { roundId, error: (e as Error).message });
+    ctx.log.error("resolve failed", { roundId, ms: Date.now() - started, error: (e as Error).message });
     await channel.send({ ...notice(msg), flags: V2 }).catch(() => {});
   } finally {
     clearInterval(typing);

@@ -73,7 +73,7 @@ export async function narrate(opts: {
       scope,
     );
     if (!res.ok) {
-      log.warn("narrator unavailable", { stop: res.stop, error: res.error });
+      log.warn("narrator unavailable", { ...scope, attempt: attempt + 1, stop: res.stop, error: res.error });
       reasons = [STOPPED[res.stop] ?? `The storyteller stopped (${res.stop}).`];
       if (res.error) reasons.push(`What the service said: ${res.error.slice(0, 300)}`);
       problems = [`narrator ${res.stop}`];
@@ -97,7 +97,12 @@ export async function narrate(opts: {
       );
       if (!judged.ok) {
         // A passage that needs reading before the table sees it never goes out unread.
-        log.warn("reviewer unavailable", { stop: judged.stop, error: judged.error });
+        log.warn("reviewer unavailable", {
+          ...scope,
+          attempt: attempt + 1,
+          stop: judged.stop,
+          error: judged.error,
+        });
         reasons = [
           `The reviewer that reads each passage before the table sees it didn't answer (${judged.stop}).`,
         ];
@@ -112,9 +117,10 @@ export async function narrate(opts: {
         problems.push(`It goes beyond what this story allows: ${judged.value.note}`);
     }
     if (problems.length === 0) return { ok: true, output: cleaned };
-    log.warn("narration rejected", { problems });
+    log.warn("narration rejected", { ...scope, attempt: attempt + 1, problems });
     reasons = problems.map((p) => `The storyteller's draft was turned back: ${p}`);
   }
+  log.warn("narration handed to a person", { ...scope, reasons });
   return { ok: false, reasons };
 }
 
