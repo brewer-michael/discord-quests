@@ -268,7 +268,7 @@ function makeSnare(state: LoomState, deed: Deed, def: ShortcutDef | undefined, i
   return {
     ...base,
     severity: 1,
-    due: deed.anchor ? { kind: "anchor_reappears" } : { kind: "after_beats", beats: 3 },
+    due: deed.anchor ? { kind: "anchor_reappears" } : { kind: "after_scenes", scenes: 3 },
     effect: faction ? "trust_lost" : "longer_way",
     hint: "What the heroes did comes back around.",
     ...(faction ? { faction } : {}),

@@ -1,0 +1,21 @@
+# Set pieces in copperpeak. The storyteller may use them when they fit, in any order.
+- id: bellhollow
+  title: The Silent Bells
+  kind: social
+  region: copperpeak
+  poi: bellhollow
+  summary: The bells of Bellhollow have stopped ringing, because the Burrowkin are afraid to draw the Gloam Host's
+    attention. The heroes learn of the Lamp-Key, forged here long ago, that opens the Ember Vault.
+  question: Will the Burrowkin trust the heroes with the Lamp-Key's secret?
+  sockets: [knowledge_given]
+  offersShortcuts: [ledger-shortcut-pass]
+  factions: [gilded-ledger]
+- id: the-tinkers-gate
+  title: The Tinkers' Gate
+  kind: exploration
+  region: copperpeak
+  poi: tinkers-gate
+  summary: The Lamp-Key lies beyond a copper gate guarded by very polite, very stubborn clockwork sentries.
+  question: Can the heroes get past the sentries to the Lamp-Key?
+  sockets: [knowledge_given, object_reveals]
+  factions: [gilded-ledger]

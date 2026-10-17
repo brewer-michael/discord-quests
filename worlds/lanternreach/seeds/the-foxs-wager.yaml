@@ -1,0 +1,185 @@
+id: the-foxs-wager
+title: The Fox's Wager
+pitch: >-
+  All over Lanternreach, old bargains made with the Bargain Fox are coming due at once, and something is
+  collecting. Keepsakes vanish from locked boxes. A traveller loses his shadow. Echoes walk off with people's
+  voices. Saffron the Bargain Fox swears none of it is her doing, and for once in her long and slippery life she
+  might be telling the truth.
+startRegions: [whisperwood, hearthmoor]
+openings:
+  - >-
+    A Hearthmoor baker wakes to find her grandmother's ring gone from a locked box, and a single glittering fox-hair
+    lying where it used to be.
+  - >-
+    In Foxglove Glade, the heroes find Saffron the Bargain Fox with her waistcoat torn and her shine gone dull, asking,
+    very politely and with great difficulty, for help.
+  - >-
+    A traveller stumbles out of the Whisperwood with no shadow at all. Years ago, he says, he borrowed a little luck
+    from a fox. Now the fox has come to collect.
+stakes: >-
+  If the collector gathers enough keepsakes it will become something real, something that can't be bargained with,
+  and everyone who ever took a quick way will pay for it, along with plenty who never did.
+fronts:
+  - id: the-mirror-collects
+    name: The Mirror Collects
+    faction: court-of-the-bargain-fox
+    central: true
+    goal: Gather enough keepsakes, and the warmth of home inside them, to step out of the mirror for good and become real.
+    portents:
+      - Keepsakes vanish from pockets and locked boxes, and a glittering fox-hair is left behind each time.
+      - "People who once bargained with the Fox lose small things that matter: their luck, their echo, their shadow."
+      - The glimmer-foxes turn from their queen and follow a fox made of mirror-glass.
+      - Saffron's doors start opening onto the wrong places, and her court falls silent.
+      - The Mirror-Fox offers bargains of its own. None of them work the way they promise.
+    doom: >-
+      The Mirror-Fox steps out into the world with every keepsake in Lanternreach in its paws, and nobody quite
+      remembers home the way they used to.
+  - id: the-debt-buyers
+    name: The Debt-Buyers
+    faction: gilded-ledger
+    goal: Buy up every favor ever owed to the Fox, and collect them all for the Ledger.
+    portents:
+      - Ledger agents go door to door asking who owes the Bargain Fox a favor.
+      - Frightened people sell their fox-debts to the Ledger for a handful of coins.
+      - Ledger collectors start calling in those favors, for oil, for gold, for work.
+      - The Ledger and the Mirror-Fox strike a bargain of their own.
+    doom: Every favor ever owed in Lanternreach now belongs to the Gilded Ledger.
+cast: [saffron-the-fox, mayor-hobb, hattie-wick, silas-coin, tumble, granny-reed, snibbet, bram-tallow]
+mysteries:
+  - id: who-collects
+    question: Who is calling in the Fox's bargains?
+    truth: >-
+      Saffron's secret-telling mirror cracked, and her reflection walked out of it. The Mirror-Fox collects keepsakes
+      because each one holds a little warmth of home, and it wants, more than anything, to be real.
+    clues:
+      - The "fox-hairs" left behind aren't hair at all. They're slivers of glass.
+      - Saffron's famous mirror hangs in her den with a crack across it, and her reflection is missing from it.
+      - At the Oasis of Echoes, the collector's voice comes back only once, not three times. It's an echo itself.
+      - The glimmer-foxes whisper about "the queen who never blinks."
+  - id: sending-it-back
+    question: How do you send a reflection back into its mirror?
+    truth: >-
+      A reflection can't bear an honest word that costs the one who says it. Tell it a true thing that costs you
+      something, and it has to go back into the glass to show it.
+    clues:
+      - Old fox-lore says that a mirror shows what's true, and so it fears what's true.
+      - Saffron finally admits, with enormous difficulty, that she lied about what her mirror cost her.
+      - At the Singing Stones, the stones fall silent when someone lies and ring out when someone tells a hard truth.
+      - Hattie Wick remembers the Lamplighters' saying, "A lie is a mirror with nothing behind it."
+moments:
+  - id: the-court-of-glimmers
+    title: The Court of Glimmers
+    front: the-mirror-collects
+    when: The glimmer-foxes turn on Saffron at her own court, and the heroes are there.
+    region: whisperwood
+    poi: foxglove-glade
+    summary: >-
+      Under the foxgloves, Saffron's court has turned against her. Glimmer-foxes ring the glade with mirror-bright
+      eyes, and the Fox's grand words come out thin and small. She needs someone to stand with her.
+    question: Can Saffron's court be kept from falling to the Mirror-Fox?
+    crux:
+      type: hold_the_line
+      check:
+        ability: cha
+        skill: persuasion
+        label: Stand With the Fox
+        dc: { base: 14, perPortent: 1, perSnareSeverity: 1, max: 30 }
+      sockets:
+        - type: spared_one_acts
+          accepts: [mercy, kindness_to_lowly]
+          hint: A glimmer-fox the heroes once spared sits down beside Saffron, and two more follow it.
+        - type: trusted_at_need
+          accepts: [honesty_at_cost, promise_kept, amends]
+          faction: court-of-the-bargain-fox
+          hint: Saffron trusts the heroes, really trusts them, for the first time, and tells her court so.
+        - type: hidden_way
+          accepts: [patience, kindness_to_lowly]
+          hint: A rabbit-run under the foxgloves lets someone slip behind the glimmer-foxes' ring.
+      requiredGrace: 0.9
+      onSuccess: The glimmer-foxes come back to their queen, sheepish and blinking. Saffron's shine returns, a little.
+      onCostlySuccess: >-
+        Saffron keeps her court, but half her glimmer-foxes are gone to the Mirror-Fox, and her doors no longer open
+        where she tells them to.
+      onFailForward: >-
+        The court falls, and Saffron flees with the heroes, small and shivering. But now she owes them, and she knows
+        where her mirror's reflection is going next.
+  - id: the-oasis-of-echoes
+    title: The Oasis of Echoes
+    front: the-mirror-collects
+    when: The heroes track the Mirror-Fox to the Oasis of Echoes, where every word comes back three times but its own.
+    region: glass-dunes
+    poi: oasis-of-echoes
+    summary: >-
+      At the little oasis where every word comes back three times, the Mirror-Fox has piled its stolen keepsakes by
+      the water. The echoes give it away, and they give away the heroes too.
+    question: Can the heroes catch the Mirror-Fox before it slips away with the keepsakes?
+    crux:
+      type: race_against_clock
+      check:
+        ability: dex
+        skill: stealth
+        label: Catch the Echo
+        dc: { base: 16, perPortent: 1, perSnareSeverity: 1, max: 30 }
+      sockets:
+        - type: knowledge_given
+          accepts: [kindness_to_lowly, honesty_at_cost]
+          hint: The friendly echoes whisper back where the Mirror-Fox is hiding, three times over.
+        - type: object_reveals
+          accepts: [keepsake_kept]
+          hint: A keepsake the heroes never traded away glows warm among the stolen ones, and the Mirror-Fox can't stop staring at it.
+        - type: ambush_avoided
+          accepts: [patience, kindness_to_lowly]
+          hint: The heroes wait out a glimmer-fox patrol without ever knowing how close it came.
+      requiredGrace: 1.2
+      onSuccess: The keepsakes are taken back, and the Mirror-Fox flees with nothing but its own reflection.
+      onCostlySuccess: Most of the keepsakes are saved, but the Mirror-Fox escapes with the warmest of them.
+      onFailForward: >-
+        The Mirror-Fox gets away with its hoard. But it dropped something as it fled: a sliver of its own glass, which
+        always points back toward it.
+  - id: the-mirror-and-the-fox
+    title: The Mirror and the Fox
+    front: the-mirror-collects
+    when: The heroes face the Mirror-Fox, nearly real now, with Saffron beside them.
+    region: whisperwood
+    poi: foxglove-glade
+    summary: >-
+      The Mirror-Fox stands in the glade, nearly real, glittering with stolen warmth. It offers one last bargain:
+      every keepsake back, if someone will give it the one thing it can't copy. Saffron, beside the heroes, has gone
+      very quiet.
+    question: Can someone tell the hard truth that sends the reflection home?
+    finale: true
+    crux:
+      type: last_step
+      check:
+        ability: cha
+        label: Speak True
+        dc: { base: 20, perPortent: 1, perSnareSeverity: 1, max: 32 }
+      sockets:
+        - type: spared_one_acts
+          accepts: [mercy, kindness_to_lowly]
+          hint: "{{agent}} steps forward and tells the truth they've been hiding."
+        - type: object_reveals
+          accepts: [keepsake_kept]
+          hint: A keepsake kept through every offer is the one thing the mirror can't copy, and the Mirror-Fox cracks trying.
+        - type: trusted_at_need
+          accepts: [honesty_at_cost, promise_kept, amends]
+          hint: Saffron, who trusts the heroes now, tells the truth about her mirror at last, in front of everyone.
+      requiredGrace: 1.4
+      onSuccess: >-
+        The true word is spoken, and the Mirror-Fox goes back into the glass with a sound like a bell. Every keepsake
+        tumbles free, warm again.
+      onCostlySuccess: >-
+        The reflection goes back, but the truth that sent it there cost someone dearly, and things between friends will
+        take time to mend.
+      onFailForward: >-
+        The Mirror-Fox steps out of the glade, real and glittering. But the heroes saw it falter at the truth, and they
+        know now what it fears.
+situations:
+  - the-glass-hair
+  - the-shadowless-traveller
+  - the-dull-fox
+  - glimmer-ambush
+  - the-debt-collector
+  - the-fork-in-the-road
+  - the-singing-dunes
+  - the-lost-river-child

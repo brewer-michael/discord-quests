@@ -1,0 +1,183 @@
+id: the-mist-that-hungers
+title: The Mist That Hungers
+pitch: >-
+  A mist is rising out of the Mistfen, thicker every night, and every light it touches goes out and is simply gone:
+  lanterns, candles, even the glow of a hearth. In the Reedmarsh the River Folk tie their boats together and watch
+  the white wall creep closer. Something in the fen is gathering lights. It isn't wicked. It's lonely, and that may
+  be worse.
+startRegions: [reedmarsh, hearthmoor]
+openings:
+  - >-
+    Granny Reed's great-granddaughter Tumble comes poling home through the reeds at dawn, white with fright. The mist,
+    she says, ate every lamp on her uncle's boat, and her uncle went into the reeds after them.
+  - >-
+    A wall of white rolls into Hearthmoor overnight. In the morning every candle in the village is cold, and the wicks
+    are missing entirely, as if they were never there.
+  - >-
+    At Lantern Hall, the night-lamps on the outer walkways go out one by one, and something out in the mist hums a
+    lullaby nobody has sung in fifty years.
+stakes: >-
+  If the mist reaches Lantern Hall it will swallow the Lamplighters' flame, and Lanternreach will lose its light
+  without anyone ever having fought for it.
+fronts:
+  - id: the-rising-mist
+    name: The Rising Mist
+    central: true
+    goal: Gather every light in Lanternreach into the Sunken Shrine, so the shrine is never left alone again.
+    portents:
+      - Each night the mist creeps out of the fen and pulls back at dawn, a little further every time.
+      - Lights the mist touches go out, and their wicks and coals are simply gone.
+      - Wisps lead travellers astray, deeper into the fen, singing.
+      - River Folk houseboats come loose in the night and drift toward the fen.
+      - The mist rolls up to the tall legs of Lantern Hall.
+      - The Hall's great lantern dims, and the Lamplighters can't say why.
+    doom: >-
+      The mist swallows Lantern Hall's flame, and Lanternreach goes quietly dark, every light it ever had glowing alone
+      at the bottom of a bog.
+  - id: the-gloam-follows
+    name: The Gloam Follows
+    faction: gloam-host
+    goal: Follow the mist and take whatever it leaves dark.
+    portents:
+      - Gloom mites ride the edge of the mist, giggling, pinching out what it missed.
+      - Gloam skulkers raid the houseboats the mist left dark.
+      - Shadow wolves circle Reedhaven at night.
+    doom: The Gloam Host moves into the dark Reedmarsh and doesn't leave.
+cast: [granny-reed, tumble, amberly-quill, hattie-wick, mayor-hobb, snibbet, bram-tallow]
+mysteries:
+  - id: what-the-mist-wants
+    question: What does the mist want with the lights?
+    truth: >-
+      The Sunken Shrine's old lantern-spirit was tended for a thousand years, until the Lamplighters stopped coming.
+      Alone and sinking, it has been gathering lights to keep it company. It doesn't understand that it is hurting
+      anyone.
+    clues:
+      - The stolen wicks and coals turn up in a glowing heap at the bottom of a bog-pool.
+      - The mist hums a Lamplighters' lullaby that nobody has sung in a generation.
+      - Amberly Quill's records show the Guild stopped tending the Sunken Shrine fifty years ago, "to save the walk."
+      - The friendly wisps say "the old light is lonely," and then laugh much too loudly.
+  - id: calming-the-mist
+    question: How can the mist be turned back without destroying what's inside it?
+    truth: >-
+      The spirit will let the lights go if someone keeps it honest company: relights its shrine with flame freely
+      given, and promises to come back. A broken promise brings the mist back worse than before.
+    clues:
+      - The wisps say the shrine "only wants someone to come back."
+      - The lullaby's last verse is about a lamplighter who promised to return each spring.
+      - Granny Reed remembers that her own grandmother tended the shrine every spring, until the Guild said not to.
+moments:
+  - id: reedhaven-adrift
+    title: Reedhaven Adrift
+    front: the-rising-mist
+    when: A night comes when the mist rolls over Reedhaven itself, and the houseboats begin to drift.
+    region: reedmarsh
+    poi: reedhaven
+    summary: >-
+      The mist pours over Reedhaven like milk. Lamps go out boat by boat, ropes creak and snap, and the whole floating
+      village begins to drift toward the fen with families still aboard.
+    question: Can the heroes hold Reedhaven together until dawn?
+    crux:
+      type: hold_the_line
+      check:
+        ability: str
+        skill: athletics
+        label: Hold the Ropes
+        dc: { base: 14, perPortent: 1, perSnareSeverity: 1, max: 30 }
+      sockets:
+        - type: ally_arrives
+          accepts: [kindness_to_lowly, promise_kept]
+          faction: river-folk
+          hint: Every River Folk family pulls on the same rope at once, singing the old boat-song.
+        - type: hidden_way
+          accepts: [patience, kindness_to_lowly]
+          hint: An old mooring-post sunk in the reeds turns out to hold, and the boats are tied fast to it.
+        - type: spared_one_acts
+          accepts: [mercy]
+          hint: "{{agent}} wades out into the dark water with a rope over their shoulder."
+      requiredGrace: 0.9
+      onSuccess: Dawn comes and Reedhaven is still tied together, every family safe and every boat accounted for.
+      onCostlySuccess: >-
+        Reedhaven holds, but three boats are lost to the fen, and the families aboard them now sleep on their neighbors'
+        floors.
+      onFailForward: >-
+        Half of Reedhaven drifts into the fen before dawn. But the families got off, and they know now that the mist
+        can be fought.
+  - id: the-wisps-riddle
+    title: The Wisps' Riddle
+    front: the-rising-mist
+    when: The heroes go into the Mistfen to find where the lights are being taken, and the mist starts to close behind them.
+    region: mistfen
+    poi: wisp-hollow
+    summary: >-
+      In Wisp Hollow the friendly wisps gather in a giggling cloud. They know the way to the Sunken Shrine, but they
+      won't tell anyone who can't make them laugh, and behind the heroes the mist is closing in.
+    question: Can the heroes find the way to the shrine before the mist closes?
+    crux:
+      type: race_against_clock
+      check:
+        ability: wis
+        skill: survival
+        label: Follow the Wisps
+        dc: { base: 16, perPortent: 1, perSnareSeverity: 1, max: 30 }
+      sockets:
+        - type: knowledge_given
+          accepts: [kindness_to_lowly, honesty_at_cost]
+          hint: A wisp the heroes were kind to settles on someone's shoulder and hums the way.
+        - type: hidden_way
+          accepts: [patience, kindness_to_lowly]
+          hint: Humming along with the fen's own song straightens the twisting paths.
+        - type: ambush_avoided
+          accepts: [patience, kindness_to_lowly]
+          hint: The heroes take the long way round a pool without ever knowing what slept beneath it.
+      requiredGrace: 1.2
+      onSuccess: The wisps laugh and lead the way, and the Sunken Shrine rises out of the mist ahead.
+      onCostlySuccess: The heroes find the shrine, but the mist took their own lantern on the way, and they arrive in the dark.
+      onFailForward: >-
+        The mist closes, and the heroes are lost in the white. But the lullaby is louder here, and they can follow it now.
+  - id: the-sunken-shrine
+    title: The Sunken Shrine
+    front: the-rising-mist
+    when: The heroes reach the Sunken Shrine and the lonely spirit that has been gathering every light.
+    region: mistfen
+    poi: sunken-shrine
+    summary: >-
+      Half sunk in the bog, the old shrine glows with a thousand stolen lights. The spirit inside is small and old and
+      frightened, and it offers every light back if someone will stay with it forever.
+    question: Can the heroes give the old light what it needs, and set the stolen lights free?
+    finale: true
+    crux:
+      type: last_step
+      check:
+        ability: wis
+        skill: insight
+        label: Keep It Company
+        dc: { base: 20, perPortent: 1, perSnareSeverity: 1, max: 32 }
+      sockets:
+        - type: spared_one_acts
+          accepts: [mercy, kindness_to_lowly]
+          hint: "{{agent}} comes wading through the bog with a lantern and offers to tend the shrine."
+        - type: object_reveals
+          accepts: [keepsake_kept]
+          hint: A keepsake from home holds a memory the spirit has never had, and it lets go of the lights to hear about it.
+        - type: trusted_at_need
+          accepts: [honesty_at_cost, promise_kept, amends]
+          hint: The spirit believes the heroes' promise to come back, because it has watched them keep every promise before.
+      requiredGrace: 1.4
+      onSuccess: >-
+        The shrine is relit with freely given flame, and every stolen light rises out of the bog and drifts home. The
+        mist sinks back into the fen, humming.
+      onCostlySuccess: >-
+        The lights go home, but the spirit asked for a promise that will cost someone every spring for the rest of their
+        life, and they gave it.
+      onFailForward: >-
+        The spirit keeps its lights, and the mist settles over the fen for good. But it lets the Reedmarsh go, and it is
+        waiting, now, for someone to come back.
+situations:
+  - tumbles-uncle
+  - the-white-wall
+  - the-lullaby-walkway
+  - the-bog-pool
+  - mist-riders
+  - lost-in-mistfen
+  - lantern-hall
+  - the-lost-river-child

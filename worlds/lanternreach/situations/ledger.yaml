@@ -1,0 +1,84 @@
+# Set pieces for the Gilded Ledger's troubles. The storyteller may use them when they fit, in any order.
+- id: the-notice-on-the-post
+  title: The Notice on the Post
+  kind: social
+  region: hearthmoor
+  poi: hearthmoor-square
+  summary: >-
+    A Ledger agent in a gold-buttoned coat nails a notice to the great lantern-post: from tonight, the lantern burns
+    only for households that are paid up. A crowd gathers, muttering. The widow Marigold Tansy, who can't pay,
+    stands at the back with her three children and says nothing at all.
+  question: What will Hearthmoor do about the Ledger's notice?
+  introduces: [mayor-hobb]
+  virtueOpportunities:
+    - tag: kindness_to_lowly
+      note: Help the widow Marigold and her children, who can't pay for light.
+    - tag: honesty_at_cost
+      note: Say out loud what the notice really means, even with the Ledger's agent watching.
+  offersShortcuts: [ledger-shortcut-pass]
+  factions: [gilded-ledger]
+- id: the-floating-market
+  title: The Floating Market
+  kind: social
+  region: reedmarsh
+  poi: reedhaven
+  summary: >-
+    Reedhaven's floating market bobs on the channel, and the oil-boats are mobbed. Ledger buyers in a striped barge
+    outbid every family for every barrel, paying with coins that leave frost on the sellers' fingers. Granny Reed
+    watches from her boat with her arms folded.
+  question: Can Reedhaven keep any oil for itself?
+  introduces: [granny-reed]
+  virtueOpportunities:
+    - tag: kindness_to_lowly
+      note: Help a River Folk family keep enough oil for the winter.
+    - tag: patience
+      note: Wait and watch the buyers instead of making a scene, and learn where the barrels go.
+  factions: [gilded-ledger, river-folk]
+- id: the-night-channel
+  title: The Night Channel
+  kind: exploration
+  region: reedmarsh
+  poi: old-sluice
+  summary: >-
+    After dark, a Ledger barge slips down a side channel with its lamps hooded, riding low in the water. The reeds
+    close in. Somewhere ahead, something big moves under the surface.
+  question: Where are the barges going at night?
+  sockets: [hidden_way]
+  virtueOpportunities:
+    - tag: patience
+      note: Follow at a distance through the reeds instead of rushing the barge.
+  foes:
+    - { creature: marsh-snapper, count: [1, 2] }
+  factions: [gilded-ledger]
+- id: the-slick-at-gull-cove
+  title: The Slick at Gull Cove
+  kind: exploration
+  region: saltwind-coast
+  poi: gull-cove
+  summary: >-
+    Gull Cove's fishers haul in empty nets that stink of lamp oil. A rainbow slick spreads across the water every
+    dawn, and the gulls won't land. The fishers blame the dark lighthouse. They're wrong.
+  question: What is fouling Gull Cove's water?
+  virtueOpportunities:
+    - tag: kindness_to_lowly
+      note: Help the fishers clean their nets and their cove.
+  factions: [gilded-ledger]
+- id: the-strongbox
+  title: The Strongbox
+  kind: exploration
+  region: reedmarsh
+  poi: silas-toll-bridge
+  summary: >-
+    The toll-house on Coin Bridge is locked for the night, and Silas is out. Inside is the Ledger's strongbox, and
+    the hired bruiser guarding it is paid by the hour and very much counting the hours.
+  question: What is Silas hiding in his strongbox?
+  sockets: [knowledge_given]
+  virtueOpportunities:
+    - tag: mercy
+      note: Let the bruiser go home instead of leaving him tied up for Silas to find.
+    - tag: honesty_at_cost
+      note: Tell the bruiser plainly why you've come, and ask him to step aside.
+  offersShortcuts: [forged-toll-token]
+  foes:
+    - { creature: ledger-bruiser, count: [1, 2] }
+  factions: [gilded-ledger]

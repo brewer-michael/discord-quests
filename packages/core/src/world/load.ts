@@ -1,7 +1,6 @@
 import { parseDocument } from "yaml";
 import { z } from "zod";
 import {
-  ActDef,
   BackgroundDef,
   ClassDef,
   ContentRules,
@@ -17,7 +16,9 @@ import {
   PathDef,
   PayoffsFile,
   RegionDef,
+  SeedDef,
   ShortcutDef,
+  SituationDef,
   SpeciesDef,
   WorldMeta,
 } from "./schema";
@@ -82,7 +83,8 @@ export function loadWorld(files: Record<string, string>): { world: World | null;
   const regions = parseMany("regions/", RegionDef);
   const factions = parseMany("factions/", FactionDef);
   const npcs = parse("npcs/archetypes.yaml", NpcsFile);
-  const acts = parseMany("arc/", ActDef);
+  const seeds = parseMany("seeds/", SeedDef);
+  const situations = parseMany("situations/", listOf(SituationDef)).flat();
   const detours = parse("providence/detours.yaml", listOf(DetourDef));
   const payoffs = parse("providence/payoffs.yaml", PayoffsFile);
   const epilogue = parse("providence/epilogue-lines.yaml", EpilogueLines);
@@ -135,7 +137,8 @@ export function loadWorld(files: Record<string, string>): { world: World | null;
     regions,
     factions,
     npcs,
-    acts,
+    seeds,
+    situations,
     detours,
     payoffs,
     epilogue,

@@ -30,8 +30,8 @@ export function markDueSnares(state: LoomState, input: LoomInput): void {
       case "anchor_reappears":
         if (input.story.turn > s.createdTurn && anchorPresent(s, input)) s.state = "due";
         break;
-      case "after_beats":
-        if (input.story.progress >= s.createdProgress + s.due.beats) s.state = "due";
+      case "after_scenes":
+        if (input.story.progress >= s.createdProgress + s.due.scenes) s.state = "due";
         break;
       case "chapter_end":
         if (input.story.chapterEnded) s.state = "due";

@@ -1,12 +1,20 @@
 import type { Rng } from "../rng/index";
-import { nextCrux } from "../story/progress";
-import { type LoomContext, markProvidence } from "./context";
+import { type LoomContext, markProvidence, momentById, nextMoment } from "./context";
 import { detourBoost } from "./detours";
 import { snarePressure } from "./snares";
 import { availableFor, scoreThreads } from "./threads";
 import { MUST_NOT_EXPLAIN } from "./tuning";
 import type { AuditEntry, CruxResolution, LoomInput, LoomState, NarrativeDirective } from "./types";
 import type { SocketType } from "./vocab";
+
+/** A payoff's text names whoever the heroes' deed reached: "{{agent}}" in a hint becomes their name. */
+export function withAgent(text: string, name: string | null): string {
+  if (!text.includes("{{agent}}")) return text;
+  const who = name ?? "someone the heroes once helped";
+  return text
+    .replace(/^\{\{agent\}\}/, who.charAt(0).toUpperCase() + who.slice(1))
+    .replaceAll("{{agent}}", who);
+}
 
 /** Worse failures need more grace to turn around. */
 export function marginBand(margin: number): number {
@@ -33,9 +41,8 @@ export function resolveCrux(
   audit: AuditEntry[],
 ): CruxOutput | null {
   const check = input.check;
-  const ref = ctx.index.beats.get(check.beatId);
-  const crux = ref?.beat.crux;
-  if (!ref || !crux) return null;
+  const crux = momentById(ctx, check.momentId);
+  if (!crux) return null;
 
   // Snares that withhold a payoff close that socket entirely. Debts tied to the crux raise the bar.
   const withheld = new Set<SocketType>();
@@ -58,7 +65,7 @@ export function resolveCrux(
   }
 
   const base = {
-    beatId: check.beatId,
+    momentId: check.momentId,
     withheldSockets: [...withheld],
     available: 0,
     required: 0,
@@ -66,17 +73,17 @@ export function resolveCrux(
     socket: null,
   };
   if (check.success) {
-    audit.push({ step: "crux", detail: `${check.beatId}: the heroes succeeded on their own` });
+    audit.push({ step: "crux", detail: `${check.momentId}: the heroes succeeded on their own` });
     return { resolution: { ...base, outcome: "success" }, directives: [] };
   }
 
   const sockets = crux.sockets.filter((s) => !withheld.has(s.type));
-  const pool = state.threads.filter((t) => availableFor(t, check.beatId));
+  const pool = state.threads.filter((t) => availableFor(t, check.momentId));
   const scored = scoreThreads(pool, sockets, input.story.progress, input.scene, state, ctx);
   const top = scored.slice(0, 3);
   const boost = detourBoost(
     state,
-    check.beatId,
+    check.momentId,
     sockets.map((s) => s.type),
   );
   const raw = top.reduce((sum, s) => sum + s.score, 0) + boost;
@@ -85,7 +92,7 @@ export function resolveCrux(
     crux.requiredGrace * (1 + 0.1 * marginBand(check.margin)) + pressure * ctx.tuning.snarePressureFactor;
   audit.push({
     step: "crux",
-    detail: `${check.beatId}: available ${available.toFixed(2)} (threads ${top.length}, detours ${boost}) vs required ${required.toFixed(2)}`,
+    detail: `${check.momentId}: available ${available.toFixed(2)} (threads ${top.length}, detours ${boost}) vs required ${required.toFixed(2)}`,
   });
 
   let outcome: CruxResolution["outcome"];
@@ -99,7 +106,7 @@ export function resolveCrux(
       directives: [
         {
           kind: "fail_forward",
-          text: crux.onFailForward.text,
+          text: crux.onFailForward,
           mustNot: ["Keep hope alive: the story goes on."],
         },
       ],
@@ -116,25 +123,24 @@ export function resolveCrux(
   }
   const lead = woven[0] ?? top[0];
   const socket = lead?.socket ?? sockets[0];
+  const agentName = lead?.thread.anchor?.name ?? null;
+  const hint = socket ? withAgent(socket.hint, agentName) : undefined;
   // Every woven thread shares the one thing that actually happened: the lead socket's moment.
   for (const s of woven) {
     s.thread.state = "woven";
     s.thread.wovenTurn = input.story.turn;
     s.thread.wovenAs = {
-      beatId: check.beatId,
+      momentId: check.momentId,
       socket: s.socket.type,
-      payoffSummary: socket?.hint ?? crux.onSuccess,
+      payoffSummary: hint ?? crux.onSuccess,
       ...(s === lead ? { lead: true } : {}),
     };
   }
   state.counters.convergences += 1;
   markProvidence(state, input.story.turn);
 
-  const agentName = lead?.thread.anchor?.name ?? null;
   const text =
-    outcome === "costly_success"
-      ? `${socket?.hint ?? ""} ${crux.onCostlySuccess}`.trim()
-      : (socket?.hint ?? crux.onSuccess);
+    outcome === "costly_success" ? `${hint ?? ""} ${crux.onCostlySuccess}`.trim() : (hint ?? crux.onSuccess);
   return {
     resolution: {
       ...base,
@@ -163,9 +169,9 @@ export function resolveCrux(
 
 /** Thread ids most likely to matter at the next crux. Minor graces never spend these. */
 export function projectedCruxThreads(state: LoomState, input: LoomInput, ctx: LoomContext): Set<string> {
-  const ref = nextCrux(ctx.index, input.story.completedBeats);
-  if (!ref?.beat.crux) return new Set();
-  const pool = state.threads.filter((t) => availableFor(t, ref.beat.id));
-  const scored = scoreThreads(pool, ref.beat.crux.sockets, input.story.progress + 6, null, state, ctx);
+  const next = nextMoment(ctx, input.story.doneMoments);
+  if (!next) return new Set();
+  const pool = state.threads.filter((t) => availableFor(t, next.id));
+  const scored = scoreThreads(pool, next.sockets, input.story.progress + 6, null, state, ctx);
   return new Set(scored.slice(0, 3).map((s) => s.thread.id));
 }

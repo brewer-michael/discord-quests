@@ -1,0 +1,200 @@
+id: the-ledgers-price
+title: The Ledger's Price
+pitch: >-
+  It's a hard winter and lantern oil is scarce. The Gilded Ledger has been buying up every drop, and now it sells
+  light by the hour to anyone who can pay. Silas Coin smiles and says it's only business. But somebody is paying
+  the Ledger in cold gold to keep Lanternreach dark, and the villages that can't pay are the first to hear
+  something scratching at their doors.
+startRegions: [hearthmoor, reedmarsh]
+openings:
+  - >-
+    In Hearthmoor's square, a Ledger agent with a golden book nails a notice to the great lantern-post: from tonight
+    the lantern burns only for households that are paid up.
+  - >-
+    At Coin Bridge, the River Folk's oil barge is stopped at the toll-gate and its whole cargo "bought" at a price
+    nobody agreed to, while Silas Coin counts out cold coins with gloved hands.
+  - >-
+    The Lamplighters' spring flame-walk is called off. The Ledger has bought the deed to the Old Road's toll-houses,
+    and from now on every step costs a coin.
+stakes: >-
+  If the Ledger corners the oil and the road, light will belong to whoever can pay, and the villages that can't
+  will be left to the dark and whatever lives in it.
+fronts:
+  - id: the-price-of-light
+    name: The Price of Light
+    faction: gilded-ledger
+    central: true
+    goal: Own every drop of lantern oil, every lantern-post and the Old Road itself, and charge for light.
+    portents:
+      - Ledger agents buy every barrel in every market they reach, paying more than anyone can refuse.
+      - Oil doubles in price, then doubles again. Poorer families sit in the dark and listen.
+      - The Ledger offers "light on credit" to frightened villages, and the debts pile up in golden books.
+      - Villages that can't pay sign their lantern-posts over to the Ledger, one by one.
+      - The Ledger takes the Old Road's toll-houses. The Lamplighters' walk now costs a coin a step.
+    doom: The Ledger owns the oil, the lamps and the road. Light belongs to whoever can pay for it.
+  - id: cold-in-the-dark
+    name: Cold in the Dark
+    faction: gloam-host
+    goal: Creep into every village the Ledger leaves dark, and stay.
+    portents:
+      - Gloom mites scuttle down unlit lanes, pinching out the last candles.
+      - Gloam skulkers raid the barns and boathouses of villages gone dark.
+      - Shadow wolves gather at the edge of the darkest village and wait.
+      - A village left dark is found empty one morning, every door open.
+    doom: Every village that couldn't pay for light belongs to the Gloam.
+cast: [silas-coin, granny-reed, amberly-quill, mayor-hobb, hattie-wick, bram-tallow, snibbet, tumble]
+mysteries:
+  - id: where-the-oil-goes
+    question: Where is all the oil going?
+    truth: >-
+      The Ledger isn't selling most of it. It ships barrels by night barge to Gull Cove and sinks them in the
+      sea-caves, so the price stays high and the land stays dark.
+    clues:
+      - Ledger barges travel the channels only at night, riding low in the water.
+      - Gull Cove's fishers smell oil on the tide, and find a rainbow slick on the water at dawn.
+      - A ledger-runner's book lists "barrels, sunk" beside a column of payments in cold gold.
+      - The River Folk have counted twice as many barrels going out as the Ledger ever sold.
+  - id: who-pays-the-ledger
+    question: Who is paying the Ledger to keep the land dark?
+    truth: >-
+      The Gloam King's cold servants pay Silas in cold gold: coins that never warm in the hand. Silas thinks it's
+      only good business with a rich, quiet buyer. He has no idea who his buyer is.
+    clues:
+      - Silas's strongbox is full of coins as cold as ice, which never warm however long they're held.
+      - Silas meets a hooded buyer on Coin Bridge at every new moon, after the toll-gate closes.
+      - Frost forms on the planks of the bridge where the buyer stood, even on a mild night.
+      - A gloom mite is found asleep in a Ledger strongbox, curled up on the cold coins like a cat by a fire.
+  - id: the-old-charter
+    question: Who really owns the Old Road?
+    truth: >-
+      The Wardens' old charter says the Old Road belongs to everyone who walks it, forever. The Ledger's deed to the
+      toll-houses is a forgery on new paper made to look old.
+    clues:
+      - The Wardens keep an ancient charter for the road in Wardens' Watch, sealed with a leaf.
+      - The Ledger's deed smells of fresh ink, and its "ancient" seal is still a little soft.
+      - Hattie Wick remembers when the Old Road had no tolls at all, and nobody ever asked who owned it.
+      - The Lamplighters' oldest records list the road as "open to all who walk it, for always."
+moments:
+  - id: the-night-barges
+    title: The Night Barges
+    front: the-price-of-light
+    when: The heroes know the barges' route and can catch them before the oil is sunk.
+    region: saltwind-coast
+    poi: gull-cove
+    summary: >-
+      Three Ledger barges slide out of the fog toward the sea-caves, riding low with barrels, and the tide is turning.
+      Once the barrels go into the caves, the oil is lost for good.
+    question: Can the heroes stop the night barges before the oil is sunk?
+    crux:
+      type: race_against_clock
+      check:
+        ability: dex
+        skill: acrobatics
+        label: Catch the Barges
+        dc: { base: 14, perPortent: 1, perSnareSeverity: 1, max: 30 }
+      sockets:
+        - type: ally_arrives
+          accepts: [kindness_to_lowly, promise_kept]
+          faction: river-folk
+          hint: River Folk flatboats come poling out of the fog, every one with a hook and a rope.
+        - type: hidden_way
+          accepts: [patience, kindness_to_lowly]
+          hint: A back channel through the reeds comes out right beside the lead barge.
+        - type: knowledge_given
+          accepts: [honesty_at_cost, kindness_to_lowly]
+          hint: A ledger-runner the heroes treated decently shouts which barge carries the captain's keys.
+      requiredGrace: 0.9
+      onSuccess: The barges are caught and the barrels hauled ashore. Gull Cove lights every lamp it has.
+      onCostlySuccess: >-
+        Most of the oil is saved, but one barge goes down in the cove with its barrels, and the fishers will be
+        cleaning the water for months.
+      onFailForward: >-
+        The barrels go into the caves. But the heroes saw the Ledger's captain and his book, and now they have proof
+        of what the Ledger is doing.
+  - id: the-great-auction
+    title: The Great Auction
+    front: the-price-of-light
+    when: The Ledger holds an auction for the lantern-posts of the villages that couldn't pay, and the heroes come to stop it.
+    region: reedmarsh
+    poi: lantern-hall
+    summary: >-
+      In Lantern Hall itself, the Ledger auctions off the lantern-posts of every village that fell behind on its
+      debts. The room is full of frightened villagers and smiling buyers, and Silas holds the gavel.
+    question: Can the heroes turn the room against the Ledger?
+    crux:
+      type: overwhelming_odds
+      check:
+        ability: cha
+        skill: persuasion
+        label: Win the Room
+        dc: { base: 16, perPortent: 1, perSnareSeverity: 1, max: 30 }
+      sockets:
+        - type: trusted_at_need
+          accepts: [honesty_at_cost, promise_kept, amends]
+          faction: wardens-of-the-old-road
+          hint: The Wardens stand up one by one and vouch for every word the heroes say.
+        - type: knowledge_given
+          accepts: [kindness_to_lowly, honesty_at_cost]
+          hint: Someone the heroes helped hands over the page that proves the Ledger's deed is forged.
+        - type: enemy_blunder
+          accepts: [patience, mercy, honesty_at_cost]
+          faction: gilded-ledger
+          hint: Silas loses his temper in front of everyone, and the room sees who he really is.
+      requiredGrace: 1.2
+      onSuccess: The auction collapses. The villages keep their lantern-posts, and the Ledger's buyers slip away.
+      onCostlySuccess: >-
+        The auction is stopped, but the Ledger keeps the posts it already bought, and those villages will need help
+        getting them back.
+      onFailForward: >-
+        The posts are sold. But half the room saw what the Ledger is, and they leave looking for the heroes, ready to
+        help.
+  - id: the-cold-buyer
+    title: The Cold Buyer
+    front: the-price-of-light
+    when: On a new moon, the heroes confront the cold buyer at Coin Bridge, with Silas caught in between.
+    region: reedmarsh
+    poi: silas-toll-bridge
+    summary: >-
+      At midnight on the new moon, the hooded buyer comes to Coin Bridge to collect, and frost spreads across the
+      planks. Silas clutches his strongbox. He's beginning to understand who he's been dealing with.
+    question: Will Silas let go of the cold gold, and will the light go free?
+    finale: true
+    crux:
+      type: last_step
+      check:
+        ability: cha
+        skill: persuasion
+        label: Open His Hand
+        dc: { base: 20, perPortent: 1, perSnareSeverity: 1, max: 32 }
+      sockets:
+        - type: spared_one_acts
+          accepts: [mercy, kindness_to_lowly]
+          hint: "{{agent}} steps out of the dark and stands beside Silas, so he isn't alone."
+        - type: ally_arrives
+          accepts: [kindness_to_lowly, promise_kept, self_sacrifice]
+          hint: Every village the heroes helped arrives on the riverbank, each carrying one small lantern.
+        - type: enemy_blunder
+          accepts: [patience, honesty_at_cost]
+          faction: gloam-host
+          hint: The cold buyer's touch freezes Silas's own strongbox shut, and he finally sees what he's been paid in.
+      requiredGrace: 1.4
+      onSuccess: >-
+        Silas opens his hand and the cold gold falls into the river. The buyer shrieks into smoke, and in the morning
+        the Ledger's oil goes back on sale at an honest price.
+      onCostlySuccess: >-
+        The buyer is driven off and the oil freed, but Silas is gone with the first boat at dawn, and the Ledger's
+        books go with him.
+      onFailForward: >-
+        The buyer takes the strongbox and vanishes into the frost. But Silas, cold and frightened, tells the heroes
+        everything, and the villages begin to share their oil without the Ledger.
+situations:
+  - the-notice-on-the-post
+  - the-floating-market
+  - the-night-channel
+  - the-slick-at-gull-cove
+  - the-strongbox
+  - the-toll-bridge
+  - gloam-in-the-garden
+  - wardens-watch
+  - lantern-hall
+  - the-hollow-oak

@@ -1,5 +1,4 @@
 import type {
-  ActDef,
   BackgroundDef,
   ClassDef,
   ContentRules,
@@ -14,7 +13,9 @@ import type {
   PathDef,
   PayoffsFile,
   RegionDef,
+  SeedDef,
   ShortcutDef,
+  SituationDef,
   SpeciesDef,
   WorldMeta,
 } from "./schema";
@@ -35,7 +36,8 @@ export interface World {
   regions: RegionDef[];
   factions: FactionDef[];
   npcs: NpcsFile;
-  acts: ActDef[];
+  seeds: SeedDef[];
+  situations: SituationDef[];
   detours: DetourDef[];
   payoffs: PayoffsFile;
   epilogue: EpilogueLines;
@@ -48,15 +50,4 @@ export interface WorldIssue {
   path: string;
   message: string;
   severity: "error" | "warning";
-}
-
-export type Beat = ActDef["chapters"][number]["beats"][number];
-export type Chapter = ActDef["chapters"][number];
-
-export interface BeatRef {
-  act: ActDef;
-  chapter: Chapter;
-  beat: Beat;
-  /** Position of the beat in story order, 0-based, across all acts. */
-  order: number;
 }

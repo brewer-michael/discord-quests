@@ -1,0 +1,80 @@
+# Set pieces for the Bargain Fox's troubles. The storyteller may use them when they fit, in any order.
+- id: the-glass-hair
+  title: The Glass Hair
+  kind: exploration
+  region: hearthmoor
+  poi: hearthmoor-square
+  summary: >-
+    Behind the bakery on Lantern Square, the baker Wren Hollis is in tears. Her grandmother's ring is gone from a
+    box that was locked all night, and in its place lies one glittering "fox-hair" that catches the light like ice.
+  question: Who took the baker's ring?
+  virtueOpportunities:
+    - tag: kindness_to_lowly
+      note: Comfort Wren and promise to look for her grandmother's ring.
+    - tag: patience
+      note: Look closely before blaming the nearest fox, or the nearest stranger.
+  factions: [court-of-the-bargain-fox]
+- id: the-shadowless-traveller
+  title: The Shadowless Traveller
+  kind: social
+  region: whisperwood
+  poi: whispering-stream
+  summary: >-
+    A thin, frightened traveller named Aldous sits by the Whispering Stream with his back to the sun, because he
+    can't bear to see that he casts no shadow. Years ago he borrowed a little luck from a fox. Now, he says, the fox
+    came back in the night and took the only thing he had left to give.
+  question: What will the heroes do for Aldous, and what does he know?
+  virtueOpportunities:
+    - tag: kindness_to_lowly
+      note: Share a meal and a fire with Aldous instead of hurrying on.
+    - tag: honesty_at_cost
+      note: Tell Aldous the truth about any bargain of your own.
+  factions: [court-of-the-bargain-fox]
+- id: the-dull-fox
+  title: The Dull Fox
+  kind: social
+  region: whisperwood
+  poi: foxglove-glade
+  summary: >-
+    Saffron the Bargain Fox sits in Foxglove Glade with her plum waistcoat torn and her famous shine gone dull. She
+    is trying very hard to sound grand. "My darlings. My dearest darlings. I find myself, ahem, in need of a favor."
+  question: Will the heroes help the Bargain Fox, and on what terms?
+  introduces: [saffron-the-fox]
+  virtueOpportunities:
+    - tag: mercy
+      note: Help Saffron without asking anything in return, even though she's never once done the same.
+    - tag: honesty_at_cost
+      note: Tell Saffron plainly what you think of her bargains, and help her anyway.
+  offersShortcuts: [borrowed-luck, fox-door]
+  factions: [court-of-the-bargain-fox]
+- id: glimmer-ambush
+  title: Glimmer Ambush
+  kind: combat
+  region: whisperwood
+  summary: >-
+    Glittering eyes in the bracken, then glittering teeth. Glimmer-foxes under the Mirror-Fox's spell pour out of the
+    undergrowth, trying to snatch whatever the heroes carry that might be precious.
+  question: Can the heroes keep hold of what matters to them?
+  virtueOpportunities:
+    - tag: mercy
+      note: Let a beaten glimmer-fox slink away instead of chasing it down.
+  foes:
+    - { creature: glimmer-fox, count: [2, 4] }
+  factions: [court-of-the-bargain-fox]
+- id: the-debt-collector
+  title: The Debt-Collector
+  kind: social
+  region: reedmarsh
+  poi: reedhaven
+  summary: >-
+    A Ledger collector with a golden book has come to Reedhaven to call in a favor the Rushwick family once owed the
+    Bargain Fox. The Ledger bought the debt for a handful of coins, and now it wants the family's boat.
+  question: Will the heroes stand between the collector and the Rushwicks?
+  virtueOpportunities:
+    - tag: kindness_to_lowly
+      note: Stand up for the Rushwicks, at a cost to yourselves.
+    - tag: honesty_at_cost
+      note: Tell the collector the truth about where the debt came from, even if it's awkward for you.
+  foes:
+    - { creature: ledger-bruiser, count: [1, 2] }
+  factions: [gilded-ledger, river-folk]

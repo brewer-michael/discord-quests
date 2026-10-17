@@ -1,0 +1,75 @@
+# Set pieces for the rising mist. The storyteller may use them when they fit, in any order.
+- id: tumbles-uncle
+  title: Tumble's Uncle
+  kind: social
+  region: reedmarsh
+  poi: reedhaven
+  summary: >-
+    Tumble clings to Granny Reed's skirts on the deck of the old woman's houseboat. Uncle Fennick went into the reeds
+    at midnight after his stolen lamps and hasn't come back. The mist is already thinning, pulling back toward the fen,
+    and his boat is still drifting where he left it, every wick gone.
+  question: What happened to Uncle Fennick?
+  introduces: [tumble, granny-reed]
+  virtueOpportunities:
+    - tag: kindness_to_lowly
+      note: Promise Tumble you'll look for her uncle, and mean it.
+    - tag: promise_kept
+      target: granny-reed
+      note: Promise Granny Reed to bring Fennick home, and later keep that promise.
+  factions: [river-folk]
+- id: the-white-wall
+  title: The White Wall
+  kind: exploration
+  region: hearthmoor
+  poi: hearthmoor-square
+  summary: >-
+    Hearthmoor wakes inside a wall of white. Every candle in the village is cold and every wick is gone, even the
+    great lantern's. The geese won't leave the commons. Mayor Hobb is trying to organize a search, and nobody can see
+    farther than the end of their own arm.
+  question: What took Hearthmoor's lights, and where did it go?
+  introduces: [mayor-hobb, hattie-wick]
+  virtueOpportunities:
+    - tag: kindness_to_lowly
+      note: Lead the frightened and the lost home through the mist.
+- id: the-lullaby-walkway
+  title: The Lullaby Walkway
+  kind: exploration
+  region: reedmarsh
+  poi: lantern-hall
+  summary: >-
+    On Lantern Hall's outer walkways the night-lamps go out one by one, and out in the mist something hums a lullaby.
+    Amberly Quill stands at the rail with a lamp in her hand, listening hard. "I know that song," she says. "I haven't
+    heard it since I was a girl."
+  question: Where is the lullaby coming from, and what does it mean?
+  introduces: [amberly-quill]
+  sockets: [knowledge_given]
+  factions: [lamplighters-guild]
+- id: the-bog-pool
+  title: The Bog-Pool
+  kind: exploration
+  region: mistfen
+  poi: sunken-shrine
+  summary: >-
+    Deep in the fen, at the bottom of a still black pool, hundreds of tiny lights glow: wicks, coals, candle-flames,
+    all stolen. Something big and soft sleeps on the bank beside it, and the mist is thicker here than anywhere.
+  question: Can the stolen lights be reached, and what guards them?
+  virtueOpportunities:
+    - tag: patience
+      note: Watch the sleeping thing a while before deciding what to do about it.
+  foes:
+    - { creature: bog-lump, count: [1, 2] }
+- id: mist-riders
+  title: Mist-Riders
+  kind: combat
+  region: reedmarsh
+  summary: >-
+    Where the mist has passed, the boats are dark, and the Gloam has come behind it. Gloom mites ride the mist's
+    trailing edge like children on a sledge, and skulkers slip aboard a dark houseboat where a family is hiding.
+  question: Can the heroes drive the Gloam off the dark boats?
+  virtueOpportunities:
+    - tag: mercy
+      note: Let a beaten gloom mite flee back into the mist.
+  foes:
+    - { creature: gloom-mite, count: [2, 3] }
+    - { creature: gloam-skulker, count: [1, 1] }
+  factions: [gloam-host, river-folk]

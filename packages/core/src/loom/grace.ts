@@ -30,8 +30,7 @@ export function considerMinorGrace(
   const protectedIds = projectedCruxThreads(state, input, ctx);
   const candidates = state.threads
     .filter(
-      (t) =>
-        isLive(t) && !t.reservedForBeat && !protectedIds.has(t.id) && ripeness(t, input.story.progress) >= 1,
+      (t) => isLive(t) && !t.reservedFor && !protectedIds.has(t.id) && ripeness(t, input.story.progress) >= 1,
     )
     .map((t) => ({ t, present: input.scene.entities.some((e) => e.present && e.ref.id === t.anchor?.id) }))
     .sort(
@@ -61,7 +60,7 @@ export function considerMinorGrace(
   t.state = "woven";
   t.wovenTurn = input.story.turn;
   t.wovenAs = {
-    beatId: input.scene.beatId ?? input.scene.id,
+    momentId: input.scene.momentId ?? input.scene.id,
     socket: "minor_grace",
     payoffSummary: text,
     lead: true,

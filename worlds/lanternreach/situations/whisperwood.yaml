@@ -1,0 +1,63 @@
+# Set pieces in whisperwood. The storyteller may use them when they fit, in any order.
+- id: the-fork-in-the-road
+  title: The Fork in the Road
+  kind: choice
+  region: whisperwood
+  poi: foxglove-glade
+  summary: 'At the edge of the Whisperwood, the Old Road bends the long way round: three whole days of walking.
+    In a glade full of foxgloves, a fox in a plum velvet waistcoat bows low and offers a much quicker way.'
+  question: The long road round, or the Fox's door?
+  introduces: [saffron-the-fox]
+  virtueOpportunities:
+  - tag: patience
+    note: Politely turn down the Fox's door and take the long road.
+  - tag: keepsake_kept
+    note: Refuse to trade away a keepsake from home.
+  offersShortcuts: [fox-door, borrowed-luck]
+  factions: [court-of-the-bargain-fox]
+- id: the-lost-river-child
+  title: The Lost River Child
+  kind: social
+  region: whisperwood
+  poi: whispering-stream
+  summary: By a chattering stream, a small River Folk girl named Tumble sits crying. She chased a heron and got
+    lost, and her family is a whole day's walk out of the way, deep in the Reedmarsh.
+  question: What will the heroes do for Tumble?
+  introduces: [tumble]
+  sockets: [ally_arrives]
+  virtueOpportunities:
+  - tag: kindness_to_lowly
+    target: tumble
+    note: Take Tumble home, even though it costs a day.
+  - tag: promise_kept
+    target: tumble
+    note: Promise to get her home safely, and keep it.
+  offersShortcuts: [leave-tumble-behind]
+  factions: [river-folk]
+- id: the-hollow-oak
+  title: The Hollow Oak
+  kind: exploration
+  region: whisperwood
+  poi: the-hollow-oak
+  summary: A huge hollow oak carved with the Wardens' leaf holds a supply cache. A sign says it is for any traveler
+    in true need, and asks them to take only what they must.
+  question: What is hidden in the hollow oak, and what will the heroes take?
+  sockets: [hidden_way]
+  virtueOpportunities:
+  - tag: honesty_at_cost
+    note: Take only what is truly needed, or leave a note and a coin for the Wardens.
+  offersShortcuts: [take-the-warden-cache]
+  factions: [wardens-of-the-old-road]
+- id: shadow-wolves
+  title: Howls in the Dark
+  kind: combat
+  region: whisperwood
+  summary: Night falls in the wood and the shadow wolves begin to howl. Every howl makes the lanterns flicker. The
+    heroes must keep their light burning until morning.
+  question: Can the heroes keep their light through a night of howling?
+  foes:
+  - creature: shadow-wolf
+    count: [2, 2]
+  - creature: gloom-mite
+    count: [1, 2]
+  factions: [gloam-host]

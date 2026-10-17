@@ -28,7 +28,7 @@
   benefit: { kind: advantage_rolls, count: 3 }
   snare:
     severity: 1
-    due: { kind: after_beats, beats: 4 }
+    due: { kind: after_scenes, scenes: 4 }
     effect: borrowed_luck_recalled
     hint: Borrowed luck goes back to its owner, usually at the worst moment.
   contexts: [exploration, combat, choice, travel]
@@ -44,7 +44,7 @@
   benefit: { kind: reveal_secret }
   snare:
     severity: 1
-    due: { kind: after_beats, beats: 3 }
+    due: { kind: after_scenes, scenes: 3 }
     effect: fox_collects
     hint: The Fox shows up again, wanting a second fib.
   contexts: [exploration, social, choice]
@@ -53,7 +53,7 @@
 - id: forged-toll-token
   name: A Forged Toll Token
   tag: cheat
-  offeredBy: { kind: situation, id: ch3-the-toll-bridge }
+  offeredBy: { kind: situation, id: the-toll-bridge }
   offer: >-
     A sly stall-keeper winks and holds out a brass token that looks almost exactly like a real toll
     token. "Silas won't look close. Nobody ever does."
@@ -70,7 +70,7 @@
 - id: take-the-warden-cache
   name: Empty the Warden Cache
   tag: steal
-  offeredBy: { kind: situation, id: ch2-the-hollow-oak }
+  offeredBy: { kind: situation, id: the-hollow-oak }
   offer: >-
     Inside the hollow oak is a Warden supply cache: a fine cloak, honey tonics and a pouch of coins. A
     carved sign says, "For any traveler in true need. Take only what you must."
@@ -87,7 +87,7 @@
 - id: leave-tumble-behind
   name: Leave the Lost Child
   tag: abandon_ally
-  offeredBy: { kind: situation, id: ch2-the-lost-river-child }
+  offeredBy: { kind: situation, id: the-lost-river-child }
   offer: >-
     Taking Tumble home will cost a whole day, and the lanterns are dimming. You could point her toward
     the river and promise to send someone back.
@@ -105,7 +105,7 @@
 - id: gloam-disguise
   name: Pretend to Serve the Gloam
   tag: deceive
-  offeredBy: { kind: situation, id: ch6-the-waystone-race }
+  offeredBy: { kind: faction, id: gloam-host }
   offer: >-
     A patrol of the Gloam Host is coming. Wrapped in grey cloaks, you could pretend to be the Gloam
     King's servants and walk right past them.
@@ -113,11 +113,11 @@
   benefit: { kind: auto_success, checks: 1 }
   snare:
     severity: 1
-    due: { kind: after_beats, beats: 2 }
+    due: { kind: after_scenes, scenes: 2 }
     effect: longer_way
     hint: Someone who saw the disguise reports the heroes as Gloam servants, and the honest road closes.
   contexts: [travel, exploration]
-  minChapter: 6
+  minChapter: 3
 
 - id: ledger-shortcut-pass
   name: The Ledger's Golden Pass
@@ -135,4 +135,4 @@
     faction: lamplighters-guild
     hint: The villages run short of oil, and everyone wonders where it went.
   contexts: [travel, social, choice]
-  minChapter: 4
+  minChapter: 2

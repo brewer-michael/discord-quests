@@ -1,0 +1,41 @@
+# Set pieces in reedmarsh. The storyteller may use them when they fit, in any order.
+- id: the-toll-bridge
+  title: The Toll Bridge
+  kind: social
+  region: reedmarsh
+  poi: silas-toll-bridge
+  summary: The only bridge into the heart of the Reedmarsh belongs to Silas Coin of the Gilded Ledger, and the toll
+    has gone up to fifty gold a head. Silas is also selling lantern oil at triple the price.
+  question: How will the heroes get across Coin Bridge?
+  introduces: [silas-coin]
+  virtueOpportunities:
+  - tag: honesty_at_cost
+    target: silas-coin
+    note: Refuse the forged token and find an honest way across.
+  offersShortcuts: [forged-toll-token]
+  factions: [gilded-ledger]
+- id: lantern-hall
+  title: Lantern Hall
+  kind: social
+  region: reedmarsh
+  poi: lantern-hall
+  summary: Lantern Hall stands on tall stilts above the reeds. Inside, Amberly Quill of the Lamplighters has terrible
+    news. The Guild's own flame is failing, the Ember has been stolen by the Gloam King, and the Gloam Host is gathering
+    in the marsh tonight.
+  question: What has happened to the Ember, and can Lantern Hall be ready for the night?
+  introduces: [amberly-quill, granny-reed]
+  sockets: [ally_arrives, hidden_way]
+  factions: [lamplighters-guild, river-folk]
+- id: the-road-ahead
+  title: The Road Ahead
+  kind: social
+  region: reedmarsh
+  poi: lantern-hall
+  summary: At dawn, Amberly explains that only the First Forge on Mount Cinder can rekindle the Ember, and the Ember
+    is locked inside Gloamhold. The road ahead is long. It always was.
+  question: Will the heroes take up the long road to the Ember?
+  quest:
+    id: rekindle-the-ember
+    title: Rekindle the Ember
+    objective: Recover the Ember from Gloamhold and carry it to the First Forge on Mount Cinder.
+  factions: [lamplighters-guild]

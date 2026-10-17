@@ -1,5 +1,5 @@
 import { SRD_BESTIARY } from "../srd/bestiary.generated";
-import type { BeatRef, World } from "./types";
+import type { World } from "./types";
 
 /** Lookup tables over a loaded world. Build once and reuse. */
 export interface WorldIndex {
@@ -15,8 +15,8 @@ export interface WorldIndex {
   detours: Map<string, World["detours"][number]>;
   archetypes: Map<string, World["npcs"]["archetypes"][number]>;
   namedNpcs: Map<string, World["npcs"]["named"][number]>;
-  beats: Map<string, BeatRef>;
-  beatOrder: BeatRef[];
+  seeds: Map<string, World["seeds"][number]>;
+  situations: Map<string, World["situations"][number]>;
   items: Map<string, { id: string; name: string; kind: ItemKind; rarity?: string; description: string }>;
   pois: Map<string, { regionId: string; poi: World["regions"][number]["pois"][number] }>;
 }
@@ -28,17 +28,6 @@ function byId<T extends { id: string }>(list: readonly T[]): Map<string, T> {
 }
 
 export function indexWorld(world: World): WorldIndex {
-  const beatOrder: BeatRef[] = [];
-  const acts = [...world.acts].sort((a, b) => a.number - b.number);
-  for (const act of acts) {
-    const chapters = [...act.chapters].sort((a, b) => a.number - b.number);
-    for (const chapter of chapters) {
-      for (const beat of chapter.beats) {
-        beatOrder.push({ act, chapter, beat, order: beatOrder.length });
-      }
-    }
-  }
-
   const items: WorldIndex["items"] = new Map();
   for (const x of world.items.weapons) items.set(x.id, { ...x, kind: "weapon" });
   for (const x of world.items.armor) items.set(x.id, { ...x, kind: "armor" });
@@ -63,8 +52,8 @@ export function indexWorld(world: World): WorldIndex {
     detours: byId(world.detours),
     archetypes: byId(world.npcs.archetypes),
     namedNpcs: byId(world.npcs.named),
-    beats: new Map(beatOrder.map((b) => [b.beat.id, b])),
-    beatOrder,
+    seeds: byId(world.seeds),
+    situations: byId(world.situations),
     items,
     pois,
   };

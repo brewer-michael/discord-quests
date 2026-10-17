@@ -1,0 +1,8 @@
+# Set pieces in mistfen. The storyteller may use them when they fit, in any order.
+- id: lost-in-mistfen
+  title: Lost in Mistfen
+  kind: travel
+  region: mistfen
+  summary: The mist swallows the path. Friendly wisps might help, if anyone can make them laugh.
+  question: Can the heroes find the way through the fen?
+  sockets: [hidden_way, knowledge_given]

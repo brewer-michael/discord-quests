@@ -79,12 +79,12 @@ export interface Thread {
   plantedTurn: number;
   ripenSpan: number;
   state: ThreadState;
-  /** Kept for the final decisive moment. */
-  reservedForBeat?: string;
+  /** Kept for this decisive moment (the finale). */
+  reservedFor?: string;
   summary: string;
   wovenTurn?: number;
   wovenAs?: {
-    beatId: string;
+    momentId: string;
     socket: SocketType | "minor_grace" | "detour";
     payoffSummary: string;
     lead?: boolean;
@@ -94,7 +94,7 @@ export interface Thread {
 export type DueRule =
   | { kind: "crux" }
   | { kind: "anchor_reappears" }
-  | { kind: "after_beats"; beats: number }
+  | { kind: "after_scenes"; scenes: number }
   | { kind: "chapter_end" };
 
 export type SnareState = "latent" | "due" | "sprung" | "unknotted";
@@ -126,13 +126,14 @@ export interface DetourPlan {
   id: string;
   templateId: string;
   state: DetourState;
-  target: { beatId: string; socket: SocketType };
+  target: { momentId: string; socket: SocketType };
   introduced: { kind: "npc" | "place" | "item"; name: string; archetype?: string; tags: string[] };
   plantedTurn: number;
   plantedProgress: number;
   plantedChapter: number;
   earliestPayoffProgress: number;
-  deadlineChapter: number;
+  /** Past this story progress without its moment coming, it finds another purpose. */
+  deadlineProgress: number;
   payoffTurn?: number;
 }
 
@@ -214,7 +215,8 @@ export interface SceneEntity {
 export interface SceneFacts {
   id: string;
   kind: SceneKind;
-  beatId: string | null;
+  /** The decisive moment being played, if this is one. */
+  momentId: string | null;
   regionId: string;
   terrain: string[];
   entities: SceneEntity[];
@@ -228,8 +230,8 @@ export interface StoryView {
   turn: number;
   progress: number;
   chapterNumber: number;
-  actNumber: number;
-  completedBeats: string[];
+  /** Decisive moments already played. */
+  doneMoments: string[];
   /** The scene changed this turn (for detours and glimpses). */
   sceneChanged: boolean;
   /** A chapter finished this turn. */
@@ -237,7 +239,7 @@ export interface StoryView {
 }
 
 export type CheckFacts =
-  | { kind: "crux"; beatId: string; success: boolean; margin: number; pSuccess: number }
+  | { kind: "crux"; momentId: string; success: boolean; margin: number; pSuccess: number }
   | { kind: "failure"; stakes: "low" | "moderate" | "high"; margin: number; characterIds: string[] };
 
 export interface LoomInput {
@@ -281,8 +283,8 @@ export type NarrativeDirective =
 /** What the story director must respect. Reasons are never included. */
 export type DirectorConstraint =
   | { kind: "keep_alive"; npcId: string }
-  | { kind: "schedule_presence"; npcId: string; nearBeatId: string; mode: BearerPresence }
-  | { kind: "need_socket"; beatId: string; socket: SocketType; detourId: string }
+  | { kind: "schedule_presence"; npcId: string; nearMomentId: string; mode: BearerPresence }
+  | { kind: "need_socket"; momentId: string; socket: SocketType; detourId: string }
   | { kind: "snare_hook"; anchor: AnchorRef | null; effect: SnareEffect }
   | { kind: "tempt"; intensity: 1 | 2 };
 
@@ -297,7 +299,7 @@ export type RuleEffect =
 export type CruxOutcome = "success" | "success_by_convergence" | "costly_success" | "fail_forward";
 
 export interface CruxResolution {
-  beatId: string;
+  momentId: string;
   outcome: CruxOutcome;
   available: number;
   required: number;

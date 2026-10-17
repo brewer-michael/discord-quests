@@ -51,13 +51,13 @@ export function compileEpilogue(state: LoomState, world: World, style: EpilogueS
   const byMoment = new Map<string, Thread>();
   for (const t of state.threads) {
     if (t.state !== "woven" || !t.wovenAs || t.wovenAs.socket === "detour") continue;
-    const current = byMoment.get(t.wovenAs.beatId);
+    const current = byMoment.get(t.wovenAs.momentId);
     if (
       !current ||
       (t.wovenAs.lead && !current.wovenAs?.lead) ||
       (!current.wovenAs?.lead && t.weight > current.weight)
     ) {
-      byMoment.set(t.wovenAs.beatId, t);
+      byMoment.set(t.wovenAs.momentId, t);
     }
   }
   const moments = [...byMoment.values()]

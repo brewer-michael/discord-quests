@@ -1,6 +1,5 @@
 import type { Rng } from "../rng/index";
-import { nextCrux } from "../story/progress";
-import type { LoomContext } from "./context";
+import { type LoomContext, nextMoment } from "./context";
 import { isLive, scoreThreads } from "./threads";
 import type {
   Bearer,
@@ -66,37 +65,31 @@ export function bearerOutputs(
 ): { constraints: DirectorConstraint[]; directives: NarrativeDirective[] } {
   const constraints: DirectorConstraint[] = [];
   const directives: NarrativeDirective[] = [];
-  const crux = nextCrux(ctx.index, input.story.completedBeats);
+  const next = nextMoment(ctx, input.story.doneMoments);
 
-  // Who could matter at the next crux? Schedule them to be nearby.
+  // Who could matter at the next decisive moment? Schedule them to be nearby.
   const candidates = new Set<string>();
-  if (crux?.beat.crux) {
-    const live = state.threads.filter(
-      (t) => isLive(t) && (!t.reservedForBeat || t.reservedForBeat === crux.beat.id),
-    );
-    for (const s of scoreThreads(
-      live,
-      crux.beat.crux.sockets,
-      input.story.progress + 4,
-      null,
-      state,
-      ctx,
-    ).slice(0, 3)) {
+  if (next) {
+    const live = state.threads.filter((t) => isLive(t) && (!t.reservedFor || t.reservedFor === next.id));
+    for (const s of scoreThreads(live, next.sockets, input.story.progress + 4, null, state, ctx).slice(
+      0,
+      3,
+    )) {
       if (s.thread.anchor?.kind === "npc") candidates.add(s.thread.anchor.id);
     }
   }
   for (const t of state.threads) {
-    if (isLive(t) && t.reservedForBeat && t.anchor?.kind === "npc") candidates.add(t.anchor.id);
+    if (isLive(t) && t.reservedFor && t.anchor?.kind === "npc") candidates.add(t.anchor.id);
   }
 
   for (const b of state.bearers) {
     if (!b.mustSurvive) continue;
     constraints.push({ kind: "keep_alive", npcId: b.npcId });
-    if (candidates.has(b.npcId) && crux) {
+    if (candidates.has(b.npcId) && next) {
       constraints.push({
         kind: "schedule_presence",
         npcId: b.npcId,
-        nearBeatId: crux.beat.id,
+        nearMomentId: next.id,
         mode: b.presence,
       });
     }
@@ -126,12 +119,12 @@ export function bearerOutputs(
   return { constraints, directives };
 }
 
-/** NPCs who should be quietly present in a crux scene so a payoff can be plausible. */
-export function bearersForScene(state: LoomState, beatId: string): string[] {
+/** People who should be quietly present at a decisive moment so a payoff can be plausible. */
+export function bearersForScene(state: LoomState, momentId: string): string[] {
   const ids = new Set<string>();
   for (const t of state.threads) {
     if (!isLive(t) || t.anchor?.kind !== "npc") continue;
-    if (!t.reservedForBeat || t.reservedForBeat === beatId) ids.add(t.anchor.id);
+    if (!t.reservedFor || t.reservedFor === momentId) ids.add(t.anchor.id);
   }
   return [...ids].filter((id) => state.bearers.some((b) => b.npcId === id && b.mustSurvive));
 }

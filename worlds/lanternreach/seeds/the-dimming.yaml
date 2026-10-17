@@ -1,0 +1,248 @@
+id: the-dimming
+title: The Dimming
+pitch: >-
+  The Gloam King has stolen the Ember from the First Forge, and one by one the lanterns of Lanternreach are going
+  out. Where the light fails, the Gloam Host creeps in. Somebody has to carry flame where it's needed, find out
+  where the Ember went, and bring it home.
+startRegions: [hearthmoor, whisperwood, reedmarsh]
+openings:
+  - >-
+    On Festival Eve, with all of Hearthmoor crowded into Lantern Square, the great lantern sputters and goes out.
+    Something laughs in the dark, and sooty footprints lead away toward the Lamp-House.
+  - >-
+    A Lamplighter staggers out of the Whisperwood at dusk with an empty lantern and a torn grey cloak, gasping that
+    the flame-carts never reached the villages, and that the dark has teeth this year.
+  - >-
+    In the Reedmarsh, the River Folk wake to find every lamp on every houseboat snuffed in the night, and a ring of
+    frost on the water around Lantern Hall's tall legs.
+stakes: >-
+  If the Ember isn't brought back to the First Forge, every lantern in Lanternreach will go dark, and the Gloam
+  Host will walk wherever it pleases.
+fronts:
+  - id: the-long-night
+    name: The Long Night
+    faction: gloam-host
+    central: true
+    goal: Put out every lantern in Lanternreach and keep the Ember locked in Gloamhold forever.
+    portents:
+      - Village lanterns gutter and go out, one after another, and nobody can relight them for long.
+      - Gloom mites and skulkers creep into gardens and lanes after dark, pinching out candles.
+      - Shadow wolves hunt the roads at night, and travelers stop travelling.
+      - The Gloam Host lays siege to Lantern Hall, the Lamplighters' last great store of flame.
+      - Night stretches longer each day. The sun rises late and pale over the whole land.
+      - The Ember, kept too long by cold hands, begins to go out.
+    doom: >-
+      The Long Night covers all of Lanternreach. The last lanterns gutter out, and the Gloam King sits in the dark with a
+      cold coal that will never warm him.
+  - id: the-oil-squeeze
+    name: The Oil Squeeze
+    faction: gilded-ledger
+    goal: Own every drop of lantern oil while the lanterns are failing, and sell light by the hour.
+    portents:
+      - Ledger agents buy up the oil in every market they reach, paying well above the price.
+      - Oil prices double, then double again. Poorer villages go without.
+      - The Ledger sells "safe-lamps" by the night to frightened villages, on credit.
+      - "Villages that can't pay are given a choice: sign their lantern-posts over to the Ledger, or go dark."
+    doom: The Ledger owns the oil, the lamps and the lantern-posts. Light belongs to whoever can pay for it.
+cast: [snibbet, mayor-hobb, hattie-wick, amberly-quill, granny-reed, tumble, saffron-the-fox, silas-coin, bram-tallow, the-gloam-king]
+mysteries:
+  - id: the-missing-coal
+    question: Who stole the flame-coal, and why?
+    truth: >-
+      Snibbet, a starving lantern-thief who was once an apprentice Lamplighter named Pip, took the coal to keep
+      warm. He didn't put the lantern out: the Gloam did, the moment the coal was gone. He has been followed by
+      cold eyes ever since.
+    clues:
+      - Sooty footprints from the square lead straight to the Lamp-House, small and bare.
+      - The thief knows the old mill tunnels under the Lamp-House better than anyone alive.
+      - Hattie Wick remembers an apprentice called Pip who vanished years ago, after a winter of hunger.
+      - Snibbet's hands are scarred the way an apprentice's are, from trimming wicks too hot.
+  - id: where-the-ember-went
+    question: What has happened to the Ember?
+    truth: >-
+      The Gloam King stole the Ember from the First Forge and keeps it in a lantern-shaped vault deep in Gloamhold.
+      The Lamp-Key that opens the vault was forged long ago by the Burrowkin of Copperpeak.
+    clues:
+      - The Lamplighters' last carts came back with frost on their wheels and no flame in their lanterns.
+      - Captured gloom mites flee toward the east, toward the Glass Dunes and Gloamhold beyond.
+      - Amberly Quill's records show the Ember's light failed on the same night the Gloam Host first marched.
+      - The Burrowkin of Copperpeak tell of a key they forged with a lantern for a bow, long before Gloamhold went dark.
+  - id: how-it-goes-home
+    question: How can the Ember be given back?
+    truth: >-
+      The First Forge only takes the Ember back from a hand that freely lets it go. Whoever carries it will feel it
+      grow heavy and hear it whisper that it wants to stay.
+    clues:
+      - The oldest Lamplighter songs say the Ember "would rather be shared than kept."
+      - A Warden's journal tells of a carrier who couldn't let go, and the cold that took his hands.
+      - Snibbet, who held the flame-coal, says it whispered to him, and that it was hard to put down.
+moments:
+  - id: siege-of-lantern-hall
+    title: The Siege of Lantern Hall
+    front: the-long-night
+    when: The Gloam Host comes for the Lamplighters' last store of flame, and the heroes are there to stand with them.
+    region: reedmarsh
+    poi: lantern-hall
+    summary: >-
+      When night falls, the Gloam Host comes in wave after wave of shadows, trying to pinch out the Hall's very last
+      lantern. If it goes out, the Guild's flame is lost.
+    question: Can the heroes hold the Hall until dawn?
+    crux:
+      type: hold_the_line
+      check:
+        ability: con
+        label: Hold Fast
+        dc: { base: 14, perPortent: 1, perSnareSeverity: 1, max: 30 }
+      sockets:
+        - type: ally_arrives
+          accepts: [kindness_to_lowly, promise_kept]
+          faction: river-folk
+          hint: River Folk boats glide out of the dark, every one hung with a lantern.
+        - type: hidden_way
+          accepts: [patience, honesty_at_cost, kindness_to_lowly]
+          hint: The Old Sluice under the Hall lets someone bring fresh oil up from the flooded cellar.
+        - type: spared_one_acts
+          accepts: [mercy]
+          anchorTag: covets-ember
+          hint: "{{agent}} relights the lantern from a spark they had been hiding for themselves."
+      requiredGrace: 0.9
+      onSuccess: The heroes hold the Hall. At dawn the shadows melt away, and the last lantern is still burning.
+      onCostlySuccess: >-
+        The lantern survives, but only just. The Hall's great oil-store is spilled into the marsh, and the
+        Lamplighters will have very little flame to spare.
+      onFailForward: >-
+        At the darkest hour the last lantern goes out. But the heroes kept the shadows from the Lamplighters
+        themselves, and at dawn Amberly gives them the Guild's final candle-stub. It is a weak light to travel by, but
+        it is light.
+  - id: race-to-the-waystone
+    title: The Race to the Waystone
+    front: the-long-night
+    when: The Long Night rolls across the Old Road and the heroes are close enough to the Great Waystone to light its signal fire first.
+    region: old-road-ruins
+    poi: the-great-waystone
+    summary: >-
+      The Long Night is rolling across the ruins like a tide. The heroes must reach the Great Waystone and light its
+      signal fire before the dark gets there first.
+    question: Can the heroes light the Waystone before the dark reaches it?
+    crux:
+      type: race_against_clock
+      check:
+        ability: con
+        skill: athletics
+        label: Race the Dark
+        dc: { base: 16, perPortent: 1, perSnareSeverity: 1, max: 30 }
+      sockets:
+        - type: trusted_at_need
+          accepts: [honesty_at_cost, promise_kept, amends]
+          faction: wardens-of-the-old-road
+          hint: The Wardens light fires all along the road ahead of them, so they never lose the way.
+        - type: hidden_way
+          accepts: [patience, kindness_to_lowly]
+          hint: A shepherd's track cuts through the hills, straight to the Waystone.
+        - type: spared_one_acts
+          accepts: [mercy]
+          anchorTag: covets-ember
+          hint: "{{agent}} scurries out of the ruins and shows them a thieves' shortcut they swore they'd never share."
+      requiredGrace: 1.2
+      onSuccess: The signal fire roars up, and one by one, Warden fires answer all along the road.
+      onCostlySuccess: The fire is lit, but the heroes are scattered and their supplies are lost in the dark.
+      onFailForward: >-
+        The Long Night reaches the Waystone first. The heroes must go on in the dark, and the Gloam Host knows they are
+        coming.
+  - id: the-ember-vault
+    title: The Ember Vault
+    front: the-long-night
+    when: The heroes have found their way into Gloamhold and know where the Ember is kept.
+    region: gloamhold
+    poi: ember-vault
+    summary: >-
+      The Ember sits in a round vault deep in Gloamhold, and every Gloam Knight in the fortress is marching toward
+      it. The heroes must take the Ember and get out.
+    question: Can the heroes take back the Ember and escape the vault?
+    crux:
+      type: overwhelming_odds
+      check:
+        ability: dex
+        skill: stealth
+        label: Slip Away
+        dc: { base: 17, perPortent: 1, perSnareSeverity: 1, max: 30 }
+      sockets:
+        - type: enemy_blunder
+          accepts: [patience, honesty_at_cost]
+          faction: gloam-host
+          hint: Two Gloam Knights start arguing about who is in charge, and the vault doors are left wide open.
+        - type: knowledge_given
+          accepts: [kindness_to_lowly, promise_kept]
+          hint: A kitchen helper the heroes were kind to shows them the cold kitchens' back door.
+        - type: object_reveals
+          accepts: [keepsake_kept]
+          hint: An old keepsake from home turns out to fit a forgotten keyhole in the vault wall.
+      requiredGrace: 1.4
+      onSuccess: The heroes slip out of Gloamhold with the Ember glowing in their lantern.
+      onCostlySuccess: They escape with the Ember, but the Gloam King himself saw them, and he is following.
+      onFailForward: They get the Ember out, but the whole Gloam Host is right behind them, and the Gloam King leads it.
+  - id: the-last-step
+    title: The Last Step
+    front: the-long-night
+    when: The heroes carry the Ember to the First Forge at the top of Mount Cinder.
+    region: mount-cinder
+    poi: first-forge
+    summary: >-
+      At the First Forge, all that is left is to let the Ember go. But the Ember is warm and lovely, and letting go is
+      the hardest thing in the world.
+    question: Can the Ember be let go?
+    finale: true
+    crux:
+      type: last_step
+      check:
+        ability: wis
+        label: Let Go
+        dc: { base: 22, perPortent: 1, perSnareSeverity: 1, max: 32 }
+      sockets:
+        - type: spared_one_acts
+          accepts: [mercy, kindness_to_lowly]
+          anchorTag: covets-ember
+          hint: >-
+            {{agent}} lunges for the Ember, slips at the forge's edge, and the Ember tumbles into
+            the fire. They are pulled back to safety, warm for the first time in years.
+        - type: enemy_blunder
+          accepts: [patience, honesty_at_cost]
+          faction: gloam-host
+          hint: >-
+            The Gloam King grabs for the Ember himself, and its warmth is too much for his cold hands. He lets go, and
+            it falls into the forge.
+        - type: object_reveals
+          accepts: [keepsake_kept]
+          hint: A keepsake from home reminds the hero why they came, and their hand opens.
+      requiredGrace: 1.6
+      onSuccess: >-
+        With an aching heart and a brave one, the hero opens their hand. The Ember falls into the First Forge, and
+        light roars up the mountain and out across all of Lanternreach.
+      onCostlySuccess: >-
+        The Ember falls into the forge and the light returns, but something precious is lost in the flames, and the
+        road home will be quieter for it.
+      onFailForward: >-
+        The Ember will not be let go of, and the Gloam King carries it back into the dark. But the heroes still carry
+        small lights, and Lanternreach will learn to keep them burning together.
+situations:
+  - the-last-flame
+  - the-thief-in-the-lamp-house
+  - hatties-request
+  - gloam-in-the-garden
+  - the-fork-in-the-road
+  - the-lost-river-child
+  - the-hollow-oak
+  - shadow-wolves
+  - the-toll-bridge
+  - lantern-hall
+  - the-road-ahead
+  - bellhollow
+  - the-tinkers-gate
+  - the-dark-lighthouse
+  - lost-in-mistfen
+  - wardens-watch
+  - raid-on-the-watch
+  - the-singing-dunes
+  - the-cold-kitchens
+  - the-knights-patrol
+  - the-thousand-steps

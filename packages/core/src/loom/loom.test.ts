@@ -1,19 +1,27 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { createRng } from "../rng/index";
-import { loomContext } from "./context";
 import { costFactor } from "./deeds";
 import { evaluateLoom } from "./engine";
 import { compileEpilogue } from "./epilogue";
-import { deed, entity, inputAt, SNIBBET, starterIndex, TUMBLE } from "./test-helpers";
+import {
+  DIMMING_TIMELINE,
+  deed,
+  entity,
+  inputAt,
+  SNIBBET,
+  starterContext,
+  starterIndex,
+  TUMBLE,
+} from "./test-helpers";
 import { emptyLoomState, type LoomInput, type LoomState } from "./types";
 
 const index = starterIndex();
-const ctx = loomContext(index);
+const ctx = starterContext(index);
 const rng = (k = "seed") => createRng(k);
 
 function spareSnibbet(state = emptyLoomState()): LoomState {
-  const input = inputAt(index, "ch1-the-thief-in-the-lamp-house", {
+  const input = inputAt(index, "the-thief-in-the-lamp-house", {
     scene: { entities: [entity(SNIBBET, "at_mercy", true)] },
     deedCandidates: [
       deed("mercy", SNIBBET, {
@@ -27,16 +35,16 @@ function spareSnibbet(state = emptyLoomState()): LoomState {
 
 function crux(
   state: LoomState,
-  beatId: string,
+  momentId: string,
   success: boolean,
   margin = -4,
   extra: Partial<LoomInput> = {},
 ) {
-  const input = inputAt(index, beatId, {
-    check: { kind: "crux", beatId, success, margin, pSuccess: 0.1 },
+  const input = inputAt(index, momentId, {
+    check: { kind: "crux", momentId, success, margin, pSuccess: 0.1 },
     ...extra,
   });
-  return evaluateLoom(state, input, ctx, rng(`crux-${beatId}`));
+  return evaluateLoom(state, input, ctx, rng(`crux-${momentId}`));
 }
 
 describe("deeds and threads", () => {
@@ -45,14 +53,14 @@ describe("deeds and threads", () => {
     expect(state.threads).toHaveLength(1);
     const t = state.threads[0];
     expect(t?.tag).toBe("mercy");
-    expect(t?.reservedForBeat).toBe("ch8-the-last-step");
+    expect(t?.reservedFor).toBe("the-last-step");
     expect(state.bearers[0]).toMatchObject({ npcId: "snibbet", presence: "shadowing", mustSurvive: true });
     expect(state.ledgers["hero-a"]?.grace).toBeGreaterThan(0);
   });
 
   it("mercy needs someone actually at the heroes' mercy", () => {
     const silas = { kind: "npc" as const, id: "silas-coin", name: "Silas Coin", faction: "gilded-ledger" };
-    const input = inputAt(index, "ch3-the-toll-bridge", {
+    const input = inputAt(index, "the-toll-bridge", {
       scene: { entities: [entity(silas, "neutral", false)] },
       deedCandidates: [deed("mercy", silas)],
     });
@@ -62,7 +70,7 @@ describe("deeds and threads", () => {
   });
 
   it("'mercy' toward someone lowly who wasn't at the heroes' mercy counts as kindness instead", () => {
-    const input = inputAt(index, "ch1-hatties-request", {
+    const input = inputAt(index, "hatties-request", {
       scene: { entities: [entity(SNIBBET, "neutral", true)] },
       deedCandidates: [deed("mercy", SNIBBET)],
     });
@@ -70,11 +78,11 @@ describe("deeds and threads", () => {
   });
 
   it("patience only counts when a shortcut was on offer", () => {
-    const offered = inputAt(index, "ch2-the-fork-in-the-road", {
+    const offered = inputAt(index, "the-fork-in-the-road", {
       deedCandidates: [deed("patience", null, { evidence: { shortcutDeclined: "fox-door" } })],
     });
     expect(evaluateLoom(emptyLoomState(), offered, ctx, rng()).state.threads).toHaveLength(1);
-    const nothing = inputAt(index, "ch1-the-last-flame", { deedCandidates: [deed("patience", null)] });
+    const nothing = inputAt(index, "the-last-flame", { deedCandidates: [deed("patience", null)] });
     expect(evaluateLoom(emptyLoomState(), nothing, ctx, rng()).state.threads).toHaveLength(0);
   });
 
@@ -82,7 +90,7 @@ describe("deeds and threads", () => {
     const scene = { entities: [entity(TUMBLE, "neutral", true)] };
     const chosen = evaluateLoom(
       emptyLoomState(),
-      inputAt(index, "ch2-the-lost-river-child", {
+      inputAt(index, "the-lost-river-child", {
         scene,
         deedCandidates: [deed("kindness_to_lowly", TUMBLE)],
       }),
@@ -91,7 +99,7 @@ describe("deeds and threads", () => {
     );
     const narrated = evaluateLoom(
       emptyLoomState(),
-      inputAt(index, "ch2-the-lost-river-child", {
+      inputAt(index, "the-lost-river-child", {
         scene,
         deedCandidates: [deed("kindness_to_lowly", TUMBLE, { source: "narrator" })],
       }),
@@ -113,7 +121,7 @@ describe("deeds and threads", () => {
     let state = emptyLoomState();
     const weights: number[] = [];
     for (let i = 0; i < 3; i++) {
-      const input = inputAt(index, "ch2-the-lost-river-child", {
+      const input = inputAt(index, "the-lost-river-child", {
         turn: 10 + i,
         scene: { id: `s${i}`, entities: [entity(TUMBLE, "neutral", true)] },
         deedCandidates: [deed("kindness_to_lowly", TUMBLE)],
@@ -127,7 +135,7 @@ describe("deeds and threads", () => {
 
   it("exploiting someone right after sparing them makes the mercy ring hollow", () => {
     let state = spareSnibbet();
-    const input = inputAt(index, "ch1-hatties-request", {
+    const input = inputAt(index, "hatties-request", {
       scene: { entities: [entity(SNIBBET, "neutral", true)] },
       deedCandidates: [deed("steal", SNIBBET, { confidence: 0.9 })],
     });
@@ -139,7 +147,7 @@ describe("deeds and threads", () => {
 
 describe("snares", () => {
   it("taking the Fox Door ties a snare that withholds a payoff at the crux", () => {
-    const input = inputAt(index, "ch2-the-fork-in-the-road", {
+    const input = inputAt(index, "the-fork-in-the-road", {
       deedCandidates: [
         deed(
           "fox_bargain",
@@ -157,16 +165,16 @@ describe("snares", () => {
     expect(state.ledgers["hero-a"]?.debt).toBe(2);
   });
 
-  it("borrowed luck is recalled a few beats later as disadvantage", () => {
+  it("borrowed luck is recalled a few scenes later as disadvantage", () => {
     let state = evaluateLoom(
       emptyLoomState(),
-      inputAt(index, "ch2-the-fork-in-the-road", {
+      inputAt(index, "the-fork-in-the-road", {
         deedCandidates: [deed("fox_bargain", null, { shortcutId: "borrowed-luck" })],
       }),
       ctx,
       rng(),
     ).state;
-    const later = evaluateLoom(state, inputAt(index, "ch3-lantern-hall"), ctx, rng());
+    const later = evaluateLoom(state, inputAt(index, "lantern-hall"), ctx, rng());
     state = later.state;
     expect(later.effects).toContainEqual({ kind: "disadvantage_next_roll", characterIds: ["hero-a"] });
     expect(state.snares[0]?.state).toBe("sprung");
@@ -182,7 +190,7 @@ describe("snares", () => {
     };
     let state = evaluateLoom(
       emptyLoomState(),
-      inputAt(index, "ch2-the-fork-in-the-road", {
+      inputAt(index, "the-fork-in-the-road", {
         deedCandidates: [deed("fox_bargain", fox, { shortcutId: "fox-door" })],
       }),
       ctx,
@@ -190,7 +198,7 @@ describe("snares", () => {
     ).state;
     state = evaluateLoom(
       state,
-      inputAt(index, "ch2-the-hollow-oak", {
+      inputAt(index, "the-hollow-oak", {
         scene: { entities: [entity(fox)] },
         deedCandidates: [deed("amends", fox)],
       }),
@@ -205,13 +213,13 @@ describe("snares", () => {
 describe("convergence at decisive moments", () => {
   it("a crux the heroes win on their own spends nothing", () => {
     const state = spareSnibbet();
-    const out = crux(state, "ch3-the-siege-of-lantern-hall", true);
+    const out = crux(state, "siege-of-lantern-hall", true);
     expect(out.crux?.outcome).toBe("success");
     expect(out.state.threads.every((t) => t.state !== "woven")).toBe(true);
   });
 
   it("with no threads, a failed crux fails forward and the story goes on", () => {
-    const out = crux(emptyLoomState(), "ch3-the-siege-of-lantern-hall", false);
+    const out = crux(emptyLoomState(), "siege-of-lantern-hall", false);
     expect(out.crux?.outcome).toBe("fail_forward");
     expect(out.directives[0]?.kind).toBe("fail_forward");
   });
@@ -220,7 +228,7 @@ describe("convergence at decisive moments", () => {
     let state = emptyLoomState();
     state = evaluateLoom(
       state,
-      inputAt(index, "ch2-the-lost-river-child", {
+      inputAt(index, "the-lost-river-child", {
         scene: { entities: [entity(TUMBLE, "neutral", true)] },
         deedCandidates: [
           deed("kindness_to_lowly", TUMBLE, {
@@ -235,7 +243,7 @@ describe("convergence at decisive moments", () => {
     ).state;
     state = evaluateLoom(
       state,
-      inputAt(index, "ch2-the-lost-river-child", {
+      inputAt(index, "the-lost-river-child", {
         turn: 30,
         scene: { id: "s2", entities: [entity(TUMBLE, "neutral", true)] },
         deedCandidates: [deed("promise_kept", TUMBLE, { evidence: { daysLost: 1 } })],
@@ -244,7 +252,7 @@ describe("convergence at decisive moments", () => {
       ctx,
       rng(),
     ).state;
-    const out = crux(state, "ch3-the-siege-of-lantern-hall", false, -3);
+    const out = crux(state, "siege-of-lantern-hall", false, -3);
     expect(["success_by_convergence", "costly_success"]).toContain(out.crux?.outcome);
     const d = out.directives.find((x) => x.kind === "convergence");
     expect(d && d.kind === "convergence" && d.socket).toBe("ally_arrives");
@@ -254,19 +262,19 @@ describe("convergence at decisive moments", () => {
 
   it("Snibbet's mercy is never spent before the final crux", () => {
     const state = spareSnibbet();
-    const out = crux(state, "ch3-the-siege-of-lantern-hall", false);
+    const out = crux(state, "siege-of-lantern-hall", false);
     expect(out.state.threads.find((t) => t.anchor?.id === "snibbet")?.state).not.toBe("woven");
   });
 
   it("mercy toward Snibbet alone is enough to carry the Last Step, at a cost", () => {
-    const out = crux(spareSnibbet(), "ch8-the-last-step", false, -6, {
+    const out = crux(spareSnibbet(), "the-last-step", false, -6, {
       scene: { entities: [entity(SNIBBET, "neutral", true)] },
     } as Partial<LoomInput>);
     expect(["costly_success", "success_by_convergence"]).toContain(out.crux?.outcome);
   });
 
   it("at the Last Step, the spared one finishes what the hero could not", () => {
-    const patient = inputAt(index, "ch2-the-fork-in-the-road", {
+    const patient = inputAt(index, "the-fork-in-the-road", {
       deedCandidates: [
         deed("patience", null, {
           evidence: { shortcutDeclined: "fox-door", daysLost: 3 },
@@ -275,7 +283,7 @@ describe("convergence at decisive moments", () => {
       ],
     });
     const state = evaluateLoom(spareSnibbet(), patient, ctx, rng()).state;
-    const out = crux(state, "ch8-the-last-step", false, -6, {
+    const out = crux(state, "the-last-step", false, -6, {
       scene: { entities: [entity(SNIBBET, "neutral", true)] },
     } as Partial<LoomInput>);
     expect(out.crux?.outcome).toBe("success_by_convergence");
@@ -292,13 +300,13 @@ describe("convergence at decisive moments", () => {
   it("a traded keepsake closes the keepsake payoff at the crux", () => {
     let state = evaluateLoom(
       emptyLoomState(),
-      inputAt(index, "ch2-the-fork-in-the-road", {
+      inputAt(index, "the-fork-in-the-road", {
         deedCandidates: [deed("fox_bargain", null, { shortcutId: "fox-door" })],
       }),
       ctx,
       rng(),
     ).state;
-    const out = crux(state, "ch7-the-ember-vault", false);
+    const out = crux(state, "the-ember-vault", false);
     state = out.state;
     expect(out.crux?.withheldSockets).toContain("object_reveals");
     expect(state.snares[0]?.state).toBe("sprung");
@@ -306,9 +314,9 @@ describe("convergence at decisive moments", () => {
 });
 
 describe("quiet-hand detours", () => {
-  it("plants a detour with a registered purpose, then pays it off at the target beat", () => {
-    const always = loomContext(index, { detourChance: 1 });
-    const input = inputAt(index, "ch2-the-fork-in-the-road", { scene: { kind: "travel" } });
+  it("plants a detour with a registered purpose, then pays it off at the decisive moment it was planted for", () => {
+    const always = starterContext(index, { detourChance: 1 });
+    const input = inputAt(index, "the-fork-in-the-road", { scene: { kind: "travel" } });
     const planted = evaluateLoom(emptyLoomState(), input, always, rng());
     expect(planted.state.detours).toHaveLength(1);
     const plan = planted.state.detours[0];
@@ -317,7 +325,7 @@ describe("quiet-hand detours", () => {
     if (!plan) return;
     const payoff = evaluateLoom(
       planted.state,
-      inputAt(index, plan.target.beatId, { turn: 200 }),
+      inputAt(index, plan.target.momentId, { turn: 200 }),
       always,
       rng(),
     );
@@ -327,17 +335,16 @@ describe("quiet-hand detours", () => {
   });
 
   it("never plants detours in combat or crux scenes", () => {
-    const always = loomContext(index, { detourChance: 1 });
-    for (const beatId of ["ch1-gloam-in-the-garden", "ch3-the-siege-of-lantern-hall"]) {
-      expect(
-        evaluateLoom(emptyLoomState(), inputAt(index, beatId), always, rng()).state.detours,
-      ).toHaveLength(0);
+    const always = starterContext(index, { detourChance: 1 });
+    for (const id of ["gloam-in-the-garden", "siege-of-lantern-hall"]) {
+      expect(evaluateLoom(emptyLoomState(), inputAt(index, id), always, rng()).state.detours).toHaveLength(0);
     }
   });
 });
 
 describe("guarantees", () => {
-  const beats = index.beatOrder.map((b) => b.beat.id);
+  const beats = DIMMING_TIMELINE.map((b) => b.id);
+  const moments = new Set(index.seeds.get("the-dimming")?.moments.map((m) => m.id));
   const tags = [
     "mercy",
     "kindness_to_lowly",
@@ -363,7 +370,6 @@ describe("guarantees", () => {
     let turn = 1;
     for (const s of steps) {
       turn += 1;
-      const ref = index.beats.get(s.beat);
       const anchor = s.snibbet ? SNIBBET : TUMBLE;
       const input = inputAt(index, s.beat, {
         turn,
@@ -378,8 +384,8 @@ describe("guarantees", () => {
           }),
         ],
         promisesKept: s.tag === "promise_kept" ? [anchor.id] : [],
-        check: ref?.beat.decisive
-          ? { kind: "crux", beatId: s.beat, success: !s.fail, margin: -3, pSuccess: 0.2 }
+        check: moments.has(s.beat)
+          ? { kind: "crux", momentId: s.beat, success: !s.fail, margin: -3, pSuccess: 0.2 }
           : s.fail
             ? { kind: "failure", stakes: "moderate", margin: -2, characterIds: ["hero-a"] }
             : null,
@@ -409,8 +415,8 @@ describe("guarantees", () => {
   it("never weaves a thread twice, never exceeds the providence budget outside cruxes, and keeps bearers alive", () => {
     fc.assert(
       fc.property(fc.string(), fc.array(step, { minLength: 5, maxLength: 40 }), (seed, shuffled) => {
-        // Stories only move forward, so play the beats in story order.
-        const position = new Map(index.beatOrder.map((b, i) => [b.beat.id, i]));
+        // Stories only move forward, so play the steps in story order.
+        const position = new Map(DIMMING_TIMELINE.map((b, i) => [b.id, i]));
         const steps = [...shuffled].sort((a, b) => (position.get(a.beat) ?? 0) - (position.get(b.beat) ?? 0));
         const { state, results } = play(seed, steps);
         const wovenIds = results.flatMap((r) => r.crux?.wovenThreadIds ?? []);
@@ -421,7 +427,7 @@ describe("guarantees", () => {
         }
         const graceChapters = results.flatMap((r, i) =>
           r.directives.some((d) => d.kind === "minor_grace")
-            ? [index.beats.get(steps[i]?.beat ?? "")?.chapter.number]
+            ? [DIMMING_TIMELINE.find((b) => b.id === steps[i]?.beat)?.chapter]
             : [],
         );
         expect(new Set(graceChapters).size).toBe(graceChapters.length);
@@ -453,11 +459,11 @@ describe("guarantees", () => {
 
 describe("epilogue", () => {
   it("hints without numbers or mechanics", () => {
-    const patient = inputAt(index, "ch2-the-fork-in-the-road", {
+    const patient = inputAt(index, "the-fork-in-the-road", {
       deedCandidates: [deed("patience", null, { evidence: { shortcutDeclined: "fox-door", daysLost: 3 } })],
     });
     const state = evaluateLoom(spareSnibbet(), patient, ctx, rng()).state;
-    const out = crux(state, "ch8-the-last-step", false, -6, {
+    const out = crux(state, "the-last-step", false, -6, {
       scene: { entities: [entity(SNIBBET, "neutral", true)] },
     } as Partial<LoomInput>);
     for (const style of ["subtle", "explicit"] as const) {

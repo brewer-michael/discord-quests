@@ -1,0 +1,14 @@
+# Set pieces in mount-cinder. The storyteller may use them when they fit, in any order.
+- id: the-thousand-steps
+  title: The Thousand Steps
+  kind: travel
+  region: mount-cinder
+  poi: cinder-steps
+  summary: The Ember grows heavier with every step, and it whispers that it would be so warm to keep it. The heroes
+    must climb anyway.
+  question: Can the heroes climb the Thousand Steps to the top of Mount Cinder?
+  virtueOpportunities:
+  - tag: self_sacrifice
+    note: Take a turn carrying the heavy Ember so a friend can rest.
+  - tag: patience
+    note: Keep climbing step by step, without looking for a shortcut.

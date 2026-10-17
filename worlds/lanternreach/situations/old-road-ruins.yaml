@@ -1,0 +1,29 @@
+# Set pieces in old-road-ruins. The storyteller may use them when they fit, in any order.
+- id: wardens-watch
+  title: Wardens' Watch
+  kind: social
+  region: old-road-ruins
+  poi: wardens-watch
+  summary: Captain Bram Tallow and the last Wardens hold the watchtower. If the Great Waystone's signal fire is
+    lit, every Warden for a hundred miles will light the road to Gloamhold.
+  question: Will the Wardens trust the heroes?
+  introduces: [bram-tallow]
+  sockets: [trusted_at_need]
+  factions: [wardens-of-the-old-road]
+- id: raid-on-the-watch
+  title: Raid on the Watch
+  kind: combat
+  region: old-road-ruins
+  poi: wardens-watch
+  summary: 'At dusk the Gloam Host comes for the watchtower: skulkers creep up the walls to snuff the torches while
+    a Gloam Knight marches on the gate. The heroes stand with the Wardens to keep the light lit.'
+  question: Can the watchtower's torches be kept burning?
+  virtueOpportunities:
+  - tag: mercy
+    note: A beaten Gloam creature that gives up can be let go instead of being dragged before the Wardens.
+  foes:
+  - creature: gloam-skulker
+    count: [2, 3]
+  - creature: gloam-knight
+    count: [1, 1]
+  factions: [gloam-host, wardens-of-the-old-road]

@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { DeltaProposal } from "../deltas/index";
 import { DEED_TAGS } from "../loom/vocab";
 import { ABILITIES } from "../rules/abilities";
 import { SKILL_IDS } from "../rules/skills";
+import { StoryChange } from "../story/changes";
 
 /**
  * Structured outputs the AI must return. These schemas avoid length and range
@@ -37,12 +37,13 @@ export const ImageBriefSchema = z.object({
 export const NarratorOutput = z.object({
   narration: z.string(),
   npcLines: z.array(z.object({ npcRef: z.string(), line: z.string() })),
-  proposedDeltas: z.array(DeltaProposal),
   choices: z.array(z.object({ label: z.string(), intent: IntentHint })),
-  /** This scene's story is done and the heroes are moving on (see the narrator's rules). */
+  /** This scene's question is answered and the heroes are moving on (see the narrator's rules). */
   sceneOver: z.boolean(),
+  /** What changed this turn, in one sentence, for the story's memory. */
+  happened: z.string(),
+  changes: z.array(StoryChange),
   imageBrief: ImageBriefSchema.nullable(),
-  significance: z.enum(["minor", "notable", "major"]),
 });
 export type NarratorOutput = z.infer<typeof NarratorOutput>;
 
@@ -93,6 +94,7 @@ export type JudgeOutput = z.infer<typeof JudgeOutput>;
 /** Limits checked after parsing. */
 export const NARRATION_LIMITS = {
   narration: 1800,
+  happened: 240,
   npcLine: 300,
   choiceLabel: 80,
   minChoices: 2,

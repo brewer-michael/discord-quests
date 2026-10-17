@@ -1,0 +1,10 @@
+# Set pieces in glass-dunes. The storyteller may use them when they fit, in any order.
+- id: the-singing-dunes
+  title: The Singing Dunes
+  kind: travel
+  region: glass-dunes
+  poi: singing-stones
+  summary: The dunes ring like glass. Somewhere in the music is a warning, for anyone who listens.
+  question: Can the heroes cross the Glass Dunes?
+  sockets: [ambush_avoided]
+  factions: [gloam-host]

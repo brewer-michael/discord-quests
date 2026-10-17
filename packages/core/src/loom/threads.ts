@@ -1,6 +1,5 @@
-import { finalCrux } from "../story/progress";
 import type { CruxSpec } from "../world/schema";
-import { clamp, type LoomContext } from "./context";
+import { clamp, finaleMoment, type LoomContext } from "./context";
 import type { LoomState, SceneFacts, Thread } from "./types";
 
 export function ripeness(t: Thread, progress: number): number {
@@ -89,14 +88,13 @@ export function scoreThreads(
  * (the Gollum socket) out of earlier payoffs, so the climax is never spent early.
  */
 export function reserveForFinale(state: LoomState, ctx: LoomContext): void {
-  const finale = finalCrux(ctx.index);
-  const crux = finale?.beat.crux;
-  if (!finale || !crux) return;
-  for (const socket of crux.sockets) {
+  const finale = finaleMoment(ctx);
+  if (!finale || finale.done) return;
+  for (const socket of finale.sockets) {
     if (!socket.anchorTag) continue;
     const live = state.threads.filter((t) => isLive(t) && socketFit(t, socket, ctx) > 0);
     if (live.length === 0) continue;
-    const already = live.find((t) => t.reservedForBeat === finale.beat.id);
+    const already = live.find((t) => t.reservedFor === finale.id);
     const strongest = [...live].sort(
       (a, b) => b.weight * b.sincerity - a.weight * a.sincerity || a.id.localeCompare(b.id),
     )[0];
@@ -107,11 +105,11 @@ export function reserveForFinale(state: LoomState, ctx: LoomContext): void {
       already.weight * already.sincerity >= strongest.weight * strongest.sincerity
     )
       continue;
-    if (already && already.id !== strongest.id) delete already.reservedForBeat;
-    strongest.reservedForBeat = finale.beat.id;
+    if (already && already.id !== strongest.id) delete already.reservedFor;
+    strongest.reservedFor = finale.id;
   }
 }
 
-export function availableFor(t: Thread, beatId: string): boolean {
-  return isLive(t) && (!t.reservedForBeat || t.reservedForBeat === beatId);
+export function availableFor(t: Thread, momentId: string): boolean {
+  return isLive(t) && (!t.reservedFor || t.reservedFor === momentId);
 }

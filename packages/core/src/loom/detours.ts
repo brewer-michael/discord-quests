@@ -1,7 +1,13 @@
 import type { Rng } from "../rng/index";
-import type { BeatRef, DetourDef } from "../world/index";
-import type { WorldIndex } from "../world/index-world";
-import { type LoomContext, markProvidence, nextId, providenceAllowed } from "./context";
+import type { DetourDef } from "../world/index";
+import {
+  type LoomContext,
+  type LoomMoment,
+  markProvidence,
+  momentById,
+  nextId,
+  providenceAllowed,
+} from "./context";
 import { MUST_NOT_EXPLAIN } from "./tuning";
 import type {
   AuditEntry,
@@ -13,23 +19,18 @@ import type {
 } from "./types";
 import type { SocketType } from "./vocab";
 
-export function beatSockets(ref: BeatRef): SocketType[] {
-  return [...ref.beat.sockets, ...(ref.beat.crux?.sockets.map((s) => s.type) ?? [])];
+export function momentSockets(m: LoomMoment): SocketType[] {
+  return m.sockets.map((s) => s.type);
 }
 
-function placeName(index: WorldIndex, ref: BeatRef): string {
-  if (ref.beat.poi) return index.pois.get(ref.beat.poi)?.poi.name ?? ref.beat.title;
-  return index.regions.get(ref.beat.region)?.name ?? ref.beat.title;
-}
-
-export function renderDetourText(text: string, plan: DetourPlan, index: WorldIndex): string {
-  const target = index.beats.get(plan.target.beatId);
+export function renderDetourText(text: string, plan: DetourPlan, ctx: LoomContext): string {
+  const target = momentById(ctx, plan.target.momentId);
   return capitalize(
     text
       .replaceAll("{{npc}}", plan.introduced.name)
       .replaceAll("{{place}}", plan.introduced.name)
       .replaceAll("{{item}}", plan.introduced.name)
-      .replaceAll("{{target}}", target ? placeName(index, target) : "the place ahead"),
+      .replaceAll("{{target}}", target?.placeName ?? "the place ahead"),
   );
 }
 
@@ -37,29 +38,25 @@ function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-function currentOrder(index: WorldIndex, input: LoomInput): number {
-  if (input.scene.beatId) return index.beats.get(input.scene.beatId)?.order ?? 0;
-  const done = new Set(input.story.completedBeats);
-  return index.beatOrder.find((b) => !done.has(b.beat.id))?.order ?? index.beatOrder.length;
-}
-
+/** Decisive moments ahead that are neither too close nor too far off, with an open socket this detour serves. */
 function candidateTargets(
-  index: WorldIndex,
+  ctx: LoomContext,
   input: LoomInput,
   template: DetourDef,
   state: LoomState,
-): BeatRef[] {
-  const done = new Set(input.story.completedBeats);
-  const from = currentOrder(index, input);
+): LoomMoment[] {
+  const done = new Set(input.story.doneMoments);
+  const from = input.story.progress;
   const taken = new Set(
-    state.detours.filter((d) => d.state === "planted").map((d) => `${d.target.beatId}|${d.target.socket}`),
+    state.detours.filter((d) => d.state === "planted").map((d) => `${d.target.momentId}|${d.target.socket}`),
   );
-  return index.beatOrder.filter(
-    (b) =>
-      !done.has(b.beat.id) &&
-      b.order >= from + 2 &&
-      b.order <= from + 8 &&
-      beatSockets(b).some((s) => template.serves.includes(s) && !taken.has(`${b.beat.id}|${s}`)),
+  return ctx.moments.filter(
+    (m) =>
+      !m.done &&
+      !done.has(m.id) &&
+      m.at >= from + 2 &&
+      m.at <= from + 10 &&
+      momentSockets(m).some((s) => template.serves.includes(s) && !taken.has(`${m.id}|${s}`)),
   );
 }
 
@@ -80,7 +77,7 @@ export function considerDetour(
   if (last !== null && input.story.turn - last < tuning.detourCooldownTurns) return none;
   if (!providenceAllowed(state, input.story.turn, tuning)) return none;
 
-  const options: Array<{ template: DetourDef; target: BeatRef; socket: SocketType }> = [];
+  const options: Array<{ template: DetourDef; target: LoomMoment; socket: SocketType }> = [];
   for (const template of index.world.detours) {
     if (!template.when.sceneKinds.includes(input.scene.kind)) continue;
     if (
@@ -88,8 +85,8 @@ export function considerDetour(
       !template.when.terrain.some((t) => input.scene.terrain.includes(t))
     )
       continue;
-    for (const target of candidateTargets(index, input, template, state)) {
-      const socket = beatSockets(target).find((s) => template.serves.includes(s));
+    for (const target of candidateTargets(ctx, input, template, state)) {
+      const socket = momentSockets(target).find((s) => template.serves.includes(s));
       if (socket) options.push({ template, target, socket });
     }
   }
@@ -102,7 +99,7 @@ export function considerDetour(
     id: nextId(state, "q"),
     templateId: choice.template.id,
     state: "planted",
-    target: { beatId: choice.target.beat.id, socket: choice.socket },
+    target: { momentId: choice.target.id, socket: choice.socket },
     introduced: {
       kind: choice.template.introduces.kind,
       name: choice.template.introduces.name,
@@ -113,14 +110,14 @@ export function considerDetour(
     plantedProgress: input.story.progress,
     plantedChapter: input.story.chapterNumber,
     earliestPayoffProgress: input.story.progress + 2,
-    deadlineChapter: choice.target.chapter.number,
+    deadlineProgress: choice.target.at + 6,
   };
   state.detours.push(plan);
   state.counters.lastDetourTurn = input.story.turn;
   markProvidence(state, input.story.turn);
   audit.push({
     step: "detour",
-    detail: `planted ${plan.id} (${plan.templateId}) for ${plan.target.beatId}/${plan.target.socket}`,
+    detail: `planted ${plan.id} (${plan.templateId}) for ${plan.target.momentId}/${plan.target.socket}`,
   });
   return {
     directives: [
@@ -136,7 +133,7 @@ export function considerDetour(
       },
     ],
     constraints: [
-      { kind: "need_socket", beatId: plan.target.beatId, socket: plan.target.socket, detourId: plan.id },
+      { kind: "need_socket", momentId: plan.target.momentId, socket: plan.target.socket, detourId: plan.id },
     ],
   };
 }
@@ -150,7 +147,7 @@ export function settleDetours(
 ): NarrativeDirective[] {
   const { index } = ctx;
   const directives: NarrativeDirective[] = [];
-  const done = new Set(input.story.completedBeats);
+  const done = new Set(input.story.doneMoments);
   for (const plan of state.detours) {
     if (plan.state !== "planted") continue;
     const template = index.detours.get(plan.templateId);
@@ -158,7 +155,7 @@ export function settleDetours(
       plan.state = "abandoned";
       continue;
     }
-    if (input.scene.beatId === plan.target.beatId) {
+    if (input.scene.momentId === plan.target.momentId) {
       if (input.story.progress < plan.earliestPayoffProgress && input.scene.kind !== "crux") continue;
       plan.state = "paid_off";
       plan.payoffTurn = input.story.turn;
@@ -166,7 +163,7 @@ export function settleDetours(
       audit.push({ step: "detour", detail: `paid off ${plan.id}` });
       directives.push({
         kind: "detour_payoff",
-        text: renderDetourText(template.payoff, plan, index),
+        text: renderDetourText(template.payoff, plan, ctx),
         mustNot: [
           "Let the heroes notice the connection to the earlier bad luck themselves. Do not explain it.",
           MUST_NOT_EXPLAIN[1] as string,
@@ -174,19 +171,17 @@ export function settleDetours(
       });
       continue;
     }
-    const targetPassed = done.has(plan.target.beatId);
-    const overdue = input.story.chapterNumber > plan.deadlineChapter;
+    const targetPassed = done.has(plan.target.momentId);
+    const overdue = input.story.progress > plan.deadlineProgress;
     if (!targetPassed && !overdue) continue;
-    // Repurpose: find another upcoming beat this detour can serve.
-    const next = candidateTargets(index, input, template, state).find(
-      (b) => b.order > currentOrder(index, input),
-    );
-    const socket = next ? beatSockets(next).find((s) => template.serves.includes(s)) : undefined;
+    // Repurpose: find another decisive moment ahead that this detour can serve.
+    const next = candidateTargets(ctx, input, template, state).find((m) => m.id !== plan.target.momentId);
+    const socket = next ? momentSockets(next).find((s) => template.serves.includes(s)) : undefined;
     if (next && socket) {
-      plan.target = { beatId: next.beat.id, socket };
-      plan.deadlineChapter = next.chapter.number;
+      plan.target = { momentId: next.id, socket };
+      plan.deadlineProgress = next.at + 6;
       plan.earliestPayoffProgress = Math.min(plan.earliestPayoffProgress, input.story.progress + 1);
-      audit.push({ step: "detour", detail: `repurposed ${plan.id} for ${next.beat.id}` });
+      audit.push({ step: "detour", detail: `repurposed ${plan.id} for ${next.id}` });
       continue;
     }
     plan.state = "repurposed";
@@ -204,12 +199,12 @@ export function settleDetours(
 }
 
 /** Detours planted for this crux add their weight to it. */
-export function detourBoost(state: LoomState, beatId: string, openSockets: readonly SocketType[]): number {
+export function detourBoost(state: LoomState, momentId: string, openSockets: readonly SocketType[]): number {
   return state.detours
     .filter(
       (d) =>
         (d.state === "planted" || d.state === "paid_off") &&
-        d.target.beatId === beatId &&
+        d.target.momentId === momentId &&
         openSockets.includes(d.target.socket),
     )
     .reduce((sum) => sum + 0.5, 0);

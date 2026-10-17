@@ -347,7 +347,7 @@ export type GuidedOptions = z.infer<typeof GuidedOptions>;
 const Due = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("crux") }),
   z.strictObject({ kind: z.literal("anchor_reappears") }),
-  z.strictObject({ kind: z.literal("after_beats"), beats: z.number().int().min(1).max(12) }),
+  z.strictObject({ kind: z.literal("after_scenes"), scenes: z.number().int().min(1).max(12) }),
   z.strictObject({ kind: z.literal("chapter_end") }),
 ]);
 
@@ -485,8 +485,9 @@ export const NpcsFile = z.strictObject({
 });
 export type NpcsFile = z.infer<typeof NpcsFile>;
 
-// ----------------------------------------------------------- arc/act*.yaml
+// ------------------------------------------------- decisive moments (cruxes)
 
+/** A decisive moment's rules: the roll, what the heroes' earlier deeds can bring to it, and how it can end. */
 export const CruxSpec = z.strictObject({
   type: z.enum(CRUX_TYPES),
   check: z.strictObject({
@@ -495,12 +496,12 @@ export const CruxSpec = z.strictObject({
     label: Short,
     dc: z.strictObject({
       base: z.number().int().min(5).max(30),
-      perEnemyClockSegment: z.number().min(0).max(3).default(0),
+      /** Harder for every portent of its front that has already come true. */
+      perPortent: z.number().min(0).max(3).default(0),
       perSnareSeverity: z.number().min(0).max(3).default(0),
       max: z.number().int().min(10).max(35).default(30),
     }),
   }),
-  clock: z.strictObject({ faction: Id, clock: Id }).optional(),
   sockets: z
     .array(
       z.strictObject({
@@ -515,64 +516,107 @@ export const CruxSpec = z.strictObject({
   requiredGrace: z.number().min(0.1).max(5),
   onSuccess: Text,
   onCostlySuccess: Text,
-  onFailForward: z.strictObject({ beat: Id.optional(), text: Text }),
+  /** A failure never ends the story: what it costs, and what the heroes are left with. */
+  onFailForward: Text,
 });
 export type CruxSpec = z.infer<typeof CruxSpec>;
 
-export const BeatDef = z.strictObject({
+const Foes = z.array(
+  z.strictObject({ creature: Id, count: z.tuple([z.number().int().min(1), z.number().int().max(8)]) }),
+);
+
+// ------------------------------------------------------- situations/*.yaml
+
+/**
+ * A set piece: an authored situation at a place, which the storyteller may use when it fits where the heroes
+ * are and what they're doing, in any order. Never a fixed step in a plot.
+ */
+export const SituationDef = z.strictObject({
   id: Id,
   title: Short,
   kind: SceneKind,
   region: Id,
   poi: Id.optional(),
+  /** What's going on as the heroes arrive. */
   summary: Text,
-  goals: z.array(Text).min(1),
-  requires: z.array(Id).default([]),
-  optional: z.boolean().default(false),
-  milestone: z.boolean().default(false),
-  quest: z.strictObject({ id: Id, title: Short, objective: Text }).optional(),
-  offersShortcuts: z.array(Id).default([]),
+  /** The scene's dramatic question. When it's answered, the scene is over. */
+  question: Short,
   introduces: z.array(Id).default([]),
   /** Open needs that a quiet-hand detour could later fill. */
   sockets: z.array(SocketType).default([]),
-  /** Chances for virtue the scene is built around (for the director and the sim). */
   virtueOpportunities: z
     .array(z.strictObject({ tag: VirtueTag, target: Id.optional(), note: Text }))
     .default([]),
-  decisive: z.boolean().default(false),
-  /** Played only when a failed crux's onFailForward sends the story here. */
-  branch: z.boolean().default(false),
-  crux: CruxSpec.optional(),
-  /** Who the heroes face in a combat beat (counts are for a party of three). Defaults to the region's table. */
-  foes: z
-    .array(
-      z.strictObject({ creature: Id, count: z.tuple([z.number().int().min(1), z.number().int().max(8)]) }),
-    )
-    .optional(),
+  offersShortcuts: z.array(Id).default([]),
+  /** A goal the heroes can take up here. */
+  quest: z.strictObject({ id: Id, title: Short, objective: Text }).optional(),
+  /** On a combat situation the fight starts as they arrive; elsewhere, who fights if it comes to that. */
+  foes: Foes.optional(),
+  /** Factions whose troubles this situation suits. */
+  factions: z.array(Id).default([]),
 });
-export type BeatDef = z.infer<typeof BeatDef>;
+export type SituationDef = z.infer<typeof SituationDef>;
 
-export const ActDef = z.strictObject({
+// ------------------------------------------------------------ seeds/*.yaml
+
+/** A threat with its own momentum: what comes true, step by step, while nobody stops it. */
+export const FrontDef = z.strictObject({
   id: Id,
-  number: z.number().int().min(1).max(5),
-  title: Short,
-  summary: Text,
-  /** Outlined acts have chapters with fewer details; the director fills them in. */
-  detail: z.enum(["full", "outline"]),
-  chapters: z
-    .array(
-      z.strictObject({
-        id: Id,
-        number: z.number().int().min(1),
-        title: Short,
-        summary: Text,
-        regions: z.array(Id).min(1),
-        beats: z.array(BeatDef).min(1),
-      }),
-    )
-    .min(1),
+  name: Short,
+  faction: Id.optional(),
+  goal: Text,
+  portents: z.array(Text).min(3).max(8),
+  doom: Text,
+  /** The story's central trouble. Exactly one front in a seed is central. */
+  central: z.boolean().default(false),
 });
-export type ActDef = z.infer<typeof ActDef>;
+export type FrontDef = z.infer<typeof FrontDef>;
+
+/** A question the story turns on, its answer, and at least three ways to find it, so no missed roll hides it. */
+export const MysteryDef = z.strictObject({
+  id: Id,
+  question: Short,
+  truth: Text,
+  clues: z.array(Text).min(3).max(8),
+});
+export type MysteryDef = z.infer<typeof MysteryDef>;
+
+/** A decisive moment the story builds to. It comes when the story has earned it, never on a schedule. */
+export const MomentDef = z.strictObject({
+  id: Id,
+  title: Short,
+  front: Id,
+  /** When the story is ready for it, in story words. */
+  when: Text,
+  region: Id.optional(),
+  poi: Id.optional(),
+  summary: Text,
+  question: Short,
+  crux: CruxSpec,
+  finale: z.boolean().default(false),
+});
+export type MomentDef = z.infer<typeof MomentDef>;
+
+/** A campaign seed: one central trouble a campaign's own story can grow from. */
+export const SeedDef = z.strictObject({
+  id: Id,
+  title: Short,
+  pitch: Text,
+  /** Regions it can begin in. */
+  startRegions: z.array(Id).min(1),
+  /** Ways it can begin. */
+  openings: z.array(Text).min(1),
+  stakes: Text,
+  fronts: z.array(FrontDef).min(1).max(4),
+  /** Named people this story involves. */
+  cast: z.array(Id).default([]),
+  mysteries: z.array(MysteryDef).min(1),
+  /** Decisive moments, the finale last. */
+  moments: z.array(MomentDef).min(1),
+  /** Set pieces that suit this story. Others may be used too. */
+  situations: z.array(Id).default([]),
+});
+export type SeedDef = z.infer<typeof SeedDef>;
 
 // ---------------------------------------------------- providence/*.yaml
 

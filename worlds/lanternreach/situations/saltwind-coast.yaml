@@ -1,0 +1,14 @@
+# Set pieces in saltwind-coast. The storyteller may use them when they fit, in any order.
+- id: the-dark-lighthouse
+  title: The Dark Lighthouse
+  kind: exploration
+  region: saltwind-coast
+  poi: dark-lighthouse
+  summary: The great lighthouse is dark, and ships are lost in the fog. Relighting it would use some of the precious
+    flame the heroes are carrying.
+  question: Will the heroes share their flame with the dark lighthouse?
+  sockets: [ally_arrives]
+  virtueOpportunities:
+  - tag: self_sacrifice
+    note: Share some of the carried flame to light the lighthouse, leaving less for the road.
+  factions: [lamplighters-guild]

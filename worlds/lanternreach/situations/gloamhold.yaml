@@ -1,0 +1,30 @@
+# Set pieces in gloamhold. The storyteller may use them when they fit, in any order.
+- id: the-cold-kitchens
+  title: The Cold Kitchens
+  kind: social
+  region: gloamhold
+  poi: cold-kitchens
+  summary: Inside Gloamhold, the heroes find lost villagers working in kitchens where nobody has cooked a warm meal
+    in years.
+  question: Can the heroes find a way deeper into Gloamhold?
+  sockets: [knowledge_given]
+  virtueOpportunities:
+  - tag: kindness_to_lowly
+    note: Share warmth and food with the kitchen helpers, even though it risks discovery.
+  factions: [gloam-host]
+- id: the-knights-patrol
+  title: The Knights' Patrol
+  kind: combat
+  region: gloamhold
+  summary: In the long cold halls, a patrol of Gloam Knights clanks around the corner, perfectly in step. There
+    is nowhere to hide. The heroes will have to get past them.
+  question: Can the heroes get past the patrol before the alarm spreads?
+  virtueOpportunities:
+  - tag: mercy
+    note: A knight who gives up can be let go. Nobody in Gloamhold has ever shown them mercy.
+  foes:
+  - creature: gloam-knight
+    count: [1, 2]
+  - creature: gloam-skulker
+    count: [1, 2]
+  factions: [gloam-host]

@@ -1,0 +1,66 @@
+# Set pieces in hearthmoor. The storyteller may use them when they fit, in any order.
+- id: the-last-flame
+  title: The Last Flame
+  kind: exploration
+  region: hearthmoor
+  poi: hearthmoor-square
+  summary: It's Festival Eve, and all of Hearthmoor is crowded into Lantern Square for the lighting. Just as Hattie
+    Wick raises her taper, the great lantern sputters, flickers and goes out. In the dark, something laughs, and someone notices sooty footprints leading away.
+  question: What put out Hearthmoor's lantern?
+  introduces: [mayor-hobb, hattie-wick]
+  virtueOpportunities:
+  - tag: kindness_to_lowly
+    note: Comfort the frightened little ones in the square.
+  factions: [gloam-host]
+- id: the-thief-in-the-lamp-house
+  title: The Thief in the Lamp-House
+  kind: social
+  region: hearthmoor
+  poi: lamp-house
+  summary: 'The footprints lead to the Lamp-House, where the heroes catch a small grey figure hugging the last warm
+    coal: Snibbet, a lantern-thief, shivering so hard his teeth chatter. Villagers come running, angry and scared.
+    Mayor Hobb wants him locked in the cellar until the Gilded Ledger''s bounty-men come to take him away.'
+  question: What becomes of Snibbet?
+  introduces: [snibbet]
+  virtueOpportunities:
+  - tag: mercy
+    target: snibbet
+    note: Let Snibbet go, speak up for him, or share warmth with him instead of handing him over.
+  - tag: kindness_to_lowly
+    target: snibbet
+    note: Give Snibbet something warm, like a scarf, a meal or a kind word.
+  - tag: honesty_at_cost
+    note: Tell the villagers the truth about what happened, even if it makes them cross.
+  factions: [lamplighters-guild]
+- id: hatties-request
+  title: Hattie's Request
+  kind: social
+  region: hearthmoor
+  poi: lamp-house
+  summary: Old Hattie Wick explains that the lantern needs new flame from Lantern Hall in the Reedmarsh, where the
+    Lamplighters keep flame carried from the Ember itself. She is too old for the road. She asks the heroes to go,
+    and gives them her own Hearth-Lantern to carry the flame home.
+  question: Will the heroes carry Hattie's lantern to Lantern Hall?
+  virtueOpportunities:
+  - tag: promise_kept
+    target: hattie-wick
+    note: Promise Hattie to bring the flame home, and later keep that promise.
+  quest:
+    id: fetch-new-flame
+    title: Fetch a New Flame
+    objective: Travel to Lantern Hall in the Reedmarsh and bring back new flame for Hearthmoor.
+  factions: [lamplighters-guild]
+- id: gloam-in-the-garden
+  title: Gloam in the Garden
+  kind: combat
+  region: hearthmoor
+  poi: goose-commons
+  summary: With the lantern dark, the Gloam Host creeps in. Gloom mites scuttle through the gardens, pinch out candles
+    and terrify the geese. The heroes must drive them off. The geese may or may not help.
+  question: Can the heroes drive the Gloam out of Hearthmoor's gardens?
+  foes:
+  - creature: gloom-mite
+    count: [2, 3]
+  - creature: gloam-skulker
+    count: [1, 1]
+  factions: [gloam-host]

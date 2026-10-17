@@ -5,6 +5,7 @@ import { SRD_CLASSES } from "../srd/classes";
 import { SRD_ARMOR, SRD_WEAPONS } from "../srd/equipment";
 import { SRD_SPELLS } from "../srd/spells";
 import { indexWorld } from "./index-world";
+import type { CruxSpec } from "./schema";
 import type { World, WorldIssue } from "./types";
 
 /**
@@ -72,8 +73,12 @@ export function validateWorld(world: World): WorldIssue[] {
     ...world.items.consumables.map((x) => x.id),
   ]);
   dupes(
-    "arc/",
-    idx.beatOrder.map((b) => b.beat.id),
+    "seeds/",
+    world.seeds.map((x) => x.id),
+  );
+  dupes(
+    "situations/",
+    world.situations.map((x) => x.id),
   );
   dupes(
     "regions/ (pois)",
@@ -275,7 +280,7 @@ export function validateWorld(world: World): WorldIssue[] {
         ? npcIds.has(ref.id) || idx.archetypes.has(ref.id)
         : ref.kind === "faction"
           ? idx.factions.has(ref.id)
-          : idx.beats.has(ref.id);
+          : idx.situations.has(ref.id);
     if (!exists) err("shortcuts.yaml", s.id, `offeredBy ${ref.kind} "${ref.id}" does not exist`);
     if (s.benefit.kind === "item" && !idx.items.has(s.benefit.item))
       err("shortcuts.yaml", s.id, `unknown item "${s.benefit.item}"`);
@@ -288,90 +293,81 @@ export function validateWorld(world: World): WorldIssue[] {
       err("shortcuts.yaml", s.id, `unknown faction "${s.snare.faction}"`);
   }
 
-  // Arc.
-  const beatIds = new Set(idx.beatOrder.map((b) => b.beat.id));
-  for (const ref of idx.beatOrder) {
-    const { beat, act } = ref;
-    const file = `arc/${act.id}.yaml`;
-    const where = `${ref.chapter.id}.${beat.id}`;
-    if (!idx.regions.has(beat.region)) err(file, where, `unknown region "${beat.region}"`);
-    for (const f of beat.foes ?? []) {
-      if (!idx.creatures.has(f.creature)) err(file, where, `unknown creature "${f.creature}" in foes`);
-      if (f.count[0] > f.count[1]) err(file, where, "foes count min exceeds max");
+  // Where a scene happens, and who and what it brings in.
+  const place = (file: string, where: string, region: string | undefined, poi: string | undefined) => {
+    if (region && !idx.regions.has(region)) err(file, where, `unknown region "${region}"`);
+    if (poi) {
+      const p = idx.pois.get(poi);
+      if (!p) err(file, where, `unknown poi "${poi}"`);
+      else if (region && p.regionId !== region) err(file, where, `poi "${poi}" is not in region "${region}"`);
     }
-    if (beat.foes && beat.kind !== "combat") err(file, where, "only combat beats can list foes");
-    if (beat.poi) {
-      const poi = idx.pois.get(beat.poi);
-      if (!poi) err(file, where, `unknown poi "${beat.poi}"`);
-      else if (poi.regionId !== beat.region)
-        err(file, where, `poi "${beat.poi}" is not in region "${beat.region}"`);
+  };
+  const crux = (file: string, where: string, c: CruxSpec) => {
+    for (const socket of c.sockets) {
+      if (!socketTypes.has(socket.type))
+        err(file, where, `socket "${socket.type}" is not described in payoffs.yaml`);
+      if (socket.faction && !idx.factions.has(socket.faction))
+        err(file, where, `unknown faction "${socket.faction}"`);
     }
-    for (const req of beat.requires) {
-      const target = idx.beats.get(req);
-      if (!target) err(file, where, `requires unknown beat "${req}"`);
-      else if (target.order >= ref.order)
-        err(file, where, `requires "${req}", which comes later in the story`);
-    }
-    for (const sid of beat.offersShortcuts)
-      if (!idx.shortcuts.has(sid)) err(file, where, `unknown shortcut "${sid}"`);
-    for (const nid of beat.introduces)
-      if (!npcIds.has(nid)) err(file, where, `introduces unknown npc "${nid}"`);
-    for (const s of beat.sockets)
-      if (!socketTypes.has(s)) err(file, where, `socket "${s}" is not described in payoffs.yaml`);
-    if (beat.decisive !== Boolean(beat.crux))
-      err(file, where, "decisive beats need a crux, and only decisive beats may have one");
-    if (beat.crux) {
-      const crux = beat.crux;
-      const target = crux.onFailForward.beat ? idx.beats.get(crux.onFailForward.beat) : undefined;
-      if (crux.onFailForward.beat && !beatIds.has(crux.onFailForward.beat)) {
-        err(file, `${where}.crux`, `onFailForward beat "${crux.onFailForward.beat}" does not exist`);
-      } else if (target && (!target.beat.branch || target.order <= ref.order)) {
-        err(
-          file,
-          `${where}.crux`,
-          `onFailForward beat "${crux.onFailForward.beat}" must be a later branch beat`,
-        );
-      }
-      if (crux.clock) {
-        const fac = idx.factions.get(crux.clock.faction);
-        if (!fac) err(file, `${where}.crux`, `unknown faction "${crux.clock.faction}"`);
-        else if (!fac.clocks.some((c) => c.id === crux.clock?.clock))
-          err(file, `${where}.crux`, `unknown clock "${crux.clock.clock}"`);
-      }
-      for (const socket of crux.sockets) {
-        const desc = world.payoffs.sockets.find((s) => s.type === socket.type);
-        if (!desc) err(file, `${where}.crux`, `socket "${socket.type}" is not described in payoffs.yaml`);
-        if (socket.faction && !idx.factions.has(socket.faction))
-          err(file, `${where}.crux`, `unknown faction "${socket.faction}"`);
-      }
-      if (beat.kind !== "crux") err(file, where, 'beats with a crux must have kind "crux"');
-    }
-  }
-  for (const act of world.acts) {
-    if (!act.chapters.some((c) => c.beats.some((b) => b.decisive)))
-      err(`arc/${act.id}.yaml`, "", "each act needs one decisive beat");
-  }
-  const finalAct = [...world.acts].sort((a, b) => b.number - a.number)[0];
-  const finalCrux = finalAct?.chapters.flatMap((c) => c.beats).findLast((b) => b.decisive);
-  if (finalCrux && !finalCrux.crux?.sockets.some((s) => s.accepts.includes("mercy"))) {
-    warn(`arc/${finalAct?.id}.yaml`, finalCrux.id, "the final crux has no socket that mercy can fill");
+  };
+
+  // Set pieces.
+  for (const sit of world.situations) {
+    const file = "situations/";
+    const where = sit.id;
+    place(file, where, sit.region, sit.poi);
+    for (const f of sit.foes ?? [])
+      if (!idx.creatures.has(f.creature)) err(file, where, `unknown creature "${f.creature}"`);
+    if (sit.kind === "combat" && !sit.foes?.length) err(file, where, "a combat situation needs foes");
+    for (const id of sit.offersShortcuts)
+      if (!idx.shortcuts.has(id)) err(file, where, `unknown shortcut "${id}"`);
+    for (const id of sit.introduces) if (!npcIds.has(id)) err(file, where, `unknown npc "${id}"`);
+    for (const v of sit.virtueOpportunities)
+      if (v.target && !npcIds.has(v.target)) err(file, where, `unknown npc "${v.target}"`);
+    for (const t of sit.sockets)
+      if (!socketTypes.has(t)) err(file, where, `socket "${t}" is not described in payoffs.yaml`);
+    for (const id of sit.factions) if (!idx.factions.has(id)) err(file, where, `unknown faction "${id}"`);
   }
 
-  // Branch beats must be reachable, and can't be decisive themselves.
-  for (const ref of idx.beatOrder.filter((b) => b.beat.branch)) {
-    const reached = idx.beatOrder.some((b) => b.beat.crux?.onFailForward.beat === ref.beat.id);
-    if (!reached)
-      err(`arc/${ref.act.id}.yaml`, ref.beat.id, "branch beat is not the onFailForward of any crux");
-    if (ref.beat.decisive) err(`arc/${ref.act.id}.yaml`, ref.beat.id, "a branch beat can't be decisive");
+  // Campaign seeds.
+  if (world.seeds.length === 0) err("seeds/", "", "a world needs at least one campaign seed");
+  for (const seed of world.seeds) {
+    const file = `seeds/${seed.id}.yaml`;
+    for (const r of seed.startRegions) place(file, "startRegions", r, undefined);
+    if (seed.fronts.filter((f) => f.central).length !== 1)
+      err(file, "fronts", "exactly one front must be central");
+    const frontIds = new Set(seed.fronts.map((f) => f.id));
+    for (const f of seed.fronts)
+      if (f.faction && !idx.factions.has(f.faction)) err(file, f.id, `unknown faction "${f.faction}"`);
+    for (const id of seed.cast) if (!npcIds.has(id)) err(file, "cast", `unknown npc "${id}"`);
+    for (const id of seed.situations)
+      if (!idx.situations.has(id)) err(file, "situations", `unknown situation "${id}"`);
+    const finales = seed.moments.filter((m) => m.finale);
+    if (finales.length !== 1 || seed.moments.at(-1)?.finale !== true)
+      err(file, "moments", "exactly one moment is the finale, and it comes last");
+    for (const m of seed.moments) {
+      if (!frontIds.has(m.front)) err(file, m.id, `unknown front "${m.front}"`);
+      place(file, m.id, m.region, m.poi);
+      crux(file, `${m.id}.crux`, m.crux);
+    }
+    const finale = finales[0];
+    if (finale && !finale.crux.sockets.some((s) => s.accepts.includes("mercy")))
+      warn(file, finale.id, "the finale has no socket that mercy can fill");
+    dupes(file, [
+      ...seed.fronts.map((f) => f.id),
+      ...seed.mysteries.map((m) => m.id),
+      ...seed.moments.map((m) => m.id),
+    ]);
   }
 
-  // Detours must serve a socket that some beat actually needs.
-  const neededSockets = new Set(
-    idx.beatOrder.flatMap((b) => [...b.beat.sockets, ...(b.beat.crux?.sockets.map((s) => s.type) ?? [])]),
-  );
+  // Detours must serve a socket that some situation or decisive moment actually needs.
+  const neededSockets = new Set([
+    ...world.situations.flatMap((x) => x.sockets),
+    ...world.seeds.flatMap((x) => x.moments.flatMap((m) => m.crux.sockets.map((s) => s.type))),
+  ]);
   for (const d of world.detours) {
     if (!d.serves.some((s) => neededSockets.has(s)))
-      err("providence/detours.yaml", d.id, "serves no socket used by any beat");
+      err("providence/detours.yaml", d.id, "serves no socket used by any situation or decisive moment");
     if (d.introduces.archetype && !idx.archetypes.has(d.introduces.archetype)) {
       err("providence/detours.yaml", d.id, `unknown archetype "${d.introduces.archetype}"`);
     }
