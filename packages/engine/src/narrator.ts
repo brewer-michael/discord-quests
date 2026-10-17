@@ -46,8 +46,8 @@ export async function narrate(opts: {
   const { llm, world, view, directives, scope, log } = opts;
   const system = narratorSystem(world, view.story);
   const user = narratorUser(view, directives);
-  // The reviewer reads turns where the hidden hand acts, and every turn once the story can get darker.
-  const review = view.story.intensity !== "light" || directives.some((d) => PROSE_DIRECTIVES.has(d.kind));
+  // The reviewer reads turns where the hidden hand acts, and every turn of a story told at Epic.
+  const review = view.story.intensity === "epic" || directives.some((d) => PROSE_DIRECTIVES.has(d.kind));
 
   let problems: string[] = [];
   let reasons: string[] = [];

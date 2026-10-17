@@ -811,6 +811,37 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
     expect(JSON.stringify(logged)).not.toContain("Springfield");
   });
 
+  it("spends extra AI calls only where they matter: the reviewer at Epic, the AI safety read at Light", async () => {
+    for (const [intensity, audience] of [
+      ["light", "family"],
+      ["classic", "family"],
+      ["epic", "teen"],
+    ] as const) {
+      const llm = new FakeLlm();
+      const engine = createEngine({ db: db.db, worlds, llm });
+      const c = await engine.campaigns.create({
+        guildId: "g-cost",
+        channelId: `ch-cost-${intensity}`,
+        name: `Cost ${intensity}`,
+        mode: "ai_dm",
+        createdBy: `cost-${intensity}`,
+        settings: { audience, story: { intensity } as never },
+      });
+      await makeHero(engine, c.id, `cost-${intensity}`, "scout", "Quill Swift");
+      const view = await engine.turns.openCampaign(c.id, `cost-${intensity}`);
+      await engine.turns.submitAction({
+        roundId: view.roundId as string,
+        userId: `cost-${intensity}`,
+        kind: "freeform",
+        text: "I look around the square",
+      });
+      const tasks = llm.calls.map((x) => x.task);
+      expect(tasks.includes("safety")).toBe(intensity === "light");
+      // The opening has no hidden-hand notes, so only an Epic story has it reviewed.
+      expect(tasks.includes("judge")).toBe(intensity === "epic");
+    }
+  });
+
   it("lets only one resolver win a round", async () => {
     const engine = createEngine({ db: db.db, worlds, llm: new FakeLlm() });
     const c = await engine.campaigns.create({

@@ -468,7 +468,8 @@ export class TurnService {
         const rng = deriveRng(input.interactionId ?? text, "flavor", 0);
         return { ok: true, deflection: pickDeflection(index.world, rng) };
       }
-      {
+      // The word checks above run at every intensity; the AI's own read of what was typed, at Light.
+      if (told.story.intensity === "light") {
         const verdict = await this.deps.llm.structured(
           {
             task: "safety",
