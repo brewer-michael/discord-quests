@@ -196,6 +196,95 @@ describe("a round of combat", () => {
   });
 });
 
+describe("conditions foes put on heroes", () => {
+  // Always hits on a 20, and no hero makes the save.
+  const stunner = {
+    ...creature("shadow-wolf"),
+    id: "stunner",
+    name: "Stunner",
+    hp: "100",
+    morale: "brave" as const,
+    traits: [],
+    attacks: [
+      {
+        name: "Daze",
+        bonus: 20,
+        damage: "1",
+        damageType: "thunder",
+        effect: { condition: "stunned" as const, save: "con" as const, dc: 30 },
+      },
+    ],
+  };
+  const table = new Map([...creatures, [stunner.id, stunner]]);
+  const high = () => sequenceRng(Array(60).fill(0.99));
+  const low = () => sequenceRng(Array(60).fill(0));
+
+  /** The hero acts first, then the stunner. */
+  function fight(hero: HeroCombatant): CombatState {
+    const s = buildEncounter({
+      foes: [{ creature: stunner, count: 1 }],
+      heroes: [hero],
+      rng: createRng("stun"),
+    });
+    s.order = [
+      { id: hero.id, side: "hero", initiative: 30 },
+      { id: s.foes[0]!.id, side: "foe", initiative: 1 },
+    ];
+    return s;
+  }
+
+  it("costs a stunned hero one turn, then wears off", () => {
+    const f = fighter();
+    let s = fight(f);
+    // As in a fight saved before conditions had a clock.
+    delete s.heroConditionRounds;
+    let res = resolveCombatRound(s, [f], { [f.id]: { kind: "defend" } }, table, high());
+    expect(res.heroes[0]!.conditions).toEqual(["stunned"]);
+    expect(res.state.heroConditionRounds).toEqual({ [f.id]: { stunned: 1 } });
+
+    // The stunner misses this time.
+    s = res.state;
+    res = resolveCombatRound(s, res.heroes, { [f.id]: { kind: "attack" } }, table, low());
+    expect(res.events.find((e) => e.actorId === f.id)?.text).toMatch(/too dizzy/);
+    expect(res.heroes[0]!.conditions).toEqual([]);
+    expect(res.state.heroConditionRounds).toEqual({});
+
+    res = resolveCombatRound(res.state, res.heroes, { [f.id]: { kind: "attack" } }, table, low());
+    expect(res.events.find((e) => e.actorId === f.id)?.kind).toBe("attack");
+  });
+
+  it("end with the fight, and leave conditions from the story alone", () => {
+    const f = { ...fighter(), conditions: ["poisoned" as const] };
+    const s = { ...fight(f), round: MAX_COMBAT_ROUNDS - 1 };
+    const res = resolveCombatRound(s, [f], { [f.id]: { kind: "defend" } }, table, high());
+    expect(res.events.some((e) => e.text.includes("Stunner") && e.text.includes("is stunned"))).toBe(true);
+    expect(res.state.phase).toBe("over");
+    expect(res.heroes[0]!.conditions).toEqual(["poisoned"]);
+    expect(res.state.heroConditionRounds).toEqual({});
+  });
+});
+
+describe("how a beaten foe leaves", () => {
+  it.each([
+    ["crumbles", "fell apart"],
+    ["fades", "faded away"],
+  ] as const)("a foe that %s leaves the fight instead of yielding", (defeat, exit) => {
+    const foe = { ...creature("gloom-mite"), id: "brittle", hp: "1", defeat };
+    const f = fighter();
+    const s = buildEncounter({ foes: [{ creature: foe, count: 1 }], heroes: [f], rng: createRng("gone") });
+    s.order = [{ id: f.id, side: "hero", initiative: 30 }, ...s.order.filter((o) => o.id !== f.id)];
+    const res = resolveCombatRound(
+      s,
+      [f],
+      { [f.id]: { kind: "attack" } },
+      new Map([...creatures, [foe.id, foe]]),
+      sequenceRng(Array(60).fill(0.99)),
+    );
+    expect(res.state.foes[0]).toMatchObject({ status: "fled", exit });
+    expect(res.state).toMatchObject({ outcome: "victory", phase: "over" });
+  });
+});
+
 const actionArb = (foeIds: string[], heroIds: string[]): fc.Arbitrary<CombatAction> =>
   fc.oneof(
     fc.record({ kind: fc.constant("attack" as const), targetId: fc.constantFrom(...foeIds) }),

@@ -1,8 +1,9 @@
 /**
  * Turn-based combat, kid-safe. Everyone picks an action at once, then the
  * round plays out in initiative order. Nobody dies: foes faint, give up, run
- * off or pop into smoke, and heroes at 0 hit points are Dazed until they
- * Rally or a friend helps. Foes never pick on a hero who is already down.
+ * off, pop into smoke, fall apart or fade away, and heroes at 0 hit points are
+ * Dazed until they Rally or a friend helps. Foes never pick on a hero who is
+ * already down.
  *
  * Pure and deterministic: all randomness comes from the Rng passed in.
  */
@@ -54,6 +55,12 @@ export interface CombatState {
   blessed: string[];
   /** Lasting armor bonuses (Shield of Faith), by hero id. */
   warded: Record<string, number>;
+  /**
+   * Conditions foes have put on heroes, by hero id, with the hero's turns left on each. Each lasts until the end
+   * of the hero's next turn, as most short monster effects in SRD 5.2.1 do, and all of them end with the fight.
+   * Missing from fights saved before it was added.
+   */
+  heroConditionRounds?: Record<string, Partial<Record<Condition, number>>>;
 }
 
 export interface HeroAttack {
@@ -255,7 +262,16 @@ export function buildEncounter(args: {
     })),
   ];
   sortOrder(order);
-  return { phase: "fighting", round: 0, foes, order, outcome: null, blessed: [], warded: {} };
+  return {
+    phase: "fighting",
+    round: 0,
+    foes,
+    order,
+    outcome: null,
+    blessed: [],
+    warded: {},
+    heroConditionRounds: {},
+  };
 }
 
 function sortOrder(order: CombatState["order"]) {
@@ -444,6 +460,17 @@ function toRoll(
 
 // ------------------------------------------------------------------ the round
 
+/**
+ * Defeat styles that take a foe out of the fight altogether, and how it goes. The rest leave it at the heroes'
+ * mercy.
+ */
+const GONE: Partial<Record<CreatureDef["defeat"], string>> = {
+  flees: "fled",
+  poofs: "came apart into smoke",
+  crumbles: "fell apart",
+  fades: "faded away",
+};
+
 export function resolveCombatRound(
   input: CombatState,
   heroList: readonly HeroCombatant[],
@@ -476,6 +503,28 @@ export function resolveCombatRound(
   );
   const shielded = new Set<string>();
 
+  state.heroConditionRounds ??= {};
+  const clocks = state.heroConditionRounds;
+  /** A foe's attack or move leaves a hero with a condition until the end of the hero's next turn. */
+  const afflict = (h: HeroCombatant, condition: Condition) => {
+    h.conditions = [...h.conditions, condition];
+    clocks[h.id] = { ...clocks[h.id], [condition]: 1 };
+  };
+  /** At the end of a hero's turn, the conditions foes put on them tick down. */
+  const wearOff = (h: HeroCombatant) => {
+    const clock = clocks[h.id];
+    if (!clock) return;
+    for (const [cond, left] of Object.entries(clock)) {
+      const next = (left ?? 0) - 1;
+      if (next > 0) clock[cond as Condition] = next;
+      else {
+        delete clock[cond as Condition];
+        h.conditions = h.conditions.filter((c) => c !== cond);
+      }
+    }
+    if (Object.keys(clock).length === 0) delete clocks[h.id];
+  };
+
   const firstFighting = (preferId?: string) => {
     const preferred = preferId ? foeById.get(preferId) : undefined;
     if (preferred?.status === "fighting") return preferred;
@@ -499,12 +548,10 @@ export function resolveCombatRound(
       const m = moraleCheck(creature?.morale ?? "normal", rng);
       if (!m.breaks) return;
     }
-    if (style === "flees") {
+    const gone = GONE[style];
+    if (gone) {
       f.status = "fled";
-      f.exit = "fled";
-    } else if (style === "poofs") {
-      f.status = "fled";
-      f.exit = "came apart into smoke";
+      f.exit = gone;
     } else {
       f.status = "at_mercy";
       f.exit = style === "faints" && f.hp <= 0 ? "was knocked senseless" : "yielded";
@@ -930,7 +977,7 @@ export function resolveCombatRound(
         const condition = attack.effect.condition as Condition;
         const save = rollD20(rng).natural + (target.saves[attack.effect.save as Ability] ?? 0);
         if (save < attack.effect.dc) {
-          target.conditions = [...target.conditions, condition];
+          afflict(target, condition);
           text += ` ${target.name} is ${condition === "prone" ? "knocked down" : condition}.`;
         }
       }
@@ -975,7 +1022,7 @@ export function resolveCombatRound(
       } else text += saved ? `, but ${target.name} gets clear.` : ".";
       const condition = special.condition as Condition | undefined;
       if (!saved && condition && !isDownHero(target) && !target.conditions.includes(condition)) {
-        target.conditions = [...target.conditions, condition];
+        afflict(target, condition);
         text += ` ${target.name} is ${condition === "restrained" ? "caught fast" : condition}.`;
       }
       events.push({
@@ -1038,7 +1085,10 @@ export function resolveCombatRound(
       if (f?.status === "fighting") foeTurn(f);
     } else {
       const h = heroes.get(entry.id);
-      if (h) heroTurn(h, actions[h.id] ?? { kind: "defend" });
+      if (h) {
+        heroTurn(h, actions[h.id] ?? { kind: "defend" });
+        wearOff(h);
+      }
     }
   }
 
@@ -1074,6 +1124,14 @@ export function resolveCombatRound(
   } else if (allDown) {
     state.outcome = "party_down";
     state.phase = "over";
+  }
+  if (state.phase !== "fighting") {
+    // Whatever the foes did to the heroes ends with the fight.
+    for (const [id, clock] of Object.entries(clocks)) {
+      const h = heroes.get(id);
+      if (h) h.conditions = h.conditions.filter((c) => !(c in clock));
+    }
+    state.heroConditionRounds = {};
   }
   return { state, heroes: [...heroes.values()], events, downed, spared, usedItems, usedSlots };
 }

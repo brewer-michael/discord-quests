@@ -174,7 +174,9 @@ run.
 
 ## Engine findings outside the miss rules
 
-Both were found by the research and checked in the code. Neither is changed here.
+Both were found by the research and checked in the code. Both are now fixed in the engine: conditions from foes
+last until the end of the hero's next turn and end with the fight (`CombatState.heroConditionRounds`), and crumble
+and fade foes leave the fight ("fell apart", "faded away"). The line numbers below are from before the fix.
 
 1. **Conditions that foes put on heroes never end.** `packages/core/src/combat/index.ts:929-934` adds a condition when
    a hero fails the save against a foe attack's effect. Only Prone is ever cleared (`:571`), and a stunned hero skips

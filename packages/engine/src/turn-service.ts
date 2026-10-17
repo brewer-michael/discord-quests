@@ -2245,7 +2245,9 @@ export class TurnService {
     );
     if (!built.combat)
       throw new GameError("no foes", "I couldn't find foes that fit here. Try a rewind instead.");
-    const spec: SceneSpec = { ...built, kind: old.kind, beatId: old.beatId };
+    // A stun or a web from the old foes still wears off on time.
+    const combat = { ...built.combat, heroConditionRounds: old.combat?.heroConditionRounds ?? {} };
+    const spec: SceneSpec = { ...built, combat, kind: old.kind, beatId: old.beatId };
     return this.deps.db.transaction(async (tx) => {
       const [open] = await tx
         .select()
