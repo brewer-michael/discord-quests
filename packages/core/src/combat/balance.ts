@@ -107,8 +107,11 @@ export function balanceEncounter(args: {
   difficulty: Difficulty;
   /** Every creature in the world, for weaker stand-ins when nothing asked for fits. */
   creatures: ReadonlyMap<string, CreatureDef>;
+  /** Which stand-ins the table allows (its intensity and the topics it left out). */
+  allowed?: (c: CreatureDef) => boolean;
 }): BalanceResult {
   const { heroes, difficulty, creatures } = args;
+  const allowed = (c: CreatureDef) => !c.friendly && (args.allowed?.(c) ?? true);
   const budget = xpBudget(
     heroes.map((h) => h.level),
     difficulty,
@@ -117,10 +120,11 @@ export function balanceEncounter(args: {
   const fits = (foes: BalancedFoe[]) => encounterXp(foes, heroes.length) <= budget;
 
   let candidates = options(wanted).filter(fits);
-  if (candidates.length === 0) candidates = options(standIns(wanted, creatures, budget)).filter(fits);
+  if (candidates.length === 0)
+    candidates = options(standIns(wanted, [...creatures.values()].filter(allowed), budget)).filter(fits);
   if (candidates.length === 0) {
     // Nothing in the world is small enough: the gentlest creature there is, at half strength.
-    const gentlest = [...creatures.values()].sort((a, b) => creatureXp(a) - creatureXp(b))[0];
+    const gentlest = [...creatures.values()].filter(allowed).sort((a, b) => creatureXp(a) - creatureXp(b))[0];
     const foes = gentlest ? [{ creature: gentlest, count: 1, hpScale: WEAKEST }] : [];
     return { foes, difficulty, budget, xp: encounterXp(foes, heroes.length), winRate: 0 };
   }
@@ -165,28 +169,31 @@ function options(wanted: ReadonlyArray<{ creature: CreatureDef; count: number }>
   return mixes.filter((m) => m.length > 0);
 }
 
-/** Weaker creatures of the same side or kind, when even the weakest version of what was asked is too much. */
+/**
+ * Weaker creatures of the same side or kind, when even the weakest version of what was asked is too much:
+ * the same faction first, then those sharing a habitat, then the strongest that could fit.
+ */
 function standIns(
   wanted: ReadonlyArray<{ creature: CreatureDef; count: number }>,
-  creatures: ReadonlyMap<string, CreatureDef>,
+  creatures: readonly CreatureDef[],
   budget: number,
 ): Array<{ creature: CreatureDef; count: number }> {
   const factions = new Set(wanted.map((w) => w.creature.faction).filter(Boolean));
   const kinds = new Set(wanted.map((w) => w.creature.kind));
+  const habitats = new Set(wanted.flatMap((w) => w.creature.habitats));
   const asked = new Set(wanted.map((w) => w.creature.id));
   const count = Math.max(1, ...wanted.map((w) => w.count));
-  return [...creatures.values()]
+  const sameSide = (c: CreatureDef) => Number(Boolean(c.faction && factions.has(c.faction)));
+  const nearby = (c: CreatureDef) => Number(c.habitats.some((h) => habitats.has(h)));
+  return creatures
     .filter(
       (c) =>
         !asked.has(c.id) &&
         !c.tags.includes("boss") &&
         creatureXp(c) * WEAKEST <= budget &&
-        ((c.faction && factions.has(c.faction)) || kinds.has(c.kind)),
+        (sameSide(c) === 1 || kinds.has(c.kind)),
     )
-    .sort(
-      (a, b) =>
-        Number(factions.has(b.faction)) - Number(factions.has(a.faction)) || creatureXp(b) - creatureXp(a),
-    )
+    .sort((a, b) => sameSide(b) - sameSide(a) || nearby(b) - nearby(a) || creatureXp(b) - creatureXp(a))
     .slice(0, 3)
     .map((creature) => ({ creature, count }));
 }

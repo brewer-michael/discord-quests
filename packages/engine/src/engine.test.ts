@@ -4,7 +4,7 @@ import { createTestDb, TEST_DATABASE_URL } from "@dq/db/testing";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { serverGameDefaults } from "./campaign-service";
-import { createEngine, createLogger, type Engine } from "./index";
+import { createEngine, createLogger, type Engine, seededDice } from "./index";
 import { loadLoom } from "./loom-store";
 import { describeTimer, paceOf, reminderAt, whenTimeIsUp } from "./pace";
 import { planChapter } from "./planner";
@@ -391,7 +391,8 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
 
   it("fights round by round, then lets the heroes choose mercy", async () => {
     const llm = new FakeLlm();
-    const engine = createEngine({ db: db.db, worlds, llm });
+    // Seeded dice, so this fight plays out the same every run.
+    const engine = createEngine({ db: db.db, worlds, llm, dice: seededDice });
     const c = await engine.campaigns.create({
       guildId: "g-fight",
       channelId: "ch-fight",
@@ -399,7 +400,6 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
       mode: "ai_dm",
       createdBy: "a",
     });
-    // A fixed seed keeps the dice the same every run.
     await db.db
       .update(campaignLoom)
       .set({ masterSeed: "fight-test-seed" })

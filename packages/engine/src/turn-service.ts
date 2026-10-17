@@ -170,14 +170,15 @@ export class TurnService {
     const planned = nextSceneSpec(index, story, loom.state);
     if (!planned) throw new GameError("empty world", "This world has no story to tell yet.");
     const seq = c.turnSeq + 1;
+    const told = await campaignStory(this.deps.db, c);
     const spec = withEncounter(
       index,
       planned,
       party,
       heroesFor(index, party, await this.inventoryFor(party)),
       this.dice(loom.masterSeed, seq, "encounter"),
+      { intensity: told.story.intensity, avoid: told.story.lines },
     );
-    const told = await campaignStory(this.deps.db, c);
 
     const view = this.publicView({
       index,
@@ -621,6 +622,7 @@ export class TurnService {
           party,
           heroesFor(index, party, inventory),
           this.dice(loom.masterSeed, seq, "encounter"),
+          { intensity: told.story.intensity, avoid: told.story.lines },
         )
       : null;
     const mode: NarrationMode = !closing ? "continue" : nextSpec ? "close_and_open" : "finale";

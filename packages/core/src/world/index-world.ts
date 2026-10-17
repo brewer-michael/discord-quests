@@ -1,9 +1,11 @@
+import { SRD_BESTIARY } from "../srd/bestiary.generated";
 import type { BeatRef, World } from "./types";
 
 /** Lookup tables over a loaded world. Build once and reuse. */
 export interface WorldIndex {
   world: World;
   regions: Map<string, World["regions"][number]>;
+  /** The world's own creatures and, unless it opts out, the SRD bestiary. */
   factions: Map<string, World["factions"][number]>;
   classes: Map<string, World["classes"][number]>;
   backgrounds: Map<string, World["backgrounds"][number]>;
@@ -56,7 +58,7 @@ export function indexWorld(world: World): WorldIndex {
     classes: byId(world.classes),
     backgrounds: byId(world.backgrounds),
     species: byId(world.species),
-    creatures: byId(world.creatures),
+    creatures: byId([...(world.meta.srdBestiary ? SRD_BESTIARY : []), ...world.creatures]),
     shortcuts: byId(world.shortcuts),
     detours: byId(world.detours),
     archetypes: byId(world.npcs.archetypes),

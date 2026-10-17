@@ -76,6 +76,10 @@
       },
       "required": ["name", "voice"],
       "additionalProperties": false
+    },
+    "srdBestiary": {
+      "default": true,
+      "type": "boolean"
     }
   },
   "required": [

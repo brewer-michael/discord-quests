@@ -51,6 +51,8 @@ export const WorldMeta = z.strictObject({
   artStyle: Text,
   themes: z.array(Short).min(1),
   storyteller: z.strictObject({ name: Short, voice: Text }),
+  /** Draw on the SRD bestiary as well as this world's own creatures (which win on a shared id). */
+  srdBestiary: z.boolean().default(true),
 });
 export type WorldMeta = z.infer<typeof WorldMeta>;
 
@@ -195,22 +197,73 @@ export type ItemsFile = z.infer<typeof ItemsFile>;
 
 // ------------------------------------------------------------ creatures.yaml
 
+/** Challenge ratings, as the SRD writes them. */
+export const CHALLENGE_RATINGS = [
+  "0",
+  "1/8",
+  "1/4",
+  "1/2",
+  ...Array.from({ length: 30 }, (_, i) => String(i + 1)),
+] as [string, ...string[]];
+
+/** Where creatures live. Regions match by their biome and terrain (see combat/bestiary.ts). */
+export const HABITATS = [
+  "forest",
+  "meadow",
+  "hills",
+  "mountain",
+  "caves",
+  "marsh",
+  "river",
+  "coast",
+  "sea",
+  "desert",
+  "arctic",
+  "ruins",
+  "town",
+  "volcano",
+] as const;
+
+const CreatureScores = z.strictObject({
+  str: z.number().int().min(1).max(30),
+  dex: z.number().int().min(1).max(30),
+  con: z.number().int().min(1).max(30),
+  int: z.number().int().min(1).max(30),
+  wis: z.number().int().min(1).max(30),
+  cha: z.number().int().min(1).max(30),
+});
+
 export const CreatureDef = z.strictObject({
   id: Id,
   name: Short,
   description: Text,
-  kind: z.enum(["beast", "critter", "shadow", "person", "construct", "spirit"]),
-  size: z.enum(["tiny", "small", "medium", "large", "huge"]),
-  cr: z.enum(["0", "1/8", "1/4", "1/2", "1", "2", "3", "4", "5", "6", "7", "8"]),
+  kind: z.enum([
+    "beast",
+    "critter",
+    "shadow",
+    "person",
+    "construct",
+    "spirit",
+    "dragon",
+    "giant",
+    "elemental",
+    "fey",
+    "monster",
+    "plant",
+    "ooze",
+    "undead",
+  ]),
+  size: z.enum(["tiny", "small", "medium", "large", "huge", "gargantuan"]),
+  cr: z.enum(CHALLENGE_RATINGS),
   ac: z.number().int().min(5).max(25),
   hp: Dice,
   speed: z.number().int().min(0).max(120),
-  abilities: AbilityScores,
+  abilities: CreatureScores,
   attacks: z
     .array(
       z.strictObject({
         name: Short,
-        bonus: z.number().int().min(-2).max(15),
+        bonus: z.number().int().min(-2).max(20),
         damage: Dice,
         damageType: Short,
         range: z.tuple([z.number().int(), z.number().int()]).optional(),
@@ -218,12 +271,43 @@ export const CreatureDef = z.strictObject({
       }),
     )
     .min(1),
+  /** Attacks it makes together on its turn, by name ("two Rend attacks"). Without it, one attack a turn. */
+  multiattack: z.array(z.strictObject({ attack: Short, count: z.number().int().min(1).max(6) })).optional(),
+  /** Moves that call for a saving throw instead of an attack roll: a dragon's breath, a spider's web. */
+  specials: z
+    .array(
+      z.strictObject({
+        name: Short,
+        save: AbilityId,
+        dc: z.number().int().min(5).max(30),
+        damage: Dice.optional(),
+        damageType: Short.optional(),
+        /** Half damage on a successful save, rather than none. */
+        halfOnSave: z.boolean().default(false),
+        condition: ConditionId.optional(),
+        /** Catches more than one hero (a cone, a burst). */
+        area: z.boolean().default(false),
+        /** Usable again once it rolls this or higher on a d6 at the start of its turn. */
+        recharge: z.number().int().min(2).max(6).optional(),
+      }),
+    )
+    .default([]),
+  resist: z.array(Short).default([]),
+  immune: z.array(Short).default([]),
+  vulnerable: z.array(Short).default([]),
+  conditionImmune: z.array(ConditionId).default([]),
   traits: z.array(z.strictObject({ name: Short, description: Text })).default([]),
   morale: z.enum(["brave", "normal", "skittish"]),
-  defeat: z.enum(["faints", "flees", "surrenders", "poofs"]),
+  /** How it leaves a fight once beaten. */
+  defeat: z.enum(["faints", "flees", "surrenders", "poofs", "crumbles", "fades"]),
   /** The faction it serves, if any. Sparing it counts as mercy toward that faction. */
   faction: Id.optional(),
   tags: z.array(Id).default([]),
+  habitats: z.array(z.enum(HABITATS)).default([]),
+  /** The gentlest story intensity it may appear in. */
+  minIntensity: z.enum(["light", "classic", "epic"]).default("light"),
+  /** Never a random foe: eagles, unicorns, town guards. The story can still bring it in. */
+  friendly: z.boolean().default(false),
 });
 export type CreatureDef = z.infer<typeof CreatureDef>;
 

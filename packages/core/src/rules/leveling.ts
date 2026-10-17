@@ -41,7 +41,7 @@ export function previewLevelUp(classId: SrdClassId, fromLevel: number): LevelUpP
   };
 }
 
-/** XP value of a defeated creature, by challenge rating (subset used by worlds). */
+/** XP value of a creature, by challenge rating (SRD 5.2.1). */
 export const XP_BY_CR: Record<string, number> = {
   "0": 10,
   "1/8": 25,
@@ -55,4 +55,26 @@ export const XP_BY_CR: Record<string, number> = {
   "6": 2300,
   "7": 2900,
   "8": 3900,
+  "9": 5000,
+  "10": 5900,
+  "11": 7200,
+  "12": 8400,
+  "13": 10000,
+  "14": 11500,
+  "15": 13000,
+  "16": 15000,
+  "17": 18000,
+  "18": 20000,
+  "19": 22000,
+  "20": 25000,
+  "21": 33000,
+  "22": 41000,
+  "23": 50000,
+  "24": 62000,
+  "25": 75000,
+  "26": 90000,
+  "27": 105000,
+  "28": 120000,
+  "29": 135000,
+  "30": 155000,
 };

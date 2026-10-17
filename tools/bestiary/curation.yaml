@@ -1,0 +1,294 @@
+# Which SRD 5.2.1 creatures join the bestiary, and how. tools/gen-bestiary.ts reads this with the SRD stat
+# blocks and writes packages/core/src/srd/bestiary.generated.ts. A creature not listed here is left out.
+#
+# Left out on purpose: fiends (demons, devils and the like; gnolls and sahuagin stay), flesh-eating and
+# grotesque undead (zombies, ghouls, mummies, vampires, liches, crawling claws), body-horror aberrations,
+# lycanthropes other than the werewolf, and anything above challenge rating 13 (beyond a level-10 party).
+#
+# Each entry:
+#   i     the gentlest intensity it may appear at: light, classic or epic
+#   h     habitats: forest meadow hills mountain caves marsh river coast sea desert arctic ruins town volcano
+#   d     one line in the world's voice, safe at that intensity
+# Optional: name (a new name), kind, defeat, morale, friendly (never a random foe), tags, boss (a big fight),
+#   rename (attack or trait names to change), drop (attacks or traits to leave out), multi (a multiattack the
+#   data doesn't spell out, as { attack name: count })
+
+# ------------------------------------------------------------------ beasts
+baboon: { i: light, h: [forest, hills, meadow], d: "A noisy, clever monkey that travels in troops and steals anything shiny." }
+badger: { i: light, h: [forest, meadow, hills], d: "A stubborn badger with digging claws and no patience for intruders." }
+bat: { i: light, h: [caves, forest, ruins], d: "A small bat that flits and squeaks in the dark." }
+cat: { i: light, h: [town, meadow, forest], d: "A sharp-eyed cat with opinions about everyone.", friendly: true }
+crab: { i: light, h: [coast], d: "A shore crab that scuttles sideways and pinches." }
+deer: { i: light, h: [forest, meadow], d: "A wary deer that bounds away at the snap of a twig.", friendly: true }
+eagle: { i: light, h: [mountain, hills, coast], d: "A keen-eyed eagle that rides the high winds." }
+frog: { i: light, h: [marsh, river], d: "A plump frog with a very loud croak.", friendly: true }
+giant-fire-beetle: { i: light, h: [caves, forest, ruins], d: "A beetle the size of a cat, with glands that glow like embers.", tags: [insect, bug, beetle] }
+goat: { i: light, h: [mountain, hills, meadow], d: "A sure-footed goat with hard horns and a harder head." }
+hawk: { i: light, h: [meadow, hills, mountain], d: "A swift hawk that stoops from the sky." }
+hyena: { i: light, h: [desert, meadow, hills], d: "A cackling scavenger that runs in loose, noisy packs." }
+jackal: { i: light, h: [desert, meadow, hills], d: "A thin, yipping wild dog that is braver in numbers." }
+lizard: { i: light, h: [desert, caves, ruins], d: "A sun-loving lizard that freezes, then darts.", friendly: true }
+owl: { i: light, h: [forest, ruins], d: "A silent owl with eyes like lamps.", friendly: true }
+piranha: { i: classic, h: [river], d: "A small fish with a big appetite and a mouth full of needle teeth.", tags: [fish] }
+rat: { i: light, h: [town, caves, ruins], d: "A bold rat that squeezes through any gap." }
+raven: { i: light, h: [forest, ruins, hills, town], d: "A clever raven that mimics voices and remembers faces." }
+scorpion: { i: light, h: [desert, caves], d: "A small desert scorpion with a stinging tail.", tags: [bug] }
+spider: { i: light, h: [forest, caves, ruins], d: "An ordinary spider, no bigger than a coin.", tags: [bug], friendly: true }
+vulture: { i: light, h: [desert, meadow, hills], d: "A patient vulture circling high above." }
+weasel: { i: light, h: [forest, meadow], d: "A quick, sly weasel." }
+blood-hawk: { i: classic, name: Crimson Hawk, h: [hills, mountain, coast], d: "A red-feathered hawk that attacks in shrieking flocks." }
+camel: { i: light, h: [desert], d: "A patient camel that carries travelers across the sands.", friendly: true }
+giant-crab: { i: light, h: [coast], d: "A crab as big as a shield, with claws that can snap an oar." }
+giant-rat: { i: light, h: [caves, town, ruins], d: "A rat the size of a small dog." }
+giant-weasel: { i: light, h: [forest, meadow], d: "A weasel as long as a grown-up is tall, and twice as quick." }
+mastiff: { i: light, h: [town], d: "A big, loyal guard dog with a deep bark.", tags: [dog] }
+mule: { i: light, h: [town, meadow], d: "A stubborn, sure-footed pack mule.", friendly: true }
+pony: { i: light, h: [town, meadow], d: "A sturdy pony with a mind of its own.", friendly: true }
+venomous-snake: { i: light, h: [forest, desert, marsh], d: "A small snake with a nasty bite." }
+boar: { i: light, h: [forest, hills], d: "A bristling wild boar with curved tusks and a short temper." }
+constrictor-snake: { i: light, h: [forest, marsh, river], d: "A long snake that squeezes rather than bites." }
+draft-horse: { i: light, h: [town, meadow], d: "A great, gentle horse built for pulling ploughs and wagons.", friendly: true }
+elk: { i: light, h: [forest, meadow, hills], d: "A great elk with a crown of antlers, dangerous when it charges." }
+giant-badger: { i: light, h: [forest, hills, meadow], d: "A badger the size of a pony, and just as stubborn as a small one." }
+giant-bat: { i: light, h: [caves, ruins, forest], d: "A bat with wings as wide as a cart." }
+giant-centipede: { i: classic, h: [caves, forest, ruins], d: "A centipede as long as a grown-up, all legs and clicking jaws.", tags: [insect, bug] }
+giant-frog: { i: light, h: [marsh, river], d: "A frog big enough to swallow a goose." }
+giant-lizard: { i: light, h: [desert, caves, hills], d: "A lizard as big as a horse, sometimes tamed as a mount." }
+giant-venomous-snake: { i: classic, h: [forest, marsh, desert], d: "A snake longer than a rowboat, with a venomous bite." }
+giant-wolf-spider: { i: classic, h: [forest, caves, meadow], d: "A hunting spider the size of a pony that runs down what it hunts.", tags: [bug] }
+panther: { i: light, h: [forest, hills], d: "A sleek black cat that hunts from the shadows of the trees." }
+pteranodon: { i: light, h: [coast, hills, mountain], d: "A leathery flying reptile with a long beak.", tags: [dinosaur] }
+riding-horse: { i: light, h: [town, meadow], d: "A swift riding horse.", friendly: true }
+wolf: { i: light, h: [forest, hills, meadow, arctic], d: "A grey wolf that hunts with its pack, clever and patient." }
+ape: { i: light, h: [forest, mountain], d: "A powerful ape that throws rocks when annoyed." }
+black-bear: { i: light, h: [forest, hills, mountain], d: "A black bear, mostly interested in honey, and dangerous when cornered." }
+crocodile: { i: classic, h: [river, marsh], d: "A crocodile that lies still as a log until it lunges." }
+giant-goat: { i: light, h: [mountain, hills], d: "A goat as big as an ox that charges anything on its mountain." }
+giant-seahorse: { i: light, h: [sea], d: "A seahorse big enough to ride.", friendly: true }
+giant-wasp: { i: classic, h: [forest, meadow], d: "A wasp as big as a hound, with a stinger like a dagger.", tags: [insect, bug] }
+reef-shark: { i: classic, h: [sea, coast], d: "A sleek shark that patrols the reefs.", tags: [fish] }
+warhorse: { i: light, h: [town, meadow], d: "A brave warhorse trained to carry a knight into battle.", friendly: true }
+brown-bear: { i: light, h: [forest, hills, mountain], d: "A huge brown bear, fierce in defence of its den." }
+dire-wolf: { i: classic, h: [forest, hills, arctic, mountain], d: "A wolf as big as a horse, leader of the largest packs." }
+giant-hyena: { i: classic, h: [desert, meadow, hills], d: "A hyena the size of a bear, with a cackle that carries for miles." }
+giant-octopus: { i: light, h: [sea, coast], d: "An octopus with arms as long as a ship's oars." }
+giant-spider: { i: classic, h: [forest, caves, ruins], d: "A spider as big as a horse that spins great sticky webs.", tags: [bug] }
+giant-toad: { i: light, h: [marsh, river], d: "A toad the size of a pony with a tongue like a rope." }
+lion: { i: light, h: [meadow, desert, hills], d: "A proud lion that hunts with its pride.", multi: { Rend: 2 } }
+tiger: { i: light, h: [forest, hills], d: "A striped tiger that stalks through the long grass." }
+allosaurus: { i: classic, h: [meadow, forest, hills], d: "A towering, fast-running hunter from a lost age.", tags: [dinosaur] }
+giant-boar: { i: light, h: [forest, hills], d: "A boar as big as a cart, with tusks like scythes." }
+giant-constrictor-snake: { i: classic, h: [forest, marsh, river], d: "A snake as thick as a tree trunk." }
+hunter-shark: { i: classic, h: [sea], d: "A large shark that hunts alone in open water.", tags: [fish] }
+plesiosaurus: { i: classic, h: [sea, coast], d: "A long-necked sea reptile from a lost age.", tags: [dinosaur] }
+polar-bear: { i: light, h: [arctic, coast], d: "A great white bear of the frozen north." }
+rhinoceros: { i: light, h: [meadow, desert], d: "A short-sighted, thick-skinned beast that charges anything it can't see clearly." }
+saber-toothed-tiger: { i: classic, h: [arctic, mountain, forest], d: "A great cat with fangs like daggers, from the age of ice." }
+ankylosaurus: { i: light, h: [meadow, hills, forest], d: "An armored beast from a lost age, with a club for a tail.", tags: [dinosaur] }
+giant-scorpion: { i: classic, h: [desert, caves], d: "A scorpion as big as a cart, with great claws and a stinging tail.", tags: [bug] }
+killer-whale: { i: light, h: [sea, arctic], d: "A black-and-white whale that hunts in family pods.", tags: [whale] }
+archelon: { i: light, h: [sea, coast], d: "A sea turtle as big as a boat." }
+elephant: { i: light, h: [meadow, forest], d: "A huge, wise elephant, dangerous only when it charges." }
+hippopotamus: { i: light, h: [river, marsh], d: "A hippo that looks lazy and is anything but." }
+giant-crocodile: { i: classic, h: [river, marsh], d: "A crocodile longer than a riverboat." }
+giant-shark: { i: classic, h: [sea], d: "A shark as long as a ship.", tags: [fish] }
+triceratops: { i: light, h: [meadow, hills], d: "A three-horned giant from a lost age that charges with its head down.", tags: [dinosaur] }
+mammoth: { i: light, h: [arctic, hills], d: "A shaggy giant elephant of the frozen north." }
+giant-ape: { i: classic, h: [forest, mountain], d: "An ape as tall as a tower." }
+tyrannosaurus-rex: { i: classic, name: Tyrannosaurus, h: [meadow, forest, hills], d: "The greatest hunter of a lost age, with jaws as wide as a doorway.", tags: [dinosaur], boss: true }
+
+# ------------------------------------------------------------------ swarms
+swarm-of-bats: { i: light, name: Swarm of Bats, h: [caves, ruins], d: "A whirling cloud of squeaking bats.", tags: [bat] }
+swarm-of-rats: { i: classic, name: Swarm of Rats, h: [town, caves, ruins], d: "A seething tide of rats.", tags: [rat] }
+swarm-of-ravens: { i: light, name: Swarm of Ravens, h: [forest, ruins, hills], d: "A croaking storm of ravens.", tags: [raven] }
+swarm-of-insects: { i: classic, name: Swarm of Insects, h: [marsh, forest, caves], d: "A buzzing, biting cloud of insects.", tags: [insect, bug] }
+swarm-of-piranhas: { i: classic, name: Swarm of Piranhas, h: [river], d: "A churning school of hungry fish.", tags: [fish, piranha] }
+swarm-of-venomous-snakes: { i: classic, name: Swarm of Snakes, h: [marsh, forest, ruins], d: "A writhing knot of snakes.", tags: [snake] }
+
+# ------------------------------------------------------------------ friendly wonders (celestial)
+giant-owl: { i: light, h: [forest, ruins], d: "A wise owl as big as a grown-up that sometimes speaks.", kind: spirit, friendly: true }
+sphinx-of-wonder: { i: light, h: [ruins, desert], d: "A tiny winged sphinx who guards secrets and loves riddles.", kind: spirit, friendly: true }
+giant-eagle: { i: light, h: [mountain, hills, coast], d: "A noble eagle large enough to carry a rider, and wise enough to choose whom.", kind: spirit, friendly: true }
+pegasus: { i: light, h: [meadow, mountain, hills], d: "A winged horse, proud and hard to befriend.", kind: spirit, friendly: true }
+giant-elk: { i: light, h: [forest, meadow], d: "A majestic elk with antlers like a young tree.", kind: spirit, friendly: true }
+couatl: { i: light, h: [forest, desert], d: "A feathered serpent of the heavens with rainbow wings.", kind: spirit, friendly: true, tags: [snake] }
+unicorn: { i: light, h: [forest], d: "A white unicorn whose horn can heal.", kind: spirit, friendly: true }
+
+# ------------------------------------------------------------------ constructs
+homunculus: { i: classic, h: [ruins, town], d: "A tiny winged servant a wizard made to run errands and keep watch." }
+animated-flying-sword: { i: light, name: Flying Sword, h: [ruins, town], d: "A sword that flies and fights on its own, set to guard something." }
+animated-armor: { i: light, name: Animated Armor, h: [ruins, town], d: "An empty suit of armor that clanks to life to guard a hall." }
+animated-rug-of-smothering: { i: classic, name: Rug of Smothering, h: [ruins, town], d: "A rug that rolls up anyone who steps on it." }
+gorgon: { i: classic, h: [mountain, hills, meadow], d: "A bull of iron plates whose breath can turn travelers to stone." }
+shield-guardian: { i: classic, h: [ruins, town], d: "A hulking guardian made to protect whoever wears its amulet." }
+clay-golem: { i: classic, h: [ruins, caves], d: "A tall golem of hardened clay, made to guard a sacred place." }
+stone-golem: { i: classic, h: [ruins, mountain, caves], d: "A giant statue that moves at its maker's command.", boss: true }
+
+# ------------------------------------------------------------------ dragons and kin
+kobold-warrior: { i: classic, name: Kobold, kind: person, h: [caves, mountain, ruins], d: "A small, scaly kobold who fights with traps, tricks and numbers.", tags: [kobold] }
+pseudodragon: { i: light, h: [forest, mountain], d: "A cat-sized dragon with a sleepy sting and a curious mind." }
+brass-dragon-wyrmling: { i: classic, name: Brass Dragon Wyrmling, h: [desert], d: "A young brass dragon, chatty and vain.", friendly: true }
+copper-dragon-wyrmling: { i: classic, name: Copper Dragon Wyrmling, h: [hills, mountain], d: "A young copper dragon who loves jokes and riddles.", friendly: true }
+black-dragon-wyrmling: { i: classic, name: Black Dragon Wyrmling, h: [marsh], d: "A young black dragon that lurks in the bogs." }
+bronze-dragon-wyrmling: { i: classic, name: Bronze Dragon Wyrmling, h: [coast, sea], d: "A young bronze dragon that watches over the shore.", friendly: true }
+green-dragon-wyrmling: { i: classic, name: Green Dragon Wyrmling, h: [forest], d: "A young green dragon, sly and full of lies." }
+silver-dragon-wyrmling: { i: classic, name: Silver Dragon Wyrmling, h: [mountain, arctic], d: "A young silver dragon, proud and curious about people.", friendly: true }
+white-dragon-wyrmling: { i: classic, name: White Dragon Wyrmling, h: [arctic, mountain], d: "A young white dragon with an icy temper." }
+blue-dragon-wyrmling: { i: classic, name: Blue Dragon Wyrmling, h: [desert, coast], d: "A young blue dragon that crackles with lightning." }
+gold-dragon-wyrmling: { i: classic, name: Gold Dragon Wyrmling, h: [meadow, forest, hills], d: "A young gold dragon, noble and wise beyond its years.", friendly: true }
+red-dragon-wyrmling: { i: classic, name: Red Dragon Wyrmling, h: [mountain, volcano], d: "A young red dragon, greedy and proud already." }
+half-dragon: { i: classic, kind: person, h: [mountain, ruins, caves], d: "A warrior born of a dragon's line, with scales, wings and fiery breath." }
+young-brass-dragon: { i: classic, name: Young Brass Dragon, h: [desert], d: "A brass dragon in its prime, talkative and easily flattered.", friendly: true, multi: { Rend: 3 } }
+young-white-dragon: { i: classic, name: Young White Dragon, h: [arctic, mountain], d: "A white dragon of the frozen peaks, cold in every way.", boss: true }
+wyvern: { i: classic, h: [mountain, hills], d: "A two-legged cousin of dragons, with a stinging tail." }
+young-black-dragon: { i: classic, name: Young Black Dragon, h: [marsh], d: "A black dragon that rules a drowned and rotting marsh.", boss: true }
+young-copper-dragon: { i: classic, name: Young Copper Dragon, h: [hills, mountain], d: "A copper dragon who loves a good joke, and hates being the joke.", friendly: true }
+young-bronze-dragon: { i: classic, name: Young Bronze Dragon, h: [coast, sea], d: "A bronze dragon who guards the coast against raiders.", friendly: true }
+young-green-dragon: { i: classic, name: Young Green Dragon, h: [forest], d: "A green dragon who rules a dark forest with lies and fear.", boss: true }
+young-blue-dragon: { i: classic, name: Young Blue Dragon, h: [desert, coast], d: "A blue dragon of the desert, proud and thunderous.", boss: true }
+young-silver-dragon: { i: classic, name: Young Silver Dragon, h: [mountain, arctic], d: "A silver dragon who sometimes walks among people in disguise.", friendly: true }
+young-gold-dragon: { i: classic, name: Young Gold Dragon, h: [meadow, hills, forest], d: "A gold dragon, wise and just, and terrible to the wicked.", friendly: true }
+young-red-dragon: { i: classic, name: Young Red Dragon, h: [mountain, volcano], d: "A red dragon sleeping on a growing hoard, greedy and proud.", boss: true }
+adult-brass-dragon: { i: epic, name: Adult Brass Dragon, h: [desert], d: "A great brass dragon of the deep desert.", friendly: true }
+adult-white-dragon: { i: epic, name: Adult White Dragon, h: [arctic], d: "A great white dragon that rules a kingdom of ice.", boss: true }
+
+# ------------------------------------------------------------------ elementals
+merfolk-skirmisher: { i: light, name: Merfolk Skirmisher, kind: person, h: [sea, coast], d: "A merfolk scout with a trident, wary of land-dwellers." }
+steam-mephit: { i: light, name: Steam Mephit, h: [volcano, caves, marsh], d: "A hissing little spirit of steam that scalds and giggles." }
+magmin: { i: light, h: [volcano, caves], d: "A small, bubbling creature of living magma that sets things alight for fun." }
+dust-mephit: { i: light, name: Dust Mephit, h: [desert, ruins], d: "A sneezy little spirit of dust and grit." }
+ice-mephit: { i: light, name: Ice Mephit, h: [arctic, mountain], d: "A sharp, spiteful little spirit of frost." }
+magma-mephit: { i: light, name: Magma Mephit, h: [volcano], d: "A drippy little spirit of molten rock." }
+azer-sentinel: { i: classic, name: Azer, h: [volcano, mountain, caves], d: "A dwarf-like smith of living brass with a beard of flame." }
+gargoyle: { i: classic, h: [ruins, town, mountain], d: "A stone statue that is not a statue at all." }
+air-elemental: { i: classic, name: Air Elemental, h: [mountain, hills, desert, coast], d: "A howling whirlwind with a will of its own." }
+earth-elemental: { i: classic, name: Earth Elemental, h: [mountain, caves, hills], d: "A walking hill of rock and soil that moves through stone like water." }
+fire-elemental: { i: classic, name: Fire Elemental, h: [volcano, desert], d: "A dancing column of living fire." }
+salamander: { i: classic, h: [volcano], d: "A serpent-bodied creature of fire, fierce and proud.", multi: { "Flame Spear": 2 } }
+water-elemental: { i: classic, name: Water Elemental, h: [sea, coast, river, marsh], d: "A rushing wave with a mind of its own." }
+xorn: { i: light, h: [caves, mountain], d: "A strange, three-armed creature of stone that eats gems and metal." }
+invisible-stalker: { i: epic, name: Invisible Stalker, h: [mountain, ruins, town], d: "An unseen hunter of wind, bound to follow one task to its end." }
+djinni: { i: classic, h: [desert, mountain], d: "A towering genie of the air, proud and generous to its friends.", friendly: true }
+efreeti: { i: epic, h: [volcano, desert], d: "A towering genie of fire, proud and quick to anger.", boss: true }
+
+# ------------------------------------------------------------------ fey and goblinkind
+goblin-minion: { i: classic, name: Goblin, kind: person, h: [caves, forest, ruins, hills], d: "A scrawny goblin who fights in a crowd and runs alone.", tags: [goblin] }
+blink-dog: { i: light, name: Blink Dog, h: [forest, meadow], d: "A clever fey dog that vanishes and reappears a few steps away.", friendly: true, tags: [dog] }
+goblin-warrior: { i: classic, name: Goblin Warrior, kind: person, h: [caves, forest, ruins, hills], d: "A sneaky goblin with a scimitar, quick to ambush and quicker to flee.", tags: [goblin] }
+sprite: { i: light, h: [forest, meadow], d: "A tiny winged fey, fierce in defence of its glade." }
+hobgoblin-warrior: { i: classic, name: Hobgoblin, kind: person, h: [hills, ruins, caves], d: "A disciplined hobgoblin soldier who fights in formation.", tags: [goblin] }
+satyr: { i: light, h: [forest, meadow], d: "A goat-legged fey musician who plays tricks on travelers." }
+worg: { i: classic, h: [forest, hills], d: "A huge, cunning wolf that speaks, and carries goblin riders.", tags: [wolf] }
+bugbear-warrior: { i: classic, name: Bugbear, kind: person, h: [forest, caves, hills], d: "A hairy, long-armed bugbear that loves an ambush.", tags: [goblin] }
+dryad: { i: light, h: [forest], d: "A tree spirit who guards her grove and sends trespassers wandering in circles." }
+goblin-boss: { i: classic, name: Goblin Boss, kind: person, h: [caves, forest, ruins, hills], d: "A goblin chief who leads from the back and keeps the best of the loot.", tags: [goblin] }
+centaur-trooper: { i: classic, name: Centaur, h: [meadow, forest], d: "A centaur warrior who guards the open plains." }
+sea-hag: { i: epic, name: Sea Hag, h: [coast, sea, marsh], d: "A hag of the sea whose glare fills hearts with dread.", tags: [hag] }
+bugbear-stalker: { i: classic, name: Bugbear Stalker, kind: person, h: [forest, caves], d: "A bugbear hunter who moves without a sound.", tags: [goblin] }
+green-hag: { i: epic, name: Green Hag, h: [marsh, forest], d: "A hag of the swamp who leads travelers astray with illusions.", tags: [hag] }
+hobgoblin-captain: { i: classic, name: Hobgoblin Captain, kind: person, h: [hills, ruins], d: "A hobgoblin officer who barks orders and never retreats.", tags: [goblin] }
+
+# ------------------------------------------------------------------ raiders (fiend in the SRD)
+gnoll-warrior: { i: classic, name: Gnoll, kind: monster, h: [meadow, hills, desert], d: "A hyena-headed raider that roams in howling packs.", tags: [gnoll] }
+sahuagin-warrior: { i: classic, name: Sahuagin, kind: monster, h: [sea, coast], d: "A shark-toothed raider from the deep sea.", tags: [sahuagin] }
+
+# ------------------------------------------------------------------ giants
+ogre: { i: classic, h: [hills, forest, mountain], d: "A huge, dim, bad-tempered brute with a tree-trunk club." }
+ettin: { i: classic, h: [hills, mountain, caves], d: "A two-headed giant whose heads never agree on anything." }
+hill-giant: { i: classic, name: Hill Giant, h: [hills, mountain], d: "A huge, lazy giant who throws boulders at anything that bothers it." }
+troll: { i: classic, h: [forest, mountain, marsh, caves], d: "A gangly troll that heals almost as fast as it is hurt." }
+stone-giant: { i: classic, name: Stone Giant, h: [mountain, caves], d: "A grey giant of the deep mountains who plays games with boulders." }
+frost-giant: { i: classic, name: Frost Giant, h: [arctic, mountain], d: "A towering giant of the icy north, proud of its strength.", boss: true }
+cloud-giant: { i: classic, name: Cloud Giant, h: [mountain], d: "A giant who lives in castles among the clouds.", boss: true }
+fire-giant: { i: classic, name: Fire Giant, h: [volcano, mountain], d: "A giant smith of the burning mountains.", boss: true }
+storm-giant: { i: epic, name: Storm Giant, h: [sea, coast, mountain], d: "A giant as tall as a tower who commands the storm.", boss: true }
+
+# ------------------------------------------------------------------ people
+commoner: { i: light, h: [town, meadow], d: "Ordinary folk going about their day.", friendly: true }
+bandit: { i: light, h: [forest, hills, ruins, meadow], d: "A robber who waylays travelers on lonely roads.", tags: [bandit] }
+cultist: { i: epic, h: [ruins, caves, town], d: "A follower of a dark cause, more fanatical than dangerous.", tags: [cultist] }
+guard: { i: light, h: [town], d: "A town guard with a spear and a tired look.", friendly: true }
+noble: { i: light, h: [town], d: "A well-dressed noble used to getting their way.", friendly: true }
+warrior-infantry: { i: classic, name: Soldier, h: [town, meadow, ruins], d: "A foot soldier with spear and shield.", friendly: true }
+priest-acolyte: { i: light, name: Acolyte, h: [town], d: "A young temple helper.", friendly: true }
+scout: { i: classic, h: [forest, hills, meadow], d: "A sharp-eyed scout who shoots from cover.", tags: [bandit] }
+tough: { i: classic, h: [town, ruins], d: "A hired brute who likes to throw their weight around.", tags: [bandit] }
+pirate: { i: classic, h: [coast, sea], d: "A sea robber with a dagger in each hand and a grin.", tags: [pirate], multi: { Dagger: 2 } }
+spy: { i: classic, h: [town], d: "A sneak who gathers secrets and strikes from the shadows." }
+bandit-captain: { i: classic, name: Bandit Captain, h: [forest, hills, ruins], d: "The cunning leader of a bandit gang.", tags: [bandit] }
+berserker: { i: classic, h: [hills, arctic, mountain], d: "A wild warrior who charges into battle roaring." }
+cultist-fanatic: { i: epic, name: Cult Fanatic, h: [ruins, caves], d: "A zealous leader of a dark cause.", tags: [cultist] }
+druid: { i: classic, h: [forest], d: "A keeper of the wild places who calls on nature's power.", friendly: true }
+priest: { i: light, h: [town], d: "A temple priest with healing hands.", friendly: true }
+knight: { i: classic, h: [town, meadow], d: "A sworn knight in shining plate.", friendly: true }
+warrior-veteran: { i: classic, name: Veteran, h: [town, hills, ruins], d: "A battle-hardened mercenary with sword and crossbow.", tags: [mercenary] }
+guard-captain: { i: classic, name: Guard Captain, h: [town], d: "The stern captain of the town watch.", friendly: true }
+tough-boss: { i: classic, name: Gang Boss, h: [town, ruins], d: "The boss of a gang of toughs.", tags: [bandit] }
+gladiator: { i: classic, h: [town], d: "A champion of the arena who fights for glory.", friendly: true }
+mage: { i: classic, h: [town, ruins, mountain], d: "A wizard who uses their magic for their own ends." }
+pirate-captain: { i: classic, name: Pirate Captain, h: [coast, sea], d: "A feared pirate captain with a sharp blade and sharper wits.", tags: [pirate] }
+assassin: { i: epic, h: [town], d: "A hired blade who strikes from the shadows." }
+archmage: { i: epic, h: [town, ruins, mountain], d: "A wizard of terrible power.", boss: true }
+
+# ------------------------------------------------------------------ monsters
+stirge: { i: classic, h: [marsh, caves, forest], d: "A whining, bat-winged pest with a long, needle-like beak.", tags: [insect, bug] }
+flying-snake: { i: light, name: Flying Snake, h: [forest, desert], d: "A brightly colored snake with feathered wings." }
+axe-beak: { i: light, name: Axe Beak, h: [meadow, hills], d: "A tall, flightless bird with a beak like an axe." }
+cockatrice: { i: classic, h: [meadow, hills, forest], d: "A bad-tempered bird-lizard whose peck can turn travelers to stone." }
+rust-monster: { i: light, name: Rust Monster, h: [caves, ruins], d: "A bug-like creature that eats metal and rusts weapons with a touch.", tags: [bug] }
+death-dog: { i: classic, name: Death Dog, h: [desert, hills], d: "A two-headed dog, snarling and relentless.", tags: [dog] }
+harpy: { i: classic, h: [coast, mountain, hills], d: "A winged creature whose song lures travelers off the path." }
+hippogriff: { i: light, h: [mountain, hills, meadow], d: "Half eagle, half horse, and proud of both halves." }
+giant-vulture: { i: classic, name: Giant Vulture, h: [desert, hills], d: "A vulture as big as a grown-up, cleverer than any bird should be." }
+ankheg: { i: classic, h: [meadow, forest], d: "A huge burrowing insect that bursts from the ground beneath farm fields.", tags: [insect, bug] }
+ettercap: { i: classic, h: [forest], d: "A creature that tends giant spiders and strings webs between the trees.", tags: [spider] }
+griffon: { i: light, h: [mountain, hills], d: "Half eagle, half lion, and fierce about its nest." }
+merrow: { i: classic, h: [sea, coast], d: "A brutish sea giant that capsizes boats." }
+mimic: { i: classic, h: [ruins, caves, town], d: "A shapeshifter that disguises itself as a chest or a door." }
+basilisk: { i: classic, h: [caves, mountain, ruins], d: "A many-legged reptile whose gaze can turn travelers to stone." }
+doppelganger: { i: epic, h: [town], d: "A shapeshifter that steals faces and secrets." }
+manticore: { i: classic, h: [mountain, hills, desert], d: "A lion with dragon wings and a tail of spikes." }
+minotaur-of-baphomet: { i: classic, name: Minotaur, h: [caves, ruins], d: "A bull-headed giant who guards a maze." }
+owlbear: { i: classic, h: [forest], d: "Half owl, half bear, and all temper." }
+phase-spider: { i: classic, name: Phase Spider, h: [forest, caves, ruins], d: "A spider that blinks between worlds to strike from nowhere.", tags: [bug] }
+werewolf-hybrid: { i: epic, name: Werewolf, h: [forest, hills], d: "A wolf-man of the deep woods, cursed to hunt under the moon.", tags: [wolf] }
+winter-wolf: { i: classic, name: Winter Wolf, h: [arctic, mountain], d: "A huge white wolf with breath of freezing wind.", tags: [wolf] }
+bulette: { i: classic, h: [hills, meadow, mountain], d: "A land shark that burrows through the ground and leaps up from below." }
+chimera: { i: classic, h: [mountain, hills], d: "A beast with the heads of a lion, a goat and a dragon.", boss: true }
+medusa: { i: classic, h: [ruins, caves], d: "A snake-haired figure whose gaze turns travelers to stone.", tags: [snake], boss: true }
+hydra: { i: classic, h: [marsh, river], d: "A many-headed serpent: lose one head and two grow back.", tags: [snake], boss: true, multi: { Bite: 5 } }
+behir: { i: classic, h: [caves, mountain], d: "A huge, many-legged serpent that crackles with lightning.", tags: [snake], boss: true }
+remorhaz: { i: classic, h: [arctic], d: "A huge, burning-hot worm of the frozen wastes.", boss: true }
+roc: { i: classic, h: [mountain, coast], d: "A bird so huge it can carry off an elephant.", boss: true, multi: { Beak: 2 } }
+
+# ------------------------------------------------------------------ oozes
+gray-ooze: { i: classic, name: Gray Ooze, h: [caves, ruins], d: "A puddle of grey slime that eats through metal." }
+gelatinous-cube: { i: classic, name: Gelatinous Cube, h: [caves, ruins], d: "A wobbling, see-through cube that sweeps dungeon halls clean." }
+ochre-jelly: { i: classic, name: Ochre Jelly, h: [caves, ruins], d: "A yellow blob that oozes under doors." }
+black-pudding: { i: classic, name: Black Pudding, h: [caves, ruins], d: "A heap of black slime that splits in two when struck." }
+
+# ------------------------------------------------------------------ plants
+awakened-shrub: { i: light, name: Awakened Shrub, h: [forest, meadow], d: "A shrub that walks and grumbles." }
+violet-fungus: { i: light, name: Violet Fungus, h: [caves], d: "A purple mushroom that lashes out with tendrils." }
+awakened-tree: { i: light, name: Awakened Tree, h: [forest], d: "A tree that has woken up and does not like axes." }
+shambling-mound: { i: classic, name: Shambling Mound, h: [marsh, forest], d: "A walking heap of vines and swamp weeds." }
+treant: { i: classic, h: [forest], d: "An ancient tree-shepherd, slow to anger and terrible when roused.", friendly: true }
+
+# ------------------------------------------------------------------ restless dead
+skeleton: { i: classic, h: [ruins, caves], d: "A rattling skeleton stirred by old magic to guard a tomb.", tags: [undead], defeat: crumbles }
+shadow: { i: classic, h: [ruins, caves], d: "A living shadow that chills whatever it touches.", tags: [undead], defeat: poofs }
+warhorse-skeleton: { i: classic, name: Warhorse Skeleton, h: [ruins], d: "The bones of a warhorse, still galloping into battle.", tags: [undead, skeleton], defeat: crumbles }
+specter: { i: epic, h: [ruins], d: "A cold, angry spirit that passes through walls.", tags: [undead, ghost], defeat: fades }
+minotaur-skeleton: { i: classic, name: Minotaur Skeleton, h: [ruins, caves], d: "The towering bones of a minotaur, still guarding its maze.", tags: [undead, skeleton], defeat: crumbles }
+will-o-wisp: { i: classic, name: Will-o'-Wisp, h: [marsh], d: "A drifting light that leads travelers astray.", tags: [undead], defeat: fades }
+wight: { i: epic, h: [ruins, arctic], d: "A cold, grim warrior risen from an old barrow.", tags: [undead], defeat: crumbles }
+ghost: { i: epic, h: [ruins, town], d: "A restless spirit bound to the place it once loved.", tags: [undead], defeat: fades, drop: [Possession] }
+wraith: { i: epic, h: [ruins], d: "A spirit of pure malice, dark as a moonless night.", tags: [undead], defeat: fades }
+
+# ------------------------------------------------------------------ strange things of the deep
+grimlock: { i: classic, kind: person, h: [caves], d: "A blind cave-dweller that hunts by sound and smell." }
+darkmantle: { i: classic, h: [caves], d: "A cave creature that hangs like a stalactite and drops on passers-by." }
+grick: { i: classic, h: [caves, forest], d: "A worm-like hunter with a hooked beak and four grasping feelers." }
+chuul: { i: classic, h: [marsh, caves, river], d: "A huge armored creature like a lobster, with grasping claws." }
+roper: { i: classic, h: [caves], d: "A creature that looks like a stalagmite until its sticky tendrils lash out." }
+cloaker: { i: epic, h: [caves], d: "A creature that drifts like a dark cloak through the deepest caves." }

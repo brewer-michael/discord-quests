@@ -39,6 +39,8 @@ export interface Foe {
   bloodiedChecked: boolean;
   /** The next attack against it has advantage. */
   distracted: boolean;
+  /** Specials it has used that haven't recharged yet (a dragon's breath), by name. */
+  spent?: string[];
 }
 
 export interface CombatState {
@@ -59,6 +61,7 @@ export interface HeroAttack {
   name: string;
   bonus: number;
   damage: string;
+  damageType: string;
   ranged: boolean;
 }
 
@@ -314,6 +317,7 @@ export function heroCombatant(args: {
       name: w.name,
       bonus: args.proficiencyBonus + abilityMod,
       damage: signed(srd.damage, abilityMod),
+      damageType: srd.damageType,
       ranged,
     });
   }
@@ -323,6 +327,7 @@ export function heroCombatant(args: {
       name: "an unarmed blow",
       bonus: args.proficiencyBonus + mod("str"),
       damage: String(Math.max(1, 1 + mod("str"))),
+      damageType: "bludgeoning",
       ranged: false,
     });
   attacks.sort((a, b) => averageDice(b.damage) + b.bonus - (averageDice(a.damage) + a.bonus));
@@ -481,6 +486,17 @@ export function resolveCombatRound(
     events.push({ actorId: f.id, actor: f.name, kind: "foe_leaves", text: `${f.name} ${f.exit}.` });
   };
 
+  /** Damage after the foe's resistances, immunities and weaknesses, with a few words on what happened. */
+  const dealtTo = (f: Foe, amount: number, type: string): { dealt: number; note: string } => {
+    const c = creatures.get(f.creatureId);
+    if (!c || amount <= 0) return { dealt: amount, note: "" };
+    if (c.immune.includes(type)) return { dealt: 0, note: ` ${f.name} can't be hurt by ${type}!` };
+    if (c.resist.includes(type))
+      return { dealt: Math.floor(amount / 2), note: ` (${f.name} shrugs off some of the ${type})` };
+    if (c.vulnerable.includes(type)) return { dealt: amount * 2, note: ` (${type} hurts it twice as much!)` };
+    return { dealt: amount, note: "" };
+  };
+
   const hurtFoe = (f: Foe, amount: number) => {
     f.hp = Math.max(0, f.hp - Math.max(0, amount));
     if (f.hp === 0) foeLeaves(f, "beaten");
@@ -552,7 +568,11 @@ export function resolveCombatRound(
         if (roll.hit) {
           dmg = rollDamage(atk.damage, roll.critical, rng).total;
           if (h.sneakDice && upperHand) dmg += rollDamage(h.sneakDice, roll.critical, rng).total;
-          text += roll.critical ? ` and lands a mighty hit for ${dmg}!` : ` and hits for ${dmg}.`;
+          const { dealt, note } = dealtTo(foe, dmg, atk.damageType);
+          dmg = dealt;
+          text += roll.critical
+            ? ` and lands a mighty hit for ${dmg}!${note}`
+            : ` and hits for ${dmg}.${note}`;
         } else text += " but misses.";
         events.push({
           actorId: h.id,
@@ -711,8 +731,10 @@ export function resolveCombatRound(
         let text = `${h.name} casts ${spell.name} at ${foe.name}`;
         let dmg = 0;
         if (roll.hit) {
-          dmg = rollDamage(scaleCantrip(e.damage, h.level, e.scalesAtLevels), roll.critical, rng).total;
-          text += ` and hits for ${dmg}.`;
+          const raw = rollDamage(scaleCantrip(e.damage, h.level, e.scalesAtLevels), roll.critical, rng).total;
+          const { dealt, note } = dealtTo(foe, raw, e.damageType);
+          dmg = dealt;
+          text += ` and hits for ${dmg}.${note}`;
         } else text += " but it goes wide.";
         events.push({
           ...base,
@@ -739,10 +761,22 @@ export function resolveCombatRound(
         const saved = total >= dc;
         let text = `${h.name} casts ${spell.name} on ${foe.name}`;
         let dmg = 0;
+        const unmoved =
+          e.kind === "save-condition" &&
+          (creature?.conditionImmune.includes(e.condition) ||
+            (e.condition === "stunned" &&
+              ["construct", "undead", "ooze", "plant", "elemental"].includes(creature?.kind ?? "")));
         if (e.kind === "save-damage") {
           const full = rollDamage(scaleCantrip(e.damage, h.level, e.scalesAtLevels), false, rng).total;
-          dmg = saved ? (e.halfOnSave ? Math.floor(full / 2) : 0) : full;
-          text += dmg > 0 ? ` for ${dmg}.` : `, but ${foe.name} shrugs it off.`;
+          const { dealt, note } = dealtTo(
+            foe,
+            saved ? (e.halfOnSave ? Math.floor(full / 2) : 0) : full,
+            e.damageType,
+          );
+          dmg = dealt;
+          text += dmg > 0 ? ` for ${dmg}.${note}` : `, but ${foe.name} shrugs it off.`;
+        } else if (unmoved) {
+          text += `, but ${foe.name} isn't affected at all.`;
         } else if (saved) {
           text += `, but ${foe.name} shrugs it off.`;
         } else if (e.condition === "stunned") {
@@ -762,13 +796,14 @@ export function resolveCombatRound(
       case "auto-damage": {
         const foe = firstFighting(targetId);
         if (!foe) return;
-        let dmg = 0;
-        for (let i = 0; i < e.darts; i++) dmg += rollDamage(e.dartDamage, false, rng).total;
+        let raw = 0;
+        for (let i = 0; i < e.darts; i++) raw += rollDamage(e.dartDamage, false, rng).total;
+        const { dealt: dmg, note } = dealtTo(foe, raw, e.damageType);
         events.push({
           ...base,
           targetId: foe.id,
           target: foe.name,
-          text: `${h.name}'s ${spell.name} streaks into ${foe.name} for ${dmg}.`,
+          text: `${h.name}'s ${spell.name} streaks into ${foe.name} for ${dmg}.${note}`,
         });
         hurtFoe(foe, dmg);
         return;
@@ -819,15 +854,11 @@ export function resolveCombatRound(
     }
   };
 
-  const foeTurn = (f: Foe) => {
-    if (f.conditions.includes("stunned")) return;
-    const creature = creatures.get(f.creatureId);
-    if (!creature) return;
-    // Gentle: foes only go after heroes who are still standing.
-    const standing = [...heroes.values()].filter((h) => !isDownHero(h));
-    if (standing.length === 0) return;
-    const target = rng.pick(standing);
-    const attack = rng.pick(creature.attacks);
+  type Attack = CreatureDef["attacks"][number];
+  type Special = CreatureDef["specials"][number];
+  const standingHeroes = () => [...heroes.values()].filter((h) => !isDownHero(h));
+
+  const foeAttack = (f: Foe, creature: CreatureDef, attack: Attack, target: HeroCombatant) => {
     const packmate =
       creature.traits.some((t) => t.name === "Pack Tactics") &&
       state.foes.some((o) => o.id !== f.id && o.creatureId === f.creatureId && o.status === "fighting");
@@ -873,6 +904,91 @@ export function resolveCombatRound(
       text,
       roll: toRoll(attack.name, roll, attack.bonus, roll.total, `armor ${ac}`, roll.hit, dmg),
     });
+  };
+
+  /** A move that calls for a saving throw: one hero, or up to two caught in a breath or a burst. */
+  const foeSpecial = (f: Foe, special: Special, standing: HeroCombatant[]) => {
+    if (special.recharge) f.spent = [...new Set([...(f.spent ?? []), special.name])];
+    const targets = special.area ? rng.shuffle(standing).slice(0, 2) : [rng.pick(standing)];
+    // One roll of the damage for everyone caught, as at the table.
+    const full = special.damage ? rollDamage(special.damage, false, rng).total : 0;
+    for (const target of targets) {
+      const d20 = rollD20(rng);
+      const modifier = target.saves[special.save as Ability] ?? 0;
+      const total = d20.natural + modifier;
+      const saved = total >= special.dc;
+      const dmg = saved ? (special.halfOnSave ? Math.floor(full / 2) : 0) : full;
+      let text = `${f.name} uses ${special.name} on ${target.name}`;
+      if (dmg > 0) {
+        const out = applyDamageToHero(
+          { hp: target.hp, hpMax: target.hpMax, tempHp: target.tempHp, conditions: target.conditions },
+          dmg,
+        );
+        target.hp = out.vitality.hp;
+        target.tempHp = out.vitality.tempHp;
+        target.conditions = out.vitality.conditions;
+        text += saved ? `, who dodges some of it and takes ${dmg}.` : ` for ${dmg}.`;
+        if (out.droppedToZero) {
+          downed.push(target.id);
+          text += ` ${target.name} is dazed!`;
+        }
+      } else text += saved ? `, but ${target.name} gets clear.` : ".";
+      const condition = special.condition as Condition | undefined;
+      if (!saved && condition && !isDownHero(target) && !target.conditions.includes(condition)) {
+        target.conditions = [...target.conditions, condition];
+        text += ` ${target.name} is ${condition === "restrained" ? "caught fast" : condition}.`;
+      }
+      events.push({
+        actorId: f.id,
+        actor: f.name,
+        kind: "foe_attack",
+        targetId: target.id,
+        target: target.name,
+        text,
+        roll: toRoll(
+          `${special.name} → ${target.name}'s ${special.save.toUpperCase()} save`,
+          d20,
+          modifier,
+          total,
+          `DC ${special.dc}`,
+          !saved,
+          dmg,
+        ),
+      });
+    }
+  };
+
+  const foeTurn = (f: Foe) => {
+    if (f.conditions.includes("stunned")) return;
+    const creature = creatures.get(f.creatureId);
+    if (!creature) return;
+    // Gentle: foes only go after heroes who are still standing.
+    const standing = standingHeroes();
+    if (standing.length === 0) return;
+
+    // A spent breath or web comes back on a high enough d6; a ready one is used, the others now and then.
+    for (const sp of creature.specials)
+      if (sp.recharge && f.spent?.includes(sp.name) && rng.int(1, 6) >= sp.recharge)
+        f.spent = f.spent.filter((n) => n !== sp.name);
+    const ready = creature.specials.filter((sp) => !f.spent?.includes(sp.name));
+    const special =
+      ready.find((sp) => sp.recharge) ??
+      (ready.length > 0 && rng.chance(1 / 3) ? rng.pick(ready) : undefined);
+    if (special) return foeSpecial(f, special, standing);
+
+    let target = rng.pick(standing);
+    if (!creature.multiattack) return foeAttack(f, creature, rng.pick(creature.attacks), target);
+    for (const { attack: name, count } of creature.multiattack) {
+      const attack = creature.attacks.find((a) => a.name === name) ?? (creature.attacks[0] as Attack);
+      for (let i = 0; i < count; i++) {
+        if (isDownHero(target)) {
+          const left = standingHeroes();
+          if (left.length === 0) return;
+          target = rng.pick(left);
+        }
+        foeAttack(f, creature, attack, target);
+      }
+    }
   };
 
   for (const entry of state.order) {

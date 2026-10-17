@@ -14,10 +14,11 @@ import {
   rollFoes,
 } from "@dq/core/combat";
 import { balanceEncounter, type Difficulty } from "@dq/core/combat/balance";
+import { creatureAllowed, pickWild, type TableRules } from "@dq/core/combat/bestiary";
 import type { Condition } from "@dq/core/rules";
 import { deriveStats, isCondition } from "@dq/core/rules";
 import { SRD_CLASSES, sneakAttackDice } from "@dq/core/srd";
-import type { WorldIndex } from "@dq/core/world";
+import type { CreatureDef, WorldIndex } from "@dq/core/world";
 import type { characters, inventoryItems } from "@dq/db";
 import { buildFor } from "./character-rules";
 import type { SceneEntityState, SceneSpec } from "./director";
@@ -96,30 +97,40 @@ export function withEncounter(
   party: readonly CharacterRow[],
   heroes: readonly HeroCombatant[],
   rng: import("@dq/core/rng").Rng,
+  rules: TableRules = { intensity: "classic", avoid: [] },
 ): SceneSpec {
-  if (spec.combat || party.length === 0) return spec;
+  if (spec.combat || party.length === 0 || heroes.length === 0) return spec;
   const region = index.regions.get(spec.regionId);
-  let table: Array<{ creature: string; count: number }> = [];
+  const allowed = (c: CreatureDef) => creatureAllowed(c, rules);
+  const levels = heroes.map((h) => h.level);
+  const wild = (difficulty: Difficulty) =>
+    region ? pickWild({ creatures: index.creatures, region, levels, difficulty, rules, rng }) : [];
+  let wanted: Array<{ creature: CreatureDef; count: number }> = [];
   if (spec.kind === "combat") {
+    // The story's own foes, unless the table left them out; then whatever lives here.
     const beat = spec.beatId ? index.beats.get(spec.beatId)?.beat : undefined;
-    table = beat?.foes?.length
-      ? rollFoes(beat.foes, party.length, rng, "all")
-      : rollFoes(region?.encounters.table ?? [], party.length, rng, "pick-one");
-  } else if (spec.kind === "travel" && region && region.encounters.table.length > 0) {
-    if (rng.chance(region.encounters.chance))
-      table = rollFoes(region.encounters.table, party.length, rng, "pick-one");
+    if (beat?.foes?.length)
+      wanted = rollFoes(beat.foes, party.length, rng, "all").flatMap((t) => {
+        const creature = index.creatures.get(t.creature);
+        return creature && allowed(creature) ? [{ creature, count: t.count }] : [];
+      });
+    if (wanted.length === 0) wanted = wild("moderate");
+  } else if (spec.kind === "travel" && region && rng.chance(region.encounters.chance)) {
+    wanted = wild("low");
   }
-  const wanted = table.flatMap((t) => {
-    const creature = index.creatures.get(t.creature);
-    return creature ? [{ creature, count: t.count }] : [];
-  });
-  if (wanted.length === 0 || heroes.length === 0) return spec;
+  if (wanted.length === 0) return spec;
   const difficulty: Difficulty = wanted.some((w) => w.creature.tags.includes("boss"))
     ? "high"
     : spec.kind === "travel"
       ? "low"
       : "moderate";
-  const { foes } = balanceEncounter({ foes: wanted, heroes, difficulty, creatures: index.creatures });
+  const { foes } = balanceEncounter({
+    foes: wanted,
+    heroes,
+    difficulty,
+    creatures: index.creatures,
+    allowed,
+  });
   const combat = buildEncounter({ foes, heroes, rng });
   const entities: SceneEntityState[] = [
     ...spec.entities,

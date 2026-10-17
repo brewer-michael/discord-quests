@@ -20,15 +20,65 @@
       },
       "kind": {
         "type": "string",
-        "enum": ["beast", "critter", "shadow", "person", "construct", "spirit"]
+        "enum": [
+          "beast",
+          "critter",
+          "shadow",
+          "person",
+          "construct",
+          "spirit",
+          "dragon",
+          "giant",
+          "elemental",
+          "fey",
+          "monster",
+          "plant",
+          "ooze",
+          "undead"
+        ]
       },
       "size": {
         "type": "string",
-        "enum": ["tiny", "small", "medium", "large", "huge"]
+        "enum": ["tiny", "small", "medium", "large", "huge", "gargantuan"]
       },
       "cr": {
         "type": "string",
-        "enum": ["0", "1", "2", "3", "4", "5", "6", "7", "8", "1/8", "1/4", "1/2"]
+        "enum": [
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13",
+          "14",
+          "15",
+          "16",
+          "17",
+          "18",
+          "19",
+          "20",
+          "21",
+          "22",
+          "23",
+          "24",
+          "25",
+          "26",
+          "27",
+          "28",
+          "29",
+          "30",
+          "1/8",
+          "1/4",
+          "1/2"
+        ]
       },
       "ac": {
         "type": "integer",
@@ -50,32 +100,32 @@
           "str": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 20
+            "maximum": 30
           },
           "dex": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 20
+            "maximum": 30
           },
           "con": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 20
+            "maximum": 30
           },
           "int": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 20
+            "maximum": 30
           },
           "wis": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 20
+            "maximum": 30
           },
           "cha": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 20
+            "maximum": 30
           }
         },
         "required": ["str", "dex", "con", "int", "wis", "cha"],
@@ -95,7 +145,7 @@
             "bonus": {
               "type": "integer",
               "minimum": -2,
-              "maximum": 15
+              "maximum": 20
             },
             "damage": {
               "type": "string",
@@ -160,6 +210,134 @@
           "additionalProperties": false
         }
       },
+      "multiattack": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "attack": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "count": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 6
+            }
+          },
+          "required": ["attack", "count"],
+          "additionalProperties": false
+        }
+      },
+      "specials": {
+        "default": [],
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "save": {
+              "type": "string",
+              "enum": ["str", "dex", "con", "int", "wis", "cha"]
+            },
+            "dc": {
+              "type": "integer",
+              "minimum": 5,
+              "maximum": 30
+            },
+            "damage": {
+              "type": "string",
+              "pattern": "^[0-9dkhl+\\- ]+$"
+            },
+            "damageType": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "halfOnSave": {
+              "default": false,
+              "type": "boolean"
+            },
+            "condition": {
+              "type": "string",
+              "enum": [
+                "blinded",
+                "charmed",
+                "frightened",
+                "grappled",
+                "invisible",
+                "poisoned",
+                "prone",
+                "restrained",
+                "stunned",
+                "dazed"
+              ]
+            },
+            "area": {
+              "default": false,
+              "type": "boolean"
+            },
+            "recharge": {
+              "type": "integer",
+              "minimum": 2,
+              "maximum": 6
+            }
+          },
+          "required": ["name", "save", "dc"],
+          "additionalProperties": false
+        }
+      },
+      "resist": {
+        "default": [],
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        }
+      },
+      "immune": {
+        "default": [],
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        }
+      },
+      "vulnerable": {
+        "default": [],
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        }
+      },
+      "conditionImmune": {
+        "default": [],
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "blinded",
+            "charmed",
+            "frightened",
+            "grappled",
+            "invisible",
+            "poisoned",
+            "prone",
+            "restrained",
+            "stunned",
+            "dazed"
+          ]
+        }
+      },
       "traits": {
         "default": [],
         "type": "array",
@@ -187,7 +365,7 @@
       },
       "defeat": {
         "type": "string",
-        "enum": ["faints", "flees", "surrenders", "poofs"]
+        "enum": ["faints", "flees", "surrenders", "poofs", "crumbles", "fades"]
       },
       "faction": {
         "type": "string",
@@ -200,6 +378,38 @@
           "type": "string",
           "pattern": "^[a-z0-9][a-z0-9-]*$"
         }
+      },
+      "habitats": {
+        "default": [],
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "forest",
+            "meadow",
+            "hills",
+            "mountain",
+            "caves",
+            "marsh",
+            "river",
+            "coast",
+            "sea",
+            "desert",
+            "arctic",
+            "ruins",
+            "town",
+            "volcano"
+          ]
+        }
+      },
+      "minIntensity": {
+        "default": "light",
+        "type": "string",
+        "enum": ["light", "classic", "epic"]
+      },
+      "friendly": {
+        "default": false,
+        "type": "boolean"
       }
     },
     "required": [
