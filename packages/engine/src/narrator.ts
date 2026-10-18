@@ -4,6 +4,7 @@ import {
   type IntentHint,
   JudgeOutput,
   judgeSystem,
+  judgeUser,
   NARRATION_LIMITS,
   NarratorOutput,
   narratorSystem,
@@ -87,7 +88,7 @@ export async function narrate(opts: {
         {
           task: "judge",
           system: judgeSystem(world, view.story),
-          user: [{ text: cleaned.narration }],
+          user: judgeUser(cleaned, directives),
           schema: JudgeOutput,
           schemaName: "review",
           expectTokens: 300,
@@ -108,13 +109,17 @@ export async function narrate(opts: {
         ];
         continue;
       }
-      if (judged.value.revealsHiddenMechanic) problems.push("It mentions a hidden mechanic. Don't.");
+      // The reviewer quotes what it flagged, so the rewrite changes what's said and the DM sees what was turned back.
+      const note = judged.value.note.trim();
+      const flagged = (what: string) =>
+        note ? `${what}: ${/[.!?"'”]$/.test(note) ? note : `${note}.`}` : `${what}.`;
+      if (judged.value.revealsHiddenMechanic)
+        problems.push(`${flagged("It shows the players a game mechanic")} Tell the story without it.`);
       if (judged.value.explainsCauseOfLuck)
         problems.push(
-          "It explains that the good outcome was caused by an earlier kindness. Show what happens; don't explain why.",
+          `${flagged("It shows the players how this turn was decided, as the payoff of an earlier deed")} Show it happening; don't show why.`,
         );
-      if (judged.value.crossesLimits)
-        problems.push(`It goes beyond what this story allows: ${judged.value.note}`);
+      if (judged.value.crossesLimits) problems.push(flagged("It goes beyond what this story allows"));
     }
     if (problems.length === 0) return { ok: true, output: cleaned };
     log.warn("narration rejected", { ...scope, attempt: attempt + 1, problems });
@@ -182,6 +187,16 @@ export function tidy(
   };
 }
 
+/** The sentence a match sits in, so the person reading (or the rewrite) sees what was said, not just the words. */
+function sentenceAround(text: string, match: string): string {
+  const at = text.toLowerCase().indexOf(match.toLowerCase());
+  if (at < 0) return clip(match, 200);
+  const before = text.slice(0, at).search(/[^.!?\n]*$/);
+  const after = text.slice(at + match.length).search(/[.!?\n]|$/);
+  const end = at + match.length + after + (/[.!?]/.test(text.charAt(at + match.length + after)) ? 1 : 0);
+  return clip(text.slice(before, end), 200);
+}
+
 function checkOutput(out: NarratorOutput, world: World, view: PublicSceneView): string[] {
   const problems: string[] = [];
   const text = [out.narration, ...out.npcLines.map((l) => l.line), ...out.choices.map((c) => c.label)].join(
@@ -192,7 +207,9 @@ function checkOutput(out: NarratorOutput, world: World, view: PublicSceneView): 
     if (f.category === "banned_word")
       problems.push(`It uses the word "${f.match}", which isn't allowed here.`);
     if (f.category === "hidden_leak")
-      problems.push(`It hints at hidden mechanics or explains luck ("${f.match}"). Don't.`);
+      problems.push(
+        `It names a game mechanic: "${sentenceAround(text, f.match)}" Tell the story without it.`,
+      );
     if (f.category === "personal_info")
       problems.push("It includes something that looks like real personal information.");
   }

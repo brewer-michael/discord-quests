@@ -10,6 +10,7 @@ import {
 } from "./profile";
 import {
   judgeSystem,
+  judgeUser,
   type NarrationStory,
   narratorSystem,
   narratorUser,
@@ -178,5 +179,29 @@ describe("prompts", () => {
     expect(text).not.toMatch(/young children|children's/i);
     expect(playerSafetySystem(world, "classic")[0]?.text).toContain("slaying monsters");
     expect(playerSafetySystem(world, "light")[0]?.text).not.toContain("slaying");
+  });
+
+  it("tell world-building from showing how a turn was decided, with this turn's quiet work in view", () => {
+    const system = judgeSystem(world, story())[0]?.text ?? "";
+    expect(system).toContain(
+      "is this world-building, or does it let the players see how this turn was decided?",
+    );
+    expect(system).toMatch(/something being meant to be.*are fine on any turn/);
+    // The storyteller is told the same on every turn, not only when the hidden hand acts.
+    expect(narratorSystem(world, story())[0]?.text).toContain("not everything is chance belongs to it");
+
+    const user = judgeUser(
+      {
+        narration: "Snibbet scrambles up the bank.",
+        npcLines: [{ npcRef: "snibbet", line: "Up you come!" }],
+      },
+      [{ kind: "minor_grace", text: "Snibbet happens by and pulls the heroes out.", mustNot: [] }],
+    )
+      .map((b) => b.text)
+      .join("\n");
+    expect(user).toContain("Snibbet happens by and pulls the heroes out.");
+    expect(user).toContain("Snibbet scrambles up the bank.");
+    expect(user).toContain("snibbet: Up you come!");
+    expect(judgeUser({ narration: "A quiet road.", npcLines: [] }, [])[0]?.text).not.toContain("quietly did");
   });
 });

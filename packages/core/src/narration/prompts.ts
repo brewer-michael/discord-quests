@@ -186,6 +186,7 @@ export function narratorSystem(world: World, story: NarrationStory): PromptBlock
     "- Write for everyone at the table, from an 8-year-old listening to the grown-ups: clear and gripping, never babyish or condescending.",
     "- The heroes are exactly as the party list describes them: their people, class, background and looks. Use those details, and never make them younger or sillier than described.",
     "- Respect every dice result exactly as given. A failure is a failure, but make it interesting, never humiliating.",
+    "- The world's sense that not everything is chance belongs to it: speak of it as an old storyteller would, now and then and in your own words, on any turn. Never tell the players how the game decided something.",
     "- A failure changes the situation; it doesn't end it. Show what it costs or what goes wrong, and leave the heroes room to try again, try another way, or deal with what happened.",
     "- Stay where the heroes are. Never move them to another place or skip ahead in time on your own: the next scene begins only when this turn's instructions say so.",
     "- Only the heroes listed in the party exist as player characters. Never decide what a player character thinks or feels beyond their stated action.",
@@ -409,13 +410,35 @@ export function judgeSystem(world: Pick<World, "content">, story: NarrationStory
         ...(asked.length > 0 ? ["", ...asked] : []),
         "",
         "Answer three questions:",
-        "1. revealsHiddenMechanic: does it mention or hint at a hidden score, stat, luck meter, karma or game mechanic?",
-        "2. explainsCauseOfLuck: does it say or strongly imply that something good happened *because* of a hero's earlier kindness or mercy (for example 'repaying your kindness')? Showing a character acting is fine; explaining the cause is not.",
+        "1. revealsHiddenMechanic: does it show the players a game mechanic: a score, tally, meter or rule that decides how things turn out?",
+        "2. explainsCauseOfLuck: does it show the players that what happens this turn was earned, owed or arranged by a particular earlier deed (for example 'because you spared him' or 'repaying your kindness')? Showing it happen is fine; showing why the game made it happen is not.",
         "3. crossesLimits: does it break any hard limit, go darker than the intensity allows, or include something this table asked to leave out or keep offscreen? Danger, menace, battles and sorrow that fit the intensity are fine: only flag what actually crosses the line.",
+        "",
+        "For 1 and 2, ask one thing: is this world-building, or does it let the players see how this turn was decided? Fate, providence, something being meant to be, a character's faith, old sayings and the land's long memory describe how the world is, and are fine on any turn, even this one. Flag only what shows the players what is at work this turn. You may be told what the game quietly did this turn; the players never are.",
+        "",
+        "When any answer is yes, quote the sentence in note.",
       ].join("\n"),
       cache: "1h",
     },
   ];
+}
+
+/** The passage for the reviewer, with what the game quietly did this turn, so it can tell world-building from a reveal. */
+export function judgeUser(
+  passage: { narration: string; npcLines: ReadonlyArray<{ npcRef: string; line: string }> },
+  directives: readonly NarrativeDirective[],
+): PromptBlock[] {
+  const lines: string[] = [];
+  if (directives.length > 0)
+    lines.push(
+      "## What the game quietly did this turn (the players don't know this)",
+      ...directives.map((d) => `- ${d.text}`),
+      "",
+    );
+  lines.push("## The passage", passage.narration);
+  if (passage.npcLines.length > 0)
+    lines.push("", "## Spoken lines", ...passage.npcLines.map((l) => `- ${l.npcRef}: ${l.line}`));
+  return [{ text: lines.join("\n") }];
 }
 
 /** The quick check on what a player typed, before anything else reads it. */

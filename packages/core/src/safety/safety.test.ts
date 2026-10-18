@@ -56,11 +56,12 @@ describe("player text", () => {
 });
 
 describe("narration", () => {
-  it("catches leaks of the hidden hand", () => {
-    expect(findLeaks("Because you spared him, Snibbet returns to help.")).not.toEqual([]);
-    expect(findLeaks("Snibbet, repaying your kindness, grabs the Ember.")).not.toEqual([]);
-    expect(findLeaks("It was destiny.")).not.toEqual([]);
-    expect(findLeaks("Your karma is high.")).not.toEqual([]);
+  it("catches game words, and leaves the world's sense of providence alone", () => {
+    expect(findLeaks("Your hidden luck score is very high.")).not.toEqual([]);
+    expect(findLeaks("Your kindness points are adding up.")).not.toEqual([]);
+    expect(findLeaks("It was destiny.")).toEqual([]);
+    expect(findLeaks("Light is meant to be shared, not kept.")).toEqual([]);
+    expect(findLeaks("Perhaps Pip was meant to find it, and not by its maker.")).toEqual([]);
     expect(findLeaks("Snibbet lunges for the Ember and slips at the forge's edge.")).toEqual([]);
   });
 

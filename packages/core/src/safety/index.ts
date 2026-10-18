@@ -174,20 +174,15 @@ export function checkPlayerText(
 }
 
 const LEAK_PATTERNS: RegExp[] = [
-  /\b(hidden|secret)\s+(stat|score|value|tally|meter)\b/i,
-  /\b(luck|karma|fate|grace)\s+(score|stat|points?|meter|tally)\b/i,
-  /\bkarma\b/i,
-  /\bprovidence\b/i,
-  /\b(the|a|your|their) loom\b/i,
-  /\bthreads? of (fate|destiny)\b/i,
-  /\b(destiny|destined|fated|meant to be|it was written)\b/i,
-  /\bbecause (you|they|the heroes|we) (once |had )?(spared|helped|showed (him |her |them )?mercy|were kind|kept (your|their|our) promise)/i,
-  /\b(repay|repays|repaying|repaid|returning|returned) (your|their|the heroes'?|our) (kindness|mercy|favou?r|help)\b/i,
-  /\b(for|after) (sparing|saving) (him|her|them) (earlier|before|back)\b/i,
-  /\b(kindness|mercy) (has been|was) (rewarded|repaid)\b/i,
+  /\b(hidden|secret)\s+(stat|score|tally|meter)s?\b/i,
+  /\b(luck|karma|fate|grace|kindness|mercy)\s+(score|stat|points?|meter|tally)\b/i,
 ];
 
-/** Narration must never reveal or explain the loom. */
+/**
+ * Game words no storybook would use, on any turn. Fate, providence and things being meant to be are the world's
+ * own voice, not a reveal; whether a passage shows the players how a turn was decided depends on what was at
+ * work that turn, so that call is the reviewer's, which is told.
+ */
 export function findLeaks(text: string, extra: readonly RegExp[] = []): string[] {
   const hits: string[] = [];
   for (const re of [...LEAK_PATTERNS, ...extra]) {

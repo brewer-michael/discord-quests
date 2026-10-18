@@ -9,6 +9,10 @@
 - Scenes end when their story does, never on a turn count.
 - Fewer AI calls per turn: the reviewer reads hidden-hand turns and every turn at Epic; the AI read of typed text
   runs at Light. Word and personal-detail checks run on everything.
+- The hidden hand is guarded by one question, not banned words: is it world-building, or does it show the players
+  how this turn was decided? Fate, providence and things being meant to be are the world's to speak of on any turn.
+  The reviewer is told what the game quietly did that turn and reads the spoken lines too; the word check keeps
+  only game words like "luck score". A turned-back draft reaches the DM room with the sentence that was flagged.
 
 ### Combat
 - Real dice, every roll shown, foe health as a bar.

@@ -611,7 +611,7 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
   it("throws away planner notes that would give the game away", async () => {
     const llm = new FakeLlm({
       director: () => ({
-        theme: "Karma is coming for them.",
+        theme: "Their kindness points will pay off soon.",
         beats: [
           {
             beatId: "ch2-the-fork-in-the-road",
@@ -652,7 +652,7 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
       note: "Remember how brave the heroes were in the garden.",
       featured: ["hattie-wick"],
     });
-    expect(plan?.theme).not.toMatch(/karma/i);
+    expect(plan?.theme).not.toMatch(/kindness points/i);
   });
 
   it("hands a turn the AI can't tell to a person in the DM room, with everything they need", async () => {
@@ -840,6 +840,65 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
       // The opening has no hidden-hand notes, so only an Epic story has it reviewed.
       expect(tasks.includes("judge")).toBe(intensity === "epic");
     }
+  });
+
+  it("lets the world speak of providence, and turns back only what shows how a turn was decided", async () => {
+    let judged = { revealsHiddenMechanic: false, explainsCauseOfLuck: false, crossesLimits: false, note: "" };
+    const llm = new FakeLlm({
+      narrator: (): NarratorOutput => ({
+        narration: "Old Wick smiles. Perhaps it was meant to be: light is meant to be shared, not kept.",
+        npcLines: [{ npcRef: "hattie-wick", line: "The roads remember every kindness." }],
+        proposedDeltas: [],
+        choices: ["Walk on toward the lamp-house", "Ask Hattie about the old roads"].map((label) => ({
+          label,
+          intent: {
+            approach: label,
+            skill: "none",
+            difficulty: "easy",
+            deed: "none",
+            targetRef: null,
+            shortcutId: null,
+          },
+        })),
+        sceneOver: false,
+        imageBrief: null,
+        significance: "minor",
+      }),
+      judge: () => judged,
+    });
+    const engine = createEngine({ db: db.db, worlds, llm });
+    const c = await engine.campaigns.create({
+      guildId: "g-meant",
+      channelId: "ch-meant",
+      name: "Meant",
+      mode: "ai_dm",
+      createdBy: "meant",
+      settings: { audience: "teen", story: { intensity: "epic" } as never },
+    });
+    await makeHero(engine, c.id, "meant", "scout", "Quill Swift");
+
+    // Fate and the land's long memory are the world's own voice: told as written, after the reviewer has read
+    // the whole passage, spoken lines included.
+    const view = await engine.turns.openCampaign(c.id, "meant");
+    expect(view.narration).toContain("meant to be");
+    const review = llm.calls.filter((x) => x.task === "judge").at(-1)?.user ?? "";
+    expect(review).toContain("Perhaps it was meant to be");
+    expect(review).toContain("The roads remember every kindness.");
+
+    // What the reviewer flags reaches the DM as the sentence it flagged, not a banned word.
+    judged = { ...judged, explainsCauseOfLuck: true, note: '"Hattie helps because you spared the skulker."' };
+    await engine.turns.submitAction({
+      roundId: view.roundId as string,
+      userId: "meant",
+      kind: "freeform",
+      text: "I ask Hattie about the old roads",
+    });
+    const next = await engine.turns.resolveRound(view.roundId as string);
+    if (next?.kind !== "draft") throw new Error("expected the turn to be handed over");
+    const reasons = next.draft.handoff?.reasons.join("\n") ?? "";
+    expect(reasons).toContain("how this turn was decided");
+    expect(reasons).toContain('"Hattie helps because you spared the skulker."');
+    expect(reasons).not.toMatch(/meant to be/);
   });
 
   it("lets only one resolver win a round", async () => {
