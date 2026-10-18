@@ -17,7 +17,7 @@ import { campaigns, chapterSummaries, type Db, turns } from "@dq/db";
 import { and, desc, eq, gt } from "drizzle-orm";
 import { z } from "zod";
 import type { Logger } from "./deps";
-import { isRewound } from "./story-state";
+import { asStory, isRewound } from "./story-state";
 
 export const ChapterRecap = z.object({ recap: z.string().min(20).max(900) });
 
@@ -31,9 +31,15 @@ function recapSystem(world: WorldIndex["world"], story: NarrationStory): string 
   ].join("\n");
 }
 
-/** A plain recap from the world's own text, for when no story AI is available. */
-export function fallbackRecap(index: WorldIndex, chapterNumber: number): string {
-  const refs = index.beatOrder.filter((b) => b.chapter.number === chapterNumber && !b.beat.branch);
+/** A plain recap from the world's own text, for when no story AI is available. Beats gone round aren't in it. */
+export function fallbackRecap(
+  index: WorldIndex,
+  chapterNumber: number,
+  bypassed: readonly string[] = [],
+): string {
+  const refs = index.beatOrder.filter(
+    (b) => b.chapter.number === chapterNumber && !b.beat.branch && !bypassed.includes(b.beat.id),
+  );
   const chapter = refs[0]?.chapter;
   if (!chapter) return `Chapter ${chapterNumber} came to an end.`;
   const firstSentence = (s: string) => (s.replace(/\s+/g, " ").match(/^.*?[.!?](\s|$)/)?.[0] ?? s).trim();
@@ -85,7 +91,7 @@ export async function writeChapterRecap(args: {
     .map((t) => (t.length > 500 ? `${t.slice(0, 499)}…` : t));
   const chapter = index.beatOrder.find((b) => b.chapter.number === args.chapterNumber)?.chapter;
 
-  let recap = fallbackRecap(index, args.chapterNumber);
+  let recap = fallbackRecap(index, args.chapterNumber, c ? asStory(c.story).bypassedBeats : []);
   const scope = { guildId: args.guildId, campaignId: args.campaignId };
   // The reviewer reads every recap: the journal and the storyteller's memory must not give the hidden hand away
   // before the epilogue. A recap it can't pass, or can't read, gives way to the plain one from the world's text.

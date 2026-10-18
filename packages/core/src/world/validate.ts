@@ -306,6 +306,16 @@ export function validateWorld(world: World): WorldIssue[] {
       else if (poi.regionId !== beat.region)
         err(file, where, `poi "${beat.poi}" is not in region "${beat.region}"`);
     }
+    if (beat.bypass) {
+      if (!npcIds.has(beat.bypass.target))
+        err(file, where, `bypass target "${beat.bypass.target}" is not a named npc`);
+      if (beat.decisive || beat.crux || beat.branch)
+        err(file, where, "a decisive, crux or branch beat can't be bypassed");
+      if (
+        !idx.beatOrder.some((b) => b.chapter.id === ref.chapter.id && b.order > ref.order && !b.beat.branch)
+      )
+        err(file, where, "a bypassed beat needs a later beat in its chapter to arrive at");
+    }
     for (const req of beat.requires) {
       const target = idx.beats.get(req);
       if (!target) err(file, where, `requires unknown beat "${req}"`);

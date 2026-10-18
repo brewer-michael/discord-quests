@@ -41,6 +41,8 @@ export const NarratorOutput = z.object({
   choices: z.array(z.object({ label: z.string(), intent: IntentHint })),
   /** This scene's story is done and the heroes are moving on (see the narrator's rules). */
   sceneOver: z.boolean(),
+  /** A later scene of this chapter the story itself has brought the heroes to, or null. */
+  arrivedAt: z.string().nullable(),
   imageBrief: ImageBriefSchema.nullable(),
   significance: z.enum(["minor", "notable", "major"]),
 });

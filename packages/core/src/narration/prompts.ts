@@ -90,6 +90,8 @@ export interface PublicSceneData {
   crux: { label: string; success: boolean } | null;
   allowedLoot: Array<{ id: string; name: string }>;
   epilogue: string[];
+  /** Later scenes of this chapter the story could bring the heroes to on its own (see arrivedAt). */
+  later?: Array<{ ref: string; title: string; place: string }>;
   /** Someone used the X-card: steer gently away from whatever was happening. */
   steerAway?: boolean;
   /** A fight in progress or just finished. Every result is already decided. */
@@ -199,6 +201,11 @@ export function narratorSystem(world: World, story: NarrationStory): PromptBlock
     "- A scene ends when its story does, never because of how many turns it has taken. Set sceneOver to true only when what the scene is about has been settled, one way or another, by what the heroes did, and nothing they're doing keeps them here; or when the players clearly choose to leave.",
     "- While the heroes are still trying, talking, exploring, recovering from a setback or dealing with what just happened, the scene isn't over.",
     "- When you set sceneOver, end at the moment of leaving and offer choices for how the heroes head on. Their next move takes them to the next scene.",
+    "- A journey ends where its goal says. Set sceneOver when the heroes arrive there, and never take them past it into the places beyond: those are scenes of their own.",
+    "",
+    "## When the story finds its own way (arrivedAt)",
+    "- Leave arrivedAt null almost always. Never hurry the heroes toward a later scene.",
+    '- Only when what has already happened has brought the heroes to one of the places under "Later in this chapter" (a boat ride, a hidden way they found, a friend who led them there), set arrivedAt to that scene\'s ref and sceneOver to true. The scenes in between are skipped, and that scene opens next.',
     "",
     "## Picture notes (imageBrief)",
     "- When the scene changes, describe one picture of it: the setting, then the other people, creatures and things in view by how they look (never by name), the mood and the time of day. The heroes' looks are added for you, so don't describe them.",
@@ -343,6 +350,12 @@ export function narratorUser(
       `Allowed loot this scene: ${view.allowedLoot.map((l) => `${l.name} [${l.id}]`).join(", ")}`,
     );
   if (view.nextScene) turn.push("", formatScene(view.nextScene, "Next scene"));
+  if (view.later && view.later.length > 0)
+    turn.push(
+      "",
+      "## Later in this chapter (never hurry the heroes toward these; see arrivedAt)",
+      ...view.later.map((l) => `- ${l.title}, at ${l.place} [ref: ${l.ref}]`),
+    );
   if (view.epilogue.length > 0)
     turn.push("", "## Epilogue lines (include faithfully)", ...view.epilogue.map((l) => `> ${l}`));
   if (view.steerAway) {

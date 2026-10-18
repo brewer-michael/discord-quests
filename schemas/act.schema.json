@@ -210,6 +210,39 @@
                   "default": false,
                   "type": "boolean"
                 },
+                "bypass": {
+                  "type": "object",
+                  "properties": {
+                    "deeds": {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "mercy",
+                          "honesty_at_cost",
+                          "patience",
+                          "promise_kept",
+                          "kindness_to_lowly",
+                          "self_sacrifice",
+                          "keepsake_kept",
+                          "amends"
+                        ]
+                      }
+                    },
+                    "target": {
+                      "type": "string",
+                      "pattern": "^[a-z0-9][a-z0-9-]*$"
+                    },
+                    "how": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 4000
+                    }
+                  },
+                  "required": ["deeds", "target", "how"],
+                  "additionalProperties": false
+                },
                 "crux": {
                   "type": "object",
                   "properties": {

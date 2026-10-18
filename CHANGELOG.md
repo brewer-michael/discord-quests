@@ -16,6 +16,10 @@
 - The heroes learn they were guided and supported on their path only in the epilogue, and only as far as its lines
   go. The reviewer reads the finale and every chapter recap; a recap it turns back twice, or can't read, gives way
   to the plain one from the world's text.
+- Routes round a scene. A world can let the heroes go round a beat: in Lanternreach, helping Tumble home gets them
+  a boat past the Toll Bridge to Lantern Hall. The storyteller can also say the story itself has brought the
+  heroes to a later scene in the same chapter and region (never past a decisive one); that scene opens next and
+  the ones between count as gone round. A journey now says where it ends.
 
 ### Combat
 - Real dice, every roll shown, foe health as a bar.

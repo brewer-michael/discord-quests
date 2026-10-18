@@ -694,6 +694,7 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
         },
       ],
       sceneOver: false,
+      arrivedAt: null,
       imageBrief: null,
       significance: "minor",
     };
@@ -868,6 +869,7 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
           },
         })),
         sceneOver: false,
+        arrivedAt: null,
         imageBrief: null,
         significance: "minor",
       }),
@@ -955,6 +957,74 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
     expect(asked[1]?.user).toContain(
       'what is kept for the epilogue: that they were guided or repaid: "something unseen guided their every step"',
     );
+  });
+
+  it("follows the story when it finds its own way to a later scene, and only to one it was offered", async () => {
+    let arrivedAt: string | null = "ch3-the-siege-of-lantern-hall";
+    const llm = new FakeLlm({
+      narrator: (): NarratorOutput => ({
+        narration: "The heroes hurry through Hearthmoor as the lanterns gutter one by one.",
+        npcLines: [],
+        proposedDeltas: [],
+        choices: ["Look around the square", "Knock at the lamp-house"].map((label) => ({
+          label,
+          intent: {
+            approach: label,
+            skill: "none",
+            difficulty: "easy",
+            deed: "none",
+            targetRef: null,
+            shortcutId: null,
+          },
+        })),
+        sceneOver: false,
+        arrivedAt,
+        imageBrief: null,
+        significance: "minor",
+      }),
+    });
+    const engine = createEngine({ db: db.db, worlds, llm });
+    const c = await engine.campaigns.create({
+      guildId: "g-route",
+      channelId: "ch-route",
+      name: "Shortcut",
+      mode: "ai_dm",
+      createdBy: "pathfinder",
+    });
+    await makeHero(engine, c.id, "pathfinder", "scout", "Quill Swift");
+    let view = await engine.turns.openCampaign(c.id, "pathfinder");
+    const round = async () => {
+      await engine.turns.submitAction({
+        roundId: view.roundId as string,
+        userId: "pathfinder",
+        kind: "pass",
+      });
+      const next = await engine.turns.resolveRound(view.roundId as string);
+      if (next?.kind !== "turn") throw new Error("expected a told turn");
+      view = next.view;
+      return asStory((await engine.campaigns.require(c.id)).story);
+    };
+
+    // Mid-scene the storyteller is offered the later scenes of this chapter. One it wasn't offered is ignored.
+    let story = await round();
+    const prompt = llm.calls.filter((x) => x.task === "narrator").at(-1)?.user ?? "";
+    expect(prompt).toContain("## Later in this chapter");
+    expect(prompt).toContain("[ref: ch1-hatties-request]");
+    expect(prompt).not.toContain("ch3-the-siege-of-lantern-hall");
+    expect([story.closeNextRound, story.arrivedAt]).toEqual([false, null]);
+
+    // One it was offered ends this scene, and the next round opens it, going round the scene between.
+    arrivedAt = "ch1-hatties-request";
+    story = await round();
+    expect([story.closeNextRound, story.arrivedAt]).toEqual([true, "ch1-hatties-request"]);
+    story = await round();
+    expect(story.beatId).toBe("ch1-hatties-request");
+    expect(story.bypassedBeats).toEqual(["ch1-the-thief-in-the-lamp-house"]);
+    expect(story.completedBeats).toEqual(
+      expect.arrayContaining(["ch1-the-last-flame", "ch1-the-thief-in-the-lamp-house"]),
+    );
+    expect(story.arrivedAt).toBeNull();
+    expect(view.sceneTitle).toBe("Hattie's Request");
   });
 
   it("lets only one resolver win a round", async () => {

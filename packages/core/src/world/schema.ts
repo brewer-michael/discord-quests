@@ -542,6 +542,11 @@ export const BeatDef = z.strictObject({
   decisive: z.boolean().default(false),
   /** Played only when a failed crux's onFailForward sends the story here. */
   branch: z.boolean().default(false),
+  /**
+   * A way round this beat: when the heroes have done one of these deeds toward target, the story skips it and
+   * they arrive at the next beat instead; how says how they got there, for the storyteller.
+   */
+  bypass: z.strictObject({ deeds: z.array(VirtueTag).min(1), target: Id, how: Text }).optional(),
   crux: CruxSpec.optional(),
   /** Who the heroes face in a combat beat (counts are for a party of three). Defaults to the region's table. */
   foes: z

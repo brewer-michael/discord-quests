@@ -873,6 +873,7 @@ describe.skipIf(!TEST_DATABASE_URL)("a whole campaign renders cleanly", () => {
           },
         })),
         sceneOver: false,
+        arrivedAt: null,
         imageBrief: null,
         significance: "minor",
       }),

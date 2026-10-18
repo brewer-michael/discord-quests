@@ -187,6 +187,12 @@ chapters:
           - Find a way across the river.
         introduces: [silas-coin]
         offersShortcuts: [forged-toll-token]
+        bypass:
+          deeds: [kindness_to_lowly, promise_kept]
+          target: tumble
+          how: >-
+            Tumble's family poles the heroes through the back channels on a flat boat, past Coin Bridge and its
+            toll, to the foot of Lantern Hall.
         virtueOpportunities:
           - tag: honesty_at_cost
             target: silas-coin

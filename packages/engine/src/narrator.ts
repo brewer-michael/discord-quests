@@ -85,7 +85,12 @@ export async function narrate(opts: {
       if (res.stop === "unconfigured" || res.stop === "budget" || res.stop === "error") break;
       continue;
     }
-    const cleaned = tidy(res.value, opts.choicesFor, view.mode);
+    const cleaned = tidy(
+      res.value,
+      opts.choicesFor,
+      view.mode,
+      (view.later ?? []).map((l) => l.ref),
+    );
     problems = checkOutput(cleaned, world, view);
     if (problems.length === 0 && review) {
       const judged = await llm.structured(
@@ -148,12 +153,18 @@ function clip(s: string, n: number): string {
   return t.length <= n ? t : `${t.slice(0, n - 1).trimEnd()}…`;
 }
 
-/** Enforces the limits the schema can't express, and keeps choice intents honest. */
+/**
+ * Enforces the limits the schema can't express, and keeps choice intents honest. An arrival counts only at a
+ * later scene the storyteller was offered, and only mid-scene; it ends the scene.
+ */
 export function tidy(
   out: NarratorOutput,
   scene: SceneSpecView,
   mode: PublicSceneView["mode"],
+  arrivals: readonly string[] = [],
 ): NarratorOutput {
+  const arrivedAt =
+    mode === "continue" && out.arrivedAt && arrivals.includes(out.arrivedAt) ? out.arrivedAt : null;
   const refs = new Set(scene.entities.map((e) => e.ref));
   const shortcuts = new Set(scene.opportunities.filter((o) => o.kind === "shortcut").map((o) => o.key));
   const virtueTags = new Set(scene.opportunities.filter((o) => o.kind === "virtue").map((o) => o.key));
@@ -183,6 +194,8 @@ export function tidy(
         });
   return {
     ...out,
+    sceneOver: out.sceneOver || arrivedAt !== null,
+    arrivedAt,
     narration: clip(out.narration, NARRATION_LIMITS.narration),
     npcLines: out.npcLines
       .slice(0, NARRATION_LIMITS.maxNpcLines)

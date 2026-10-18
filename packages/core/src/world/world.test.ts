@@ -100,6 +100,23 @@ describe("world validation catches mistakes", () => {
     expect(errorsOf(w).some((m) => m.includes("unknown npc"))).toBe(true);
   });
 
+  it("lets the Toll Bridge be gone round by boat, and checks every way round", () => {
+    const bridge = world.acts[0]?.chapters
+      .flatMap((c) => c.beats)
+      .find((b) => b.id === "ch3-the-toll-bridge");
+    expect(bridge?.bypass).toMatchObject({ target: "tumble", deeds: ["kindness_to_lowly", "promise_kept"] });
+
+    const w = clone(world);
+    const beats = w.acts.flatMap((a) => a.chapters.flatMap((c) => c.beats));
+    const toll = beats.find((b) => b.id === "ch3-the-toll-bridge");
+    if (toll?.bypass) toll.bypass.target = "nobody-at-all";
+    const siege = beats.find((b) => b.id === "ch3-the-siege-of-lantern-hall");
+    if (siege) siege.bypass = { deeds: ["mercy"], target: "tumble", how: "They slip round it." };
+    const errors = errorsOf(w);
+    expect(errors.some((m) => m.includes('bypass target "nobody-at-all" is not a named npc'))).toBe(true);
+    expect(errors.some((m) => m.includes("a decisive, crux or branch beat can't be bypassed"))).toBe(true);
+  });
+
   it("rejects banned terms in authored text", () => {
     const w = clone(world);
     if (w.regions[0]) w.regions[0].description = "A village where the geese were killed.";

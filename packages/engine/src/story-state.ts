@@ -20,6 +20,10 @@ export interface StoryState {
   steerAway?: boolean;
   /** Branch beats opened by failed cruxes. */
   branches?: string[];
+  /** Beats the heroes went round (also in completedBeats, so the arc moves on as if they were done). */
+  bypassedBeats?: string[];
+  /** A later beat of this chapter the storyteller said the story itself has brought the heroes to. */
+  arrivedAt?: string | null;
   /** Turns undone by a rewind, as [first, last] seq ranges. Still in the history, but they never happened. */
   rewound?: Array<[number, number]>;
 }

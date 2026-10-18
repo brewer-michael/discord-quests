@@ -130,6 +130,7 @@ const DEFAULTS: Record<string, Handler> = {
       proposedDeltas: [],
       choices: finale ? [] : choices.slice(0, 4),
       sceneOver: true,
+      arrivedAt: null,
       imageBrief: {
         setting: title || "a winding road",
         subjects: ["three young heroes"],

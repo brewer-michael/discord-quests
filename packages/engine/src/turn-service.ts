@@ -101,7 +101,7 @@ import {
   withEncounter,
 } from "./combat";
 import { type EngineDeps, GameError, realDice, silentLogger } from "./deps";
-import { nextSceneSpec, type SceneEntityState, type SceneSpec } from "./director";
+import { beatPlace, laterInChapter, nextSceneSpec, type SceneEntityState, type SceneSpec } from "./director";
 import { withLogContext } from "./logger";
 import { clearPendingLoom, loadLoom, loadPendingLoom, saveLoom, savePendingLoom } from "./loom-store";
 import { type NarrationResult, narrate } from "./narrator";
@@ -809,6 +809,15 @@ export class TurnService {
       canon: canonRows,
       steerAway: Boolean(story.steerAway),
       summaries: recaps.map((r) => `Chapter ${r.chapter}: ${r.text}`),
+      // Mid-scene, out of a fight, the storyteller may say the story has found its own way to a later scene.
+      later:
+        mode === "continue" && !fight && !sceneSpec.combat
+          ? laterInChapter(index, story, sceneSpec).map((r) => ({
+              ref: r.beat.id,
+              title: r.beat.title,
+              place: beatPlace(index, r),
+            }))
+          : [],
       ...(fight
         ? {
             battle: {
@@ -1144,6 +1153,11 @@ export class TurnService {
         roundsInScene: story.roundsInScene + 1,
         // Only the dice end a fight, never the narrator.
         closeNextRound: !closing && !prepared.combat && !spec.combat && narration.output.sceneOver,
+        // Where the storyteller said the story itself has brought the heroes; the next scene opens there.
+        arrivedAt:
+          !closing && !prepared.combat && !spec.combat && narration.output.arrivedAt
+            ? narration.output.arrivedAt
+            : (story.arrivedAt ?? null),
         steerAway: false,
       };
       if (closing && spec.kind === "travel")
@@ -1267,8 +1281,13 @@ export class TurnService {
             fightStarts ? [] : narration.output.choices,
             fightStarts ? "combat" : "exploration",
           );
+          // Beats the heroes went round to get here count as done from now on.
+          const skipped = nextSpec.bypassed ?? [];
           storyAfter = {
             ...storyAfter,
+            completedBeats: [...new Set([...storyAfter.completedBeats, ...skipped])],
+            bypassedBeats: [...new Set([...(storyAfter.bypassedBeats ?? []), ...skipped])],
+            arrivedAt: null,
             sceneId,
             sceneKind: nextSpec.kind,
             beatId: nextSpec.beatId,
@@ -2621,6 +2640,7 @@ export class TurnService {
     steerAway?: boolean;
     summaries?: string[];
     battle?: PublicSceneData["battle"];
+    later?: PublicSceneData["later"];
   }) {
     const { index } = args;
     const data: PublicSceneData = {
@@ -2676,6 +2696,7 @@ export class TurnService {
       epilogue: args.epilogue,
       steerAway: args.steerAway ?? false,
       ...(args.battle ? { battle: args.battle } : {}),
+      ...(args.later && args.later.length > 0 ? { later: args.later } : {}),
     };
     return publicSceneView(data);
   }
@@ -2764,6 +2785,7 @@ function quietNarration(narration: string): NarratorOutput {
     proposedDeltas: [],
     choices: [],
     sceneOver: false,
+    arrivedAt: null,
     imageBrief: null,
     significance: "minor",
   };
@@ -2797,6 +2819,7 @@ function blankNarration(): NarratorOutput {
     proposedDeltas: [],
     choices: [],
     sceneOver: false,
+    arrivedAt: null,
     imageBrief: null,
     significance: "minor",
   };
