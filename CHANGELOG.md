@@ -29,6 +29,7 @@
 - Optional new fight rules from the DM room: grazes, Courage, and a weak spot for every foe found by what players try.
 
 ### DM room
+- Choices the DM writes roll when they should: when picked, they're read like typed text.
 - Rewind turns, mend the party, rebuild a fight, switch the fight rules: mention the bot in the DM room.
 
 ### AI services

@@ -1027,6 +1027,34 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
     expect(view.sceneTitle).toBe("Hattie's Request");
   });
 
+  it("rolls for a choice the DM wrote, as the action reader reads it", async () => {
+    const llm = new FakeLlm({ narrator: () => new Error("service down") });
+    const engine = createEngine({ db: db.db, worlds, llm });
+    const c = await engine.campaigns.create({
+      guildId: "g-dmdice",
+      channelId: "ch-dmdice",
+      name: "DM dice",
+      mode: "ai_dm",
+      createdBy: "teller",
+    });
+    await makeHero(engine, c.id, "teller", "scout", "Quill Swift");
+    const started = await engine.turns.startCampaign(c.id, "teller");
+    if (started.kind !== "draft") throw new Error("expected the opening to be handed over");
+    const view = await engine.turns.approveDraft(started.draft.approvalId, "teller", {
+      narration: "Lanterns gutter all over Hearthmoor as the heroes gather in the square.",
+      choices: ["Search the square for clues", "Wait by the well"],
+    });
+    await engine.turns.submitAction({
+      roundId: view.roundId as string,
+      userId: "teller",
+      kind: "choice",
+      choiceIndex: 0,
+    });
+    const next = await engine.turns.resolveRound(view.roundId as string);
+    if (next?.kind !== "draft") throw new Error("expected the turn to be handed over");
+    expect(next.draft.rolls.map((r) => r.label)).toEqual(["Investigation"]);
+  });
+
   it("lets only one resolver win a round", async () => {
     const engine = createEngine({ db: db.db, worlds, llm: new FakeLlm() });
     const c = await engine.campaigns.create({

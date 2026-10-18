@@ -125,6 +125,8 @@ type CampaignRow = typeof campaigns.$inferSelect;
 export interface StoredChoice {
   label: string;
   intent: IntentHint;
+  /** Written by the DM: when picked, it's read like typed text, so it rolls when it should. */
+  byDm?: true;
 }
 
 interface ResolvedAction {
@@ -1695,19 +1697,19 @@ export class TurnService {
         throw new GameError("no choices", "Give the players at least one choice.");
       out.narration.choices = labels.map((label) => {
         const existing = turn.narration.choices.find((c) => c.label.toLowerCase() === label.toLowerCase());
-        return (
-          existing ?? {
-            label: label.slice(0, 80),
-            intent: {
-              approach: label,
-              skill: "none",
-              difficulty: "medium",
-              deed: "none",
-              targetRef: null,
-              shortcutId: null,
-            },
-          }
-        );
+        const written: StoredChoice = {
+          label: label.slice(0, 80),
+          intent: {
+            approach: label,
+            skill: "none",
+            difficulty: "medium",
+            deed: "none",
+            targetRef: null,
+            shortcutId: null,
+          },
+          byDm: true,
+        };
+        return existing ?? written;
       });
     }
     return out;
@@ -1722,10 +1724,13 @@ export class TurnService {
     choices: StoredChoice[],
   ): Promise<ResolvedAction[]> {
     const byChar = new Map(acted.map((a) => [a.characterId, a]));
-    const freeform = acted.filter((a) => a.kind === "freeform");
+    const pickedChoice = (a: (typeof acted)[number]) =>
+      a.kind === "choice" ? choices[Number(a.payload.choiceIndex)] : undefined;
+    // Typed actions, and choices the DM wrote, are read by the action reader: it decides what needs a roll.
+    const toRead = acted.filter((a) => a.kind === "freeform" || pickedChoice(a)?.byDm);
     let parsed: IntentOutput["actions"] = [];
     let unreadBecause = "The action reader left this out of its answer.";
-    if (freeform.length > 0) {
+    if (toRead.length > 0) {
       const res = await this.deps.llm.structured(
         {
           task: "intent",
@@ -1733,7 +1738,10 @@ export class TurnService {
           user: intentUser(
             this.sceneSpecView(index, spec),
             party.map((p) => ({ ref: p.id, name: p.name })),
-            freeform.map((a) => ({ characterRef: a.characterId, text: String(a.payload.text ?? "") })),
+            toRead.map((a) => ({
+              characterRef: a.characterId,
+              text: a.kind === "freeform" ? String(a.payload.text ?? "") : (pickedChoice(a)?.label ?? ""),
+            })),
             { fight: spec.combat?.phase === "fighting" && campaignSettings(c).combatRules.defenseMix },
           ),
           schema: IntentOutput,
@@ -1753,6 +1761,45 @@ export class TurnService {
     const entityAnchor = (ref: string | null) => {
       if (!ref) return null;
       return spec.entities.find((e) => e.ref.id === ref)?.ref ?? null;
+    };
+
+    const fromReader = (
+      p: CharacterRow,
+      base: ResolvedAction,
+      pa: IntentOutput["actions"][number],
+    ): ResolvedAction => {
+      const deeds: DeedCandidate[] = pa.deeds.map((d) => ({
+        tag: d.tag as DeedCandidate["tag"],
+        actorIds: [p.id],
+        anchor: entityAnchor(d.targetRef),
+        evidence: { forgoneBenefit: Math.max(0, Math.min(3, d.forgoneBenefit)), riskTaken: d.riskTaken },
+        source: "intent",
+        confidence: 0.8,
+        summary: pa.summary,
+      }));
+      const helper =
+        pa.helpsCharacterRef && party.some((x) => x.id === pa.helpsCharacterRef)
+          ? pa.helpsCharacterRef
+          : null;
+      return {
+        ...base,
+        summary: pa.summary,
+        skill: pa.needsRoll && isSkill(pa.skill) ? pa.skill : null,
+        ability: pa.needsRoll
+          ? isSkill(pa.skill)
+            ? SKILLS[pa.skill]
+            : isAbility(pa.ability)
+              ? pa.ability
+              : null
+          : null,
+        difficulty: pa.difficulty,
+        targetRef: pa.targetRef,
+        helpsCharacterId: helper,
+        deeds,
+        keepsPromiseTo: pa.keepsPromiseTo,
+        makesPromiseTo: pa.makesPromiseTo,
+        passed: false,
+      };
     };
 
     return party.map((p): ResolvedAction => {
@@ -1777,6 +1824,9 @@ export class TurnService {
       if (a.kind === "choice") {
         const choice = choices[Number(a.payload.choiceIndex)];
         if (!choice) return base;
+        // A choice the DM wrote, as the reader understood it; unread, it's taken as written, with no roll.
+        const read = choice.byDm ? parsed.find((x) => x.characterRef === p.id) : undefined;
+        if (read) return fromReader(p, base, read);
         const intent = choice.intent;
         const deeds: DeedCandidate[] = [];
         if (intent.deed !== "none") {
@@ -1829,38 +1879,7 @@ export class TurnService {
           passed: false,
           unread: unreadBecause,
         };
-      const deeds: DeedCandidate[] = pa.deeds.map((d) => ({
-        tag: d.tag as DeedCandidate["tag"],
-        actorIds: [p.id],
-        anchor: entityAnchor(d.targetRef),
-        evidence: { forgoneBenefit: Math.max(0, Math.min(3, d.forgoneBenefit)), riskTaken: d.riskTaken },
-        source: "intent",
-        confidence: 0.8,
-        summary: pa.summary,
-      }));
-      const helper =
-        pa.helpsCharacterRef && party.some((x) => x.id === pa.helpsCharacterRef)
-          ? pa.helpsCharacterRef
-          : null;
-      return {
-        ...base,
-        summary: pa.summary,
-        skill: pa.needsRoll && isSkill(pa.skill) ? pa.skill : null,
-        ability: pa.needsRoll
-          ? isSkill(pa.skill)
-            ? SKILLS[pa.skill]
-            : isAbility(pa.ability)
-              ? pa.ability
-              : null
-          : null,
-        difficulty: pa.difficulty,
-        targetRef: pa.targetRef,
-        helpsCharacterId: helper,
-        deeds,
-        keepsPromiseTo: pa.keepsPromiseTo,
-        makesPromiseTo: pa.makesPromiseTo,
-        passed: false,
-      };
+      return fromReader(p, base, pa);
     });
   }
 
