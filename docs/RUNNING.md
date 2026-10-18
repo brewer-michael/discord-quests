@@ -61,7 +61,9 @@ pnpm web:build && pnpm --filter @dq/web start   # or `pnpm web:dev` while develo
 
 To run everything in Docker on a server, see [Deploying with Docker Compose](#deploying-with-docker-compose).
 
-The bot serves a health check at `http://localhost:8080/healthz`; the setup page listens on port 3000.
+The bot serves a health check at `http://localhost:8080/healthz` (the writer on 8081, so both can run on one
+machine); the setup page listens on port 3000. With Docker, leave `HEALTH_PORT` out of `.env`: the image sets 8080,
+which its health check expects.
 
 ### The setup page
 

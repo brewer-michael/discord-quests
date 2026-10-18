@@ -1,12 +1,13 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import type { PromptBlock } from "@dq/core/llm";
-import type {
-  AdapterResult,
-  CallContext,
-  LlmAdapter,
-  ResolvedProviderConfig,
-  StructuredRequest,
+import {
+  type AdapterResult,
+  type CallContext,
+  type LlmAdapter,
+  MAX_CALL_MS,
+  type ResolvedProviderConfig,
+  type StructuredRequest,
 } from "../types";
 
 /** Models that accept the server-side refusal fallback ("default" routing). */
@@ -46,6 +47,8 @@ export const anthropicAdapter: LlmAdapter = {
       ...(cfg.baseUrl ? { baseURL: cfg.baseUrl } : {}),
       fetch: ctx.fetch,
       maxRetries: 2,
+      // The call's own time limit comes with ctx.signal; the client's 10-minute default would cut slow calls short.
+      timeout: MAX_CALL_MS,
       defaultHeaders: cfg.extraHeaders,
     });
     const officialEndpoint = !cfg.baseUrl || cfg.baseUrl.startsWith("https://api.anthropic.com");

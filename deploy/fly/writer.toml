@@ -1,6 +1,8 @@
 # Fly.io config for the story writer. From the repository root:
 #   fly launch --no-deploy --copy-config --config deploy/fly/writer.toml --name <your-writer-app>
 #   fly secrets set --config deploy/fly/writer.toml DATABASE_URL=... MASTER_KEYS=...
+# plus the same story AI keys (OPENAI_API_KEY, GEMINI_API_KEY, ...) and DEFAULT_DAILY_* limits the bot has: the
+# writer's calls come out of the same daily budget, and without the keys it has no service to write with.
 #   fly deploy --config deploy/fly/writer.toml --dockerfile Dockerfile
 app = "discord-quests-writer"
 primary_region = "iad"

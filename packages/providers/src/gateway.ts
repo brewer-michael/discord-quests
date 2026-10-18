@@ -3,7 +3,7 @@ import { type BudgetGuard, costMicros } from "./budget";
 import { llmAdapter } from "./registry";
 import { createSafeFetch } from "./safe-fetch";
 import type { ProviderStore } from "./store";
-import type { AdapterResult, ResolvedProviderConfig } from "./types";
+import { type AdapterResult, CALL_TIMEOUT_MS, MAX_CALL_MS, type ResolvedProviderConfig } from "./types";
 
 type LogFn = (msg: string, data?: Record<string, unknown>) => void;
 
@@ -30,9 +30,10 @@ export class ProviderGateway implements LlmGateway {
     private readonly budget: BudgetGuard,
     private readonly opts: GatewayOptions = {},
   ) {
-    this.safeFetch = opts.fetch ?? createSafeFetch();
+    // Each call sets its own time limit (below); the fetchers only cap the longest any call may ask for.
+    this.safeFetch = opts.fetch ?? createSafeFetch({ timeoutMs: MAX_CALL_MS });
     const allowPrivate = store.env.ALLOW_PRIVATE_ENDPOINTS === "true";
-    this.privateFetch = opts.fetch ?? createSafeFetch({ allowPrivate });
+    this.privateFetch = opts.fetch ?? createSafeFetch({ allowPrivate, timeoutMs: MAX_CALL_MS });
   }
 
   fetchFor(cfg: ResolvedProviderConfig): typeof fetch {
@@ -47,7 +48,11 @@ export class ProviderGateway implements LlmGateway {
     let last: StructuredOutcome<T> = { ok: false, stop: "error", error: "no route succeeded" };
     const promptChars = [...call.system, ...call.user].reduce((s, b) => s + b.text.length, 0);
 
+    const timeoutMs = Math.min(call.timeoutMs ?? CALL_TIMEOUT_MS, MAX_CALL_MS);
+
     for (const route of routes) {
+      // Whoever asked has stopped waiting: no more services are tried.
+      if (call.signal?.aborted) return { ok: false, stop: "error", error: "stopped before an answer came" };
       const cfg = await this.store.resolve(route.configId).catch((e: Error) => {
         this.opts.log?.warn("provider config unavailable", { configId: route.configId, error: e.message });
         return null;
@@ -75,7 +80,11 @@ export class ProviderGateway implements LlmGateway {
       // What the server chose for this job comes first; the task's usual depth only fills in when it chose nothing.
       const effort = route.params.effort ?? call.effort;
       const started = Date.now();
-      const res = await adapter.generateStructured(
+      // Each service gets the whole time limit, and stops early if the caller does.
+      const signal = call.signal
+        ? AbortSignal.any([AbortSignal.timeout(timeoutMs), call.signal])
+        : AbortSignal.timeout(timeoutMs);
+      const answer = await adapter.generateStructured(
         {
           task: call.task,
           model: route.model,
@@ -87,8 +96,18 @@ export class ProviderGateway implements LlmGateway {
           ...(effort ? { effort } : {}),
         },
         cfg,
-        { fetch: this.fetchFor(cfg) },
+        { fetch: this.fetchFor(cfg), signal },
       );
+      // A cut-off request says so plainly, whatever the service's client made of the abort.
+      const res: typeof answer =
+        !answer.ok && signal.aborted
+          ? {
+              ...answer,
+              error: call.signal?.aborted
+                ? "stopped before an answer came"
+                : `no answer within ${duration(timeoutMs)}`,
+            }
+          : answer;
       this.logCall(res, Date.now() - started, {
         task: call.task,
         guildId: scope.guildId,
@@ -170,4 +189,10 @@ export class ProviderGateway implements LlmGateway {
         ...(trace.answer !== undefined ? { answer: trace.answer } : {}),
       });
   }
+}
+
+function duration(ms: number): string {
+  if (ms >= 120_000) return `${Math.round(ms / 60_000)} minutes`;
+  const s = Math.max(1, Math.round(ms / 1000));
+  return s === 1 ? "1 second" : `${s} seconds`;
 }

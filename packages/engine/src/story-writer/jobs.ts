@@ -38,6 +38,8 @@ export interface FailOptions {
   free?: boolean;
   /** Retrying won't help: give up now. */
   final?: boolean;
+  /** Tokens the failed try spent, which count toward the job's allowance. */
+  tokens?: number;
 }
 
 export class StoryJobs {
@@ -210,6 +212,7 @@ export class StoryJobs {
       .set({
         status: retryAt ? "queued" : "failed",
         attempts,
+        tokensUsed: sql`${storyJobs.tokensUsed} + ${Math.round(opts.tokens ?? 0)}`,
         runAfter: retryAt ?? now,
         leaseOwner: null,
         leaseUntil: null,

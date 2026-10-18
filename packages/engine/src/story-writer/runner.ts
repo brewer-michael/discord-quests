@@ -32,6 +32,8 @@ export interface WriterDeps {
 export const DEFAULT_JOB_TOKENS = 200_000;
 export const DEFAULT_DEADLINE_MS = 30 * 60_000;
 const HEARTBEAT_MS = 30_000;
+/** How long one AI call may take. Nobody waits on the writer, so a slow, deep answer is fine. */
+const CALL_TIMEOUT_MS = 15 * 60_000;
 
 /** A step that couldn't finish, with what the DM room is told. */
 export class StepFailure extends Error {
@@ -84,10 +86,12 @@ const STOPS: Record<Exclude<StructuredOutcome<unknown>, { ok: true }>["stop"], s
   error: "the AI service failed",
 };
 
+/** Runs one claimed job. `stop` ends it early, as on shutdown once its lease has been handed back. */
 export async function runJob(
   job: StoryJob,
   kinds: Record<string, WriterKind>,
   deps: WriterDeps,
+  stop?: AbortSignal,
 ): Promise<RunOutcome> {
   const log = deps.log ?? silentLogger;
   const now = deps.now ?? (() => new Date());
@@ -116,15 +120,20 @@ export async function runJob(
   const limitMs = deps.deadlineMs ?? DEFAULT_DEADLINE_MS;
   const deadline = Date.now() + limitMs;
   let tokensUsed = job.tokensUsed;
+  // Tokens spent on the step under way, not yet saved with it.
   let stepTokens = 0;
 
   // The lease is renewed while the job runs. If it's lost (a rewind made the job stale, or the worker stalled
-  // long enough for another to take over), the job stops here and saves nothing more.
+  // long enough for another to take over), or the worker is stopping, the job stops here and saves nothing more.
+  // Whatever stops it also cancels the AI request under way, so nothing goes on being paid for.
+  const cancel = new AbortController();
   let lose: (e: Error) => void = () => {};
   const lost = new Promise<never>((_, reject) => {
     lose = reject;
   });
-  lost.catch(() => {});
+  lost.catch(() => cancel.abort());
+  if (stop?.aborted) lose(new Lost("stopped"));
+  stop?.addEventListener("abort", () => lose(new Lost("stopped")), { once: true });
   const beat = setInterval(() => {
     deps.jobs.heartbeat(job).then(
       (mine) => mine || lose(new Lost("lease lost")),
@@ -143,7 +152,10 @@ export async function runJob(
       scope: { guildId: campaign.guildId, campaignId: campaign.id },
       outputs: Object.fromEntries(job.steps.map((s) => [s.name, s.output])),
       ask: async <T>(call: StructuredCall<T>) => {
-        const res = await deps.llm.structured(call, { guildId: campaign.guildId, campaignId: campaign.id });
+        const res = await deps.llm.structured(
+          { timeoutMs: CALL_TIMEOUT_MS, ...call, signal: cancel.signal },
+          { guildId: campaign.guildId, campaignId: campaign.id },
+        );
         if (res.usage) stepTokens += Math.round(res.usage.inputTokens + res.usage.outputTokens);
         if (res.ok) return res.value;
         const why = STOPS[res.stop];
@@ -162,7 +174,7 @@ export async function runJob(
         });
       const started = Date.now();
       stepTokens = 0;
-      const output = await within(step.run(ctx), deadline, limitMs, lost);
+      const output = await within(step.run(ctx), deadline, limitMs, lost, () => cancel.abort());
       tokensUsed += stepTokens;
       const saved = await deps.jobs.checkpoint(job, {
         name: step.name,
@@ -179,6 +191,7 @@ export async function runJob(
         ms: Date.now() - started,
         tokens: stepTokens,
       });
+      stepTokens = 0;
     }
 
     const outcome = await deps.db.transaction(async (tx) => {
@@ -210,7 +223,11 @@ export async function runJob(
     if (!(e instanceof Lost || e instanceof StepFailure))
       log.error("writer job crashed", { ...fields, error: (e as Error).message });
     if (failure instanceof StepFailure) {
-      const { retryAt, recorded } = await deps.jobs.fail(job, failure.message, label, failure.opts);
+      // A failed try's tokens count toward the allowance too, so a job that keeps failing still runs out.
+      const { retryAt, recorded } = await deps.jobs.fail(job, failure.message, label, {
+        ...failure.opts,
+        tokens: stepTokens,
+      });
       if (recorded) {
         log.warn("writer job failed", {
           ...fields,
@@ -229,6 +246,7 @@ export async function runJob(
     return stale ? "stale" : "lost";
   } finally {
     clearInterval(beat);
+    cancel.abort();
   }
 }
 
@@ -238,11 +256,15 @@ async function within<T>(
   deadline: number,
   limitMs: number,
   lost: Promise<never>,
+  onLate: () => void,
 ): Promise<T> {
   let timer: NodeJS.Timeout | undefined;
   const late = new Promise<never>((_, reject) => {
     timer = setTimeout(
-      () => reject(new StepFailure(`it ran past its ${span(limitMs)} limit`)),
+      () => {
+        onLate();
+        reject(new StepFailure(`it ran past its ${span(limitMs)} limit`));
+      },
       Math.max(0, deadline - Date.now()),
     );
   });

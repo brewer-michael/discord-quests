@@ -98,6 +98,11 @@ export interface CallContext {
   signal?: AbortSignal;
 }
 
+/** How long an AI request may take unless its call asks for longer. */
+export const CALL_TIMEOUT_MS = 180_000;
+/** The longest any AI request may take: the story writer's slow, deep calls. */
+export const MAX_CALL_MS = 30 * 60_000;
+
 export interface StructuredRequest<T> {
   task: LlmTask;
   model: string;

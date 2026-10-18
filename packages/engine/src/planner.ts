@@ -44,12 +44,17 @@ export interface ChapterPlan {
   seq?: number;
 }
 
+/** The schema's limits, which services that enforce the shape don't pass on to the model. */
+const PLAN_LENGTHS =
+  "Lengths: the theme under 300 characters, each note under 400, each callback under 240, and at most three characters featured per scene.";
+
 export function plannerSystem(world: WorldIndex["world"], story: NarrationStory): string {
   const wishes = tableWishesText(story);
   return [
     `You are the story planner for ${audienceLine(story.intensity)}. The next chapter's scenes are fixed; your job is to make them feel like they grew out of what these particular heroes did.`,
     "For each scene, write a short note for the storyteller: which earlier choices, promises or friendships should echo here, and how. You may feature up to three characters from the list given (use their ids).",
     "Rules: never add or remove scenes, never decide how anything turns out, never remove a character, and never mention luck, fate, destiny, threads, hidden forces or anything working behind the scenes.",
+    PLAN_LENGTHS,
     "",
     ...contentRulesText(world, story.intensity),
     ...(wishes.length > 0 ? ["", ...wishes] : []),
@@ -157,7 +162,8 @@ export function plannerReviseSystem(world: WorldIndex["world"], story: Narration
   return [
     `You are the story editor for ${audienceLine(story.intensity)}. The story planner has drafted notes for the next chapter's scenes; you return the finished plan.`,
     "Keep what is good. Fix: anything that contradicts what has happened (who the heroes met, what they promised, how people feel about them), characters featured who aren't on the list or have fled, been captured or gone away, notes that decide how a scene turns out, and anything that mentions luck, fate, destiny, threads, hidden forces or anything working behind the scenes.",
-    "One note per scene, short and concrete enough for a storyteller to use in the moment. Feature at most three characters per scene, by id.",
+    "One note per scene, short and concrete enough for a storyteller to use in the moment. Feature characters by id.",
+    PLAN_LENGTHS,
     "",
     ...contentRulesText(world, story.intensity),
     ...(wishes.length > 0 ? ["", ...wishes] : []),

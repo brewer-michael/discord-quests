@@ -42,6 +42,27 @@ describe.skipIf(!TEST_DATABASE_URL)("story writer", () => {
     return { jobs, engine, writer };
   }
 
+  /** An AI that never answers until its request is stopped, and remembers each request. */
+  function hanging() {
+    const calls: Array<{ signal?: AbortSignal; timeoutMs?: number }> = [];
+    const llm: LlmGateway = {
+      structured: (call) => {
+        calls.push({
+          ...(call.signal ? { signal: call.signal } : {}),
+          ...(call.timeoutMs ? { timeoutMs: call.timeoutMs } : {}),
+        });
+        return new Promise((resolve) =>
+          call.signal?.addEventListener(
+            "abort",
+            () => resolve({ ok: false, stop: "error", error: "stopped before an answer came" }),
+            { once: true },
+          ),
+        );
+      },
+    };
+    return { llm, calls };
+  }
+
   const plan = (campaignId: string, key: number, seq = 0) => ({
     campaignId,
     kind: "chapter_plan" as const,
@@ -172,15 +193,18 @@ describe.skipIf(!TEST_DATABASE_URL)("story writer", () => {
   });
 
   it("stops a try that runs past its time limit or a job past its token allowance", async () => {
-    const slow = new FakeLlm({
-      writer: () => new Promise((resolve) => setTimeout(() => resolve(null), 2000)),
-    });
-    const timed = setup(slow);
+    const slow = hanging();
+    const timed = setup(slow.llm);
     const c = await campaign(timed.engine);
     await timed.jobs.enqueue(plan(c.id, 1));
     const [late] = await timed.writer(c.id, { deadlineMs: 200 }).drain();
     expect(late?.outcome).toBe("retrying");
     expect((await timed.jobs.get(late?.job.id as string))?.error).toBe("it ran past its 1-second limit");
+    // The AI request under way was stopped too, rather than left running (and paid for). Each call may take up
+    // to 15 minutes, far longer than a turn's 3.
+    expect(slow.calls).toHaveLength(1);
+    expect(slow.calls[0]?.signal?.aborted).toBe(true);
+    expect(slow.calls[0]?.timeoutMs).toBe(15 * 60_000);
 
     const greedy = setup();
     const d = await campaign(greedy.engine);
@@ -208,11 +232,68 @@ describe.skipIf(!TEST_DATABASE_URL)("story writer", () => {
     expect(job?.notice?.text).toContain("today's spending limit was reached. Trying again tomorrow.");
   });
 
-  it("hands a job back on shutdown, keeping its finished steps", async () => {
-    const llm = new FakeLlm({
-      writer: () => new Promise((resolve) => setTimeout(() => resolve(null), 1500)),
+  it("counts a failed try's tokens toward the job's allowance", async () => {
+    const costly: LlmGateway = {
+      structured: async () => ({
+        ok: false,
+        stop: "invalid",
+        error: "not the shape asked for",
+        usage: { inputTokens: 100, outputTokens: 50 },
+      }),
+    };
+    const { jobs, engine, writer } = setup(costly);
+    const c = await campaign(engine);
+    await jobs.enqueue(plan(c.id, 1));
+    const used: number[] = [];
+    let outcome: string | undefined;
+    for (let i = 0; i < 3; i++) {
+      const [ran] = await writer(c.id, { jobTokens: 200 }).drain();
+      outcome = ran?.outcome;
+      const job = await jobs.get(ran?.job.id as string);
+      used.push(job?.tokensUsed ?? 0);
+      await db.db.update(storyJobs).set({ runAfter: new Date() }).where(eq(storyJobs.campaignId, c.id));
+    }
+    expect(used).toEqual([150, 300, 300]);
+    expect(outcome).toBe("failed");
+    expect((await jobs.recent(c.id))[0]?.error).toBe("it used up its allowance of 200 tokens");
+  });
+
+  it("hands back a job it claims while being told to stop", async () => {
+    const { jobs, engine } = setup();
+    const c = await campaign(engine);
+    await jobs.enqueue(plan(c.id, 1));
+    let open: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      open = resolve;
     });
-    const { jobs, engine, writer } = setup(llm);
+    // Claiming takes a moment, and the stop comes in the middle of it.
+    const slowClaims = new Proxy(jobs, {
+      get(target, prop, receiver) {
+        const value = Reflect.get(target, prop, receiver);
+        if (typeof value !== "function") return value;
+        return prop === "claim"
+          ? async (...args: unknown[]) => {
+              await gate;
+              return value.apply(target, args);
+            }
+          : value.bind(target);
+      },
+    });
+    const w = new StoryWriter({ db: db.db, llm: new FakeLlm(), worlds, jobs: slowClaims, campaignId: c.id });
+    const running = w.runOnce();
+    const stopping = w.stop(1_000);
+    open();
+    expect(await running).toBeNull();
+    await stopping;
+    const [job] = await jobs.recent(c.id);
+    expect(job?.status).toBe("queued");
+    expect(job?.attempts).toBe(0);
+    expect(job?.steps).toEqual([]);
+  });
+
+  it("hands a job back on shutdown, keeping its finished steps", async () => {
+    const slow = hanging();
+    const { jobs, engine, writer } = setup(slow.llm);
     const c = await campaign(engine);
     await jobs.enqueue(plan(c.id, 1));
     const w = writer(c.id);
@@ -225,6 +306,8 @@ describe.skipIf(!TEST_DATABASE_URL)("story writer", () => {
     expect(job?.attempts).toBe(0);
     expect(job?.steps.map((s) => s.name)).toEqual(["facts"]);
     expect(await running).toEqual(expect.objectContaining({ outcome: "lost" }));
+    // Its AI request was stopped with it.
+    expect(slow.calls[0]?.signal?.aborted).toBe(true);
   });
 
   it("gives up on the recap of a chapter that has no scenes", async () => {

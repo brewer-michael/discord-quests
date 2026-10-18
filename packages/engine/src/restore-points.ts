@@ -76,17 +76,22 @@ export async function saveRestorePoint(
   const heroes = await tx.select().from(characters).where(eq(characters.campaignId, campaignId));
   const ids = heroes.map((h) => h.id);
   const sceneId = typeof c.story.sceneId === "string" ? c.story.sceneId : null;
-  const [inventory, questRows, promiseRows, npcRows, regionRows, canonRows, sceneRows, roundRows] =
-    await Promise.all([
-      ids.length > 0 ? tx.select().from(inventoryItems).where(inArray(inventoryItems.characterId, ids)) : [],
-      tx.select().from(quests).where(eq(quests.campaignId, campaignId)),
-      tx.select().from(promises).where(eq(promises.campaignId, campaignId)),
-      tx.select().from(npcs).where(eq(npcs.campaignId, campaignId)),
-      tx.select().from(campaignRegions).where(eq(campaignRegions.campaignId, campaignId)),
-      tx.select().from(canonEntities).where(eq(canonEntities.campaignId, campaignId)),
-      sceneId ? tx.select().from(scenes).where(eq(scenes.id, sceneId)) : [],
-      roundId ? tx.select().from(rounds).where(eq(rounds.id, roundId)) : [],
-    ]);
+  // One at a time: a transaction is one connection, and queries sent to it together only queue up (and draw
+  // a warning from pg, an error from pg 9).
+  const inventory =
+    ids.length > 0
+      ? await tx.select().from(inventoryItems).where(inArray(inventoryItems.characterId, ids))
+      : [];
+  const questRows = await tx.select().from(quests).where(eq(quests.campaignId, campaignId));
+  const promiseRows = await tx.select().from(promises).where(eq(promises.campaignId, campaignId));
+  const npcRows = await tx.select().from(npcs).where(eq(npcs.campaignId, campaignId));
+  const regionRows = await tx
+    .select()
+    .from(campaignRegions)
+    .where(eq(campaignRegions.campaignId, campaignId));
+  const canonRows = await tx.select().from(canonEntities).where(eq(canonEntities.campaignId, campaignId));
+  const sceneRows = sceneId ? await tx.select().from(scenes).where(eq(scenes.id, sceneId)) : [];
+  const roundRows = roundId ? await tx.select().from(rounds).where(eq(rounds.id, roundId)) : [];
   const [loomRow] = await tx.select().from(campaignLoom).where(eq(campaignLoom.campaignId, campaignId));
   const [planRow] = await tx
     .select()

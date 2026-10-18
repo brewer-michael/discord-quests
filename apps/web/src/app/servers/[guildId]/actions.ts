@@ -98,7 +98,9 @@ export async function saveRoutesAction(guildId: string, task: string, fd: FormDa
   });
   if (!res.ok) return { ok: false, message: res.error };
   revalidatePath(`/servers/${guildId}`, "layout");
-  return { ok: true, message: parsed.rows.length > 0 ? "Saved." : "Cleared. Server defaults apply." };
+  const cleared =
+    task === "writer" ? "Cleared. It uses the Planner's service." : "Cleared. Server defaults apply.";
+  return { ok: true, message: parsed.rows.length > 0 ? "Saved." : cleared };
 }
 
 export async function saveSettingsAction(guildId: string, fd: FormData): Promise<FormState> {

@@ -60,6 +60,40 @@ describe("provider gateway logs", () => {
     return { lines, log: { info: at("info"), warn: at("warn") } };
   }
 
+  it("give a call its own time limit, and stop when the caller does", async () => {
+    // A service that never answers, until the request is cut off.
+    const asked: AbortSignal[] = [];
+    const hanging = (async (_input: string | URL | Request, init: RequestInit = {}) => {
+      const signal = init.signal as AbortSignal;
+      asked.push(signal);
+      return new Promise<Response>((_, reject) => {
+        signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+      });
+    }) as typeof fetch;
+    const { lines, log } = capture();
+    const gw = new ProviderGateway(store, budget, { fetch: hanging, log });
+    const started = Date.now();
+    const late = await gw.structured({ ...call, timeoutMs: 100 }, { guildId: "g1" });
+    expect(late).toMatchObject({ ok: false, stop: "error", error: "no answer within 1 second" });
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(asked[0]?.aborted).toBe(true);
+    expect(lines[0]).toMatchObject({ level: "warn", msg: "ai call failed" });
+
+    const stop = new AbortController();
+    const waiting = gw.structured({ ...call, signal: stop.signal }, { guildId: "g1" });
+    await new Promise((r) => setTimeout(r, 50));
+    stop.abort();
+    expect(await waiting).toMatchObject({ ok: false, stop: "error", error: "stopped before an answer came" });
+    expect(asked[1]?.aborted).toBe(true);
+    // Once the caller has stopped, no service is asked at all.
+    const before = asked.length;
+    expect(await gw.structured({ ...call, signal: stop.signal }, { guildId: "g1" })).toMatchObject({
+      ok: false,
+      error: "stopped before an answer came",
+    });
+    expect(asked.length).toBe(before);
+  });
+
   it("give each call's time, tokens, reasoning and the server's timings", async () => {
     const { lines, log } = capture();
     const { fetch } = fakeFetch(() =>

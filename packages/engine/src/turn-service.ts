@@ -75,6 +75,7 @@ import {
   campaigns,
   canonEntities,
   characters,
+  type DbOrTx,
   events,
   inventoryItems,
   npcs,
@@ -405,8 +406,8 @@ export class TurnService {
     });
   }
 
-  async currentRound(campaignId: string) {
-    const [r] = await this.deps.db
+  async currentRound(campaignId: string, tx: DbOrTx = this.deps.db) {
+    const [r] = await tx
       .select()
       .from(rounds)
       .where(and(eq(rounds.campaignId, campaignId), eq(rounds.status, "collecting")))
@@ -2012,12 +2013,11 @@ export class TurnService {
             )})`,
           )
       : [];
-    const [questRows, promiseRows, canonRows, npcRows] = await Promise.all([
-      tx.select().from(quests).where(eq(quests.campaignId, c.id)),
-      tx.select().from(promises).where(eq(promises.campaignId, c.id)),
-      tx.select().from(canonEntities).where(eq(canonEntities.campaignId, c.id)),
-      tx.select().from(npcs).where(eq(npcs.campaignId, c.id)),
-    ]);
+    // One at a time: queries sent to a transaction together only queue up on its one connection.
+    const questRows = await tx.select().from(quests).where(eq(quests.campaignId, c.id));
+    const promiseRows = await tx.select().from(promises).where(eq(promises.campaignId, c.id));
+    const canonRows = await tx.select().from(canonEntities).where(eq(canonEntities.campaignId, c.id));
+    const npcRows = await tx.select().from(npcs).where(eq(npcs.campaignId, c.id));
     const loot = new Set<string>();
     const region = index.regions.get(spec.regionId);
     const table = region?.lootTable
@@ -2458,7 +2458,12 @@ export class TurnService {
         type: "party_mended",
         payload: { by: userId, heroes: party.map((p) => ({ id: p.id, hp: p.hp, hpMax: p.hpMax })) },
       });
-      await saveRestorePoint(tx, campaignId, c.turnSeq, (await this.currentRound(campaignId))?.id ?? null);
+      await saveRestorePoint(
+        tx,
+        campaignId,
+        c.turnSeq,
+        (await this.currentRound(campaignId, tx))?.id ?? null,
+      );
     });
     return party.map((p) => p.name);
   }

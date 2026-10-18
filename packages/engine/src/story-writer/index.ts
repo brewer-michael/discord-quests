@@ -37,7 +37,7 @@ export interface StoryWriterOptions extends WriterDeps {
 export class StoryWriter {
   readonly worker: string;
   private stopping = false;
-  private current: { job: StoryJob; run: Promise<RunOutcome> } | null = null;
+  private current: { job: StoryJob; run: Promise<RunOutcome>; stop: AbortController } | null = null;
   private loop: Promise<void> | null = null;
   private wake: (() => void) | null = null;
 
@@ -55,8 +55,14 @@ export class StoryWriter {
     if (this.stopping) return null;
     const job = await this.opts.jobs.claim(this.worker, this.opts.campaignId);
     if (!job) return null;
-    const run = runJob(job, this.opts.kinds ?? WRITER_KINDS, this.opts);
-    this.current = { job, run };
+    // Told to stop while it was claiming: the job goes straight back, untouched.
+    if (this.stopping) {
+      await this.opts.jobs.release(job);
+      return null;
+    }
+    const stop = new AbortController();
+    const run = runJob(job, this.opts.kinds ?? WRITER_KINDS, this.opts, stop.signal);
+    this.current = { job, run, stop };
     try {
       return { job, outcome: await run };
     } finally {
@@ -80,13 +86,20 @@ export class StoryWriter {
     if (this.loop) return;
     const log = this.opts.log ?? silentLogger;
     const pollMs = this.opts.pollMs ?? 5_000;
+    let waitingSaid = 0;
     this.loop = (async () => {
       while (!this.stopping) {
         let ran = false;
         try {
           ran = (await this.runOnce()) !== null;
         } catch (e) {
-          log.error("writer loop error", { worker: this.worker, error: (e as Error).message });
+          // Started before the bot migrated the database: say so once a minute, not every look at the queue.
+          if (missingTable(e)) {
+            if (Date.now() - waitingSaid > 60_000) {
+              log.warn("writer waiting for the database to be migrated", { worker: this.worker });
+              waitingSaid = Date.now();
+            }
+          } else log.error("writer loop error", { worker: this.worker, error: (e as Error).message });
         }
         if (!ran && !this.stopping)
           await new Promise<void>((resolve) => {
@@ -107,22 +120,33 @@ export class StoryWriter {
   async stop(graceMs = 25_000): Promise<void> {
     this.stopping = true;
     this.wake?.();
-    const current = this.current;
-    if (!current) return void (await this.loop);
     let timer: NodeJS.Timeout | undefined;
-    const finished = await Promise.race([
-      current.run.then(() => true),
-      new Promise<boolean>((resolve) => {
-        timer = setTimeout(() => resolve(false), graceMs);
-      }),
-    ]);
+    const graceOver = new Promise<false>((resolve) => {
+      timer = setTimeout(() => resolve(false), graceMs);
+    });
+    const current = this.current;
+    if (!current) {
+      // Maybe in the middle of claiming: runOnce hands back anything it claims from now on.
+      await Promise.race([this.loop, graceOver]);
+      clearTimeout(timer);
+      return;
+    }
+    const finished = await Promise.race([current.run.then(() => true), graceOver]);
     clearTimeout(timer);
     if (finished) return void (await this.loop);
+    // Handed back first, then stopped, so the cut-off try isn't recorded as a failure.
     await this.opts.jobs.release(current.job);
+    current.stop.abort();
     (this.opts.log ?? silentLogger).info("writer job released", {
       jobId: current.job.id,
       kind: current.job.kind,
       campaignId: current.job.campaignId,
     });
   }
+}
+
+/** Postgres's "relation does not exist", as thrown or as wrapped by drizzle. */
+function missingTable(e: unknown): boolean {
+  const err = e as { code?: string; cause?: { code?: string } };
+  return err.code === "42P01" || err.cause?.code === "42P01";
 }

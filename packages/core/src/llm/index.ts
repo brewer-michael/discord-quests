@@ -42,6 +42,13 @@ export interface StructuredCall<T> {
   expectTokens: number;
   /** The task's usual reasoning depth. The server's per-job setting, when there is one, wins. */
   effort?: Effort;
+  /**
+   * How long the service may take to answer, for work nobody is waiting on (the story writer). Turns leave it out
+   * and get the usual 3 minutes.
+   */
+  timeoutMs?: number;
+  /** Stops the request, for example when the job that asked for it is stopped. */
+  signal?: AbortSignal;
 }
 
 export interface LlmUsage {
