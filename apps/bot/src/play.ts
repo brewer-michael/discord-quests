@@ -5,7 +5,8 @@
  *   pnpm play                         the scripted storyteller (no AI service needed)
  *   pnpm play --ai mock --slow 1-3    the same story through the real provider code, from a local stand-in
  *   pnpm play --ai env                the AI keys in the environment (OPENAI_API_KEY, GEMINI_API_KEY, ...)
- *   pnpm play --ai zai                any service in the presets list, its key in ZAI_API_KEY (and so on)
+ *   pnpm play --ai zai                any service in the presets list, its key in ZAI_API_KEY (and so on),
+ *                                     and another address for it, if wanted, in ZAI_BASE_URL
  *   pnpm play --ai http://localhost:11434/v1 --model llama3.3   a self-hosted OpenAI-compatible service
  *
  * `pnpm play --help` lists every option; docs/RUNNING.md, "Playing without Discord", explains them.
@@ -42,7 +43,7 @@ import {
   WorldCache,
 } from "@dq/engine";
 import { FakeLlm } from "@dq/engine/testing";
-import { BudgetGuard, ProviderGateway, ProviderStore, preset, presets } from "@dq/providers";
+import { BudgetGuard, type Preset, ProviderGateway, ProviderStore, preset, presets } from "@dq/providers";
 import { and, eq } from "drizzle-orm";
 import { battleChoices, formatDraft, formatJournal, formatSheet, formatTurn } from "./play-format";
 import { startMockProvider } from "./play-mock";
@@ -482,7 +483,79 @@ export async function routeEverythingTo(db: Db, guildId: string, baseUrl: string
 
 /** The variable `--ai <service>` reads its key from unless --key-env names another: ZAI_API_KEY for zai. */
 export function keyVariable(presetId: string): string {
-  return `${presetId.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_API_KEY`;
+  return serviceVariable(presetId, "API_KEY");
+}
+
+/** The variable that gives `--ai <service>` another address than its preset's, unless --base-url does: ZAI_BASE_URL. */
+export function addressVariable(presetId: string): string {
+  return serviceVariable(presetId, "BASE_URL");
+}
+
+function serviceVariable(presetId: string, setting: string): string {
+  return `${presetId.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_${setting}`;
+}
+
+function keyFrom(name: string, env: NodeJS.ProcessEnv): string {
+  const key = env[name]?.trim();
+  if (!key)
+    throw new Error(
+      `${name} isn't set: put the service's API key in it (or name another variable with --key-env)`,
+    );
+  return key;
+}
+
+function masterKeysFrom(env: NodeJS.ProcessEnv): MasterKey[] {
+  const raw = env.MASTER_KEYS;
+  if (!raw || raw.includes("REPLACE_ME"))
+    throw new Error(
+      "MASTER_KEYS isn't set: keys are stored encrypted, as the setup page stores them. Make one with\n" +
+        "  node -e \"console.log('v1:'+require('crypto').randomBytes(32).toString('base64'))\"\n" +
+        "and set MASTER_KEYS to it (in .env with Docker, so the writer can read the key too).",
+    );
+  return parseMasterKeys(raw);
+}
+
+/** Whether an address is on a hosted service's host from the presets list (any path, such as Z.ai's Coding Plan). */
+function hostedAddress(url: string): boolean {
+  const host = new URL(url).host;
+  return presets("llm").some((p) => !p.selfHosted && p.baseUrl !== null && new URL(p.baseUrl).host === host);
+}
+
+/**
+ * What `--ai <service>` sets up, from the command line and the environment (.env with Docker): the key from its
+ * variable, another address from --base-url or its variable, and MASTER_KEYS to store the key encrypted.
+ */
+export function serviceFromEnv(
+  p: Preset,
+  opts: { model?: string; baseUrl?: string; keyEnv?: string },
+  env: NodeJS.ProcessEnv = process.env,
+): PlayService {
+  const keyName = opts.keyEnv ?? keyVariable(p.id);
+  const apiKey = p.needsKey || opts.keyEnv ? keyFrom(keyName, env) : undefined;
+  const addressName = opts.baseUrl ? "--base-url" : addressVariable(p.id);
+  const baseUrl = opts.baseUrl ?? (env[addressVariable(p.id)]?.trim() || undefined);
+  if (baseUrl) {
+    let u: URL;
+    try {
+      u = new URL(baseUrl);
+    } catch {
+      throw new Error(`${addressName} isn't a web address`);
+    }
+    if (u.protocol !== "https:" && u.protocol !== "http:")
+      throw new Error(
+        `${addressName} should start with https:// (or http:// on your own machine or network)`,
+      );
+    if (u.username || u.password)
+      throw new Error(`${addressName} has credentials in it: put the key in ${keyName}`);
+  }
+  return {
+    presetId: p.id,
+    // A hosted service's address is reached like any hosted service; another (this machine, a proxy, a test
+    // server) may be on a private network, so it's let through.
+    ...(baseUrl ? { baseUrl, selfHosted: !hostedAddress(baseUrl) } : {}),
+    ...(opts.model ? { model: opts.model } : {}),
+    ...(apiKey ? { apiKey, masterKeys: masterKeysFrom(env) } : {}),
+  };
 }
 
 const USAGE = `pnpm play [options]: the game in a terminal, no Discord.
@@ -497,7 +570,7 @@ const USAGE = `pnpm play [options]: the game in a terminal, no Discord.
                           keys are stored encrypted, so MASTER_KEYS must be set
   --ai <url> --model <m>  any OpenAI-compatible endpoint (keyless unless --key-env)
   --model <id>            one model for every job (default: the service's choice per job)
-  --base-url <url>        another address for the service
+  --base-url <url>        another address for the service, or <SERVICE>_BASE_URL (ZAI_BASE_URL for zai)
   --key-env <NAME>        the environment variable that holds the key
 
   --heroes "Wren:lanternkeeper,Bram:shieldheart"   --mode assist   --intensity light|classic|epic
@@ -539,24 +612,6 @@ async function main() {
   }
   const ai = values.ai as string;
   const keyEnv = values["key-env"];
-  const keyFrom = (name: string) => {
-    const key = process.env[name]?.trim();
-    if (!key)
-      throw new Error(
-        `${name} isn't set: put the service's API key in it (or name another variable with --key-env)`,
-      );
-    return key;
-  };
-  const masterKeys = () => {
-    const raw = process.env.MASTER_KEYS;
-    if (!raw || raw.includes("REPLACE_ME"))
-      throw new Error(
-        "MASTER_KEYS isn't set: keys are stored encrypted, as the setup page stores them. Make one with\n" +
-          "  node -e \"console.log('v1:'+require('crypto').randomBytes(32).toString('base64'))\"\n" +
-          "and set MASTER_KEYS to it (in .env with Docker, so the writer can read the key too).",
-      );
-    return parseMasterKeys(raw);
-  };
   const isUrl = /^https?:\/\//.test(ai);
   const service = isUrl || ["fake", "mock", "env"].includes(ai) ? undefined : preset(ai);
   if (!isUrl && !["fake", "mock", "env"].includes(ai) && service?.kind !== "llm") {
@@ -588,24 +643,21 @@ async function main() {
       // The server-default routes from the environment's keys; nothing of the local guild's own.
       await handle.db.delete(taskRoutes).where(eq(taskRoutes.guildId, guildId));
     } else if (isUrl) {
-      const apiKey = keyEnv ? keyFrom(keyEnv) : undefined;
+      const apiKey = keyEnv ? keyFrom(keyEnv, process.env) : undefined;
       await useService(handle.db, guildId, {
         presetId: "custom-openai",
         baseUrl: ai,
         model: values.model as string,
         selfHosted: true,
         capabilityOverrides: { structured: "json_schema" },
-        ...(apiKey ? { apiKey, masterKeys: masterKeys() } : {}),
+        ...(apiKey ? { apiKey, masterKeys: masterKeysFrom(process.env) } : {}),
       });
     } else if (service) {
-      const apiKey = service.needsKey || keyEnv ? keyFrom(keyEnv ?? keyVariable(service.id)) : undefined;
-      await useService(handle.db, guildId, {
-        presetId: service.id,
-        // Another address may be on this machine or network (a proxy, a test server): let it be reached.
-        ...(values["base-url"] ? { baseUrl: values["base-url"], selfHosted: true } : {}),
-        ...(values.model ? { model: values.model } : {}),
-        ...(apiKey ? { apiKey, masterKeys: masterKeys() } : {}),
-      });
+      await useService(
+        handle.db,
+        guildId,
+        serviceFromEnv(service, { model: values.model, baseUrl: values["base-url"], keyEnv }),
+      );
     }
     const store = new ProviderStore(handle.db, env);
     llm = new ProviderGateway(store, new BudgetGuard(handle.db, env), { log });

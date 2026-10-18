@@ -90,7 +90,7 @@ guidance; for a turn the storyteller couldn't tell, `w` writes it.
 |---|---|
 | `--ai <service>` | Any service in the presets list (`openai`, `zai`, `gemini`, ...; `--help` lists them), with its own models per job. |
 | `--model <id>` | One model for every job instead of the service's choice per job. |
-| `--base-url <url>` | Send the service's settings to another address (treated as self-hosted). |
+| `--base-url <url>` | Another address for the service. `<SERVICE>_BASE_URL` (`ZAI_BASE_URL`) in `.env` does the same. |
 | `--key-env NAME` | Read the key from this variable instead of `<SERVICE>_API_KEY`. |
 | `--heroes "Wren:lanternkeeper,Bram:shieldheart:quick-way"` | The party: name, class and path (default: Wren, a Lanternkeeper on the Long Road). |
 | `--mode assist` | Every turn comes to you as a draft first. |
@@ -111,11 +111,19 @@ and logs, just not a real model.
 models and settings. Its key is read from `<SERVICE>_API_KEY` (`ZAI_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`,
 ...) or the variable `--key-env` names, never from the command line, and is stored encrypted with `MASTER_KEYS`,
 like a key added on the setup page. So `MASTER_KEYS` must be set (`.env.example` shows how to make one), and the
-same value lets `pnpm writer` read the key if you run it beside. `--ai <url>` points every job at your own
-OpenAI-compatible endpoint; it sends a key only if `--key-env` names one.
+same value lets `pnpm writer` read the key if you run it beside. The address is the presets list's own unless
+`<SERVICE>_BASE_URL` (`ZAI_BASE_URL`, ...) or `--base-url` gives another: one on a hosted service's host (any path)
+is reached like that service, and any other (your machine, a proxy) like a self-hosted one. `--ai <url>` points
+every job at your own OpenAI-compatible endpoint; it sends a key only if `--key-env` names one.
 
-Z.ai: use a key for its pay-as-you-go API. Its GLM Coding Plan endpoint is for its supported coding tools only
-under Z.ai's terms, so the game can't use it.
+```sh
+# .env
+ZAI_API_KEY=...
+ZAI_BASE_URL=https://api.z.ai/api/paas/v4
+```
+
+Z.ai's GLM Coding Plan endpoint is for its supported coding tools under Z.ai's terms; its pay-as-you-go API (the
+presets list's address) is the one for apps like this.
 
 ### The setup page
 

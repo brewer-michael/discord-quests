@@ -1,13 +1,20 @@
 import { randomBytes } from "node:crypto";
 import { secrets, storyJobs } from "@dq/db";
-import { parseMasterKeys } from "@dq/db/crypto";
 import { createTestDb, TEST_DATABASE_URL } from "@dq/db/testing";
 import { createEngine, StoryWriter, WorldCache } from "@dq/engine";
 import { FakeLlm, UnconfiguredLlm } from "@dq/engine/testing";
-import { BudgetGuard, ProviderGateway, ProviderStore } from "@dq/providers";
+import { BudgetGuard, type Preset, ProviderGateway, ProviderStore, preset } from "@dq/providers";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { keyVariable, type PlayIO, playSession, routeEverythingTo, useService } from "./play";
+import {
+  addressVariable,
+  keyVariable,
+  type PlayIO,
+  playSession,
+  routeEverythingTo,
+  serviceFromEnv,
+  useService,
+} from "./play";
 import { battleChoices, formatJournal } from "./play-format";
 import { startMockProvider } from "./play-mock";
 
@@ -155,18 +162,36 @@ describe.skipIf(!TEST_DATABASE_URL)("pnpm play", () => {
 
   it("plays with any listed service and its key, stored encrypted the way the setup page stores it", async () => {
     expect(keyVariable("zai")).toBe("ZAI_API_KEY");
+    expect(addressVariable("zai")).toBe("ZAI_BASE_URL");
     expect(keyVariable("custom-openai")).toBe("CUSTOM_OPENAI_API_KEY");
+    const zai = preset("zai") as Preset;
+    const raw = `v1:${randomBytes(32).toString("base64")}`;
+    // The key and address come from the environment (.env with Docker); a hosted service's other address is
+    // reached like a hosted service, and setup mistakes are said in one line.
+    const coding = serviceFromEnv(
+      zai,
+      {},
+      { ZAI_API_KEY: "k", ZAI_BASE_URL: "https://api.z.ai/api/coding/paas/v4", MASTER_KEYS: raw },
+    );
+    expect(coding).toMatchObject({ baseUrl: "https://api.z.ai/api/coding/paas/v4", selfHosted: false });
+    expect(serviceFromEnv(zai, {}, { ZAI_API_KEY: "k", ZAI_BASE_URL: " ", MASTER_KEYS: raw }).baseUrl).toBe(
+      undefined,
+    );
+    expect(() => serviceFromEnv(zai, {}, { MASTER_KEYS: raw })).toThrow("ZAI_API_KEY isn't set");
+    expect(() => serviceFromEnv(zai, {}, { ZAI_API_KEY: "k" })).toThrow("MASTER_KEYS isn't set");
+    expect(() =>
+      serviceFromEnv(zai, {}, { ZAI_API_KEY: "k", ZAI_BASE_URL: "api.z.ai", MASTER_KEYS: raw }),
+    ).toThrow("ZAI_BASE_URL isn't a web address");
     // Z.ai's own settings (plain JSON answers, its models per job), sent to the stand-in instead of Z.ai.
     const mock = await startMockProvider();
     try {
-      const raw = `v1:${randomBytes(32).toString("base64")}`;
-      await useService(db.db, "g-play-zai", {
-        presetId: "zai",
-        baseUrl: mock.url,
-        selfHosted: true,
-        apiKey: "zai-test-key-1234",
-        masterKeys: parseMasterKeys(raw),
-      });
+      const service = serviceFromEnv(
+        zai,
+        {},
+        { ZAI_API_KEY: "zai-test-key-1234", ZAI_BASE_URL: mock.url, MASTER_KEYS: raw },
+      );
+      expect(service).toMatchObject({ baseUrl: mock.url, selfHosted: true });
+      await useService(db.db, "g-play-zai", service);
       const [stored] = await db.db.select().from(secrets).where(eq(secrets.guildId, "g-play-zai"));
       expect(stored?.last4).toBe("1234");
       expect(stored?.ciphertext.toString("utf8")).not.toContain("zai-test-key");
