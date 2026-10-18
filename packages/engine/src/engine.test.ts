@@ -6,6 +6,7 @@ import {
   events,
   inventoryItems,
   safetyEvents,
+  storyJobs,
   storyPlans,
   turns,
 } from "@dq/db";
@@ -403,6 +404,12 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
     // Every chapter gets a recap, which the storyteller and the journal both use.
     const recaps = await db.db.select().from(chapterSummaries).where(eq(chapterSummaries.campaignId, c.id));
     expect(recaps.length).toBeGreaterThanOrEqual(7);
+    // The reviewer reads every recap the storyteller writes, and the finale with its epilogue lines.
+    const reviews = llm.calls.filter((x) => x.task === "judge");
+    const written = llm.calls.filter((x) => x.task === "summarizer" && x.user.startsWith("Chapter "));
+    expect(written.length).toBeGreaterThan(0);
+    expect(reviews.filter((x) => x.user.includes("chapter recap"))).toHaveLength(written.length);
+    expect(reviews.some((x) => x.user.includes("This passage ends the campaign"))).toBe(true);
     expect(llm.calls.some((x) => x.task === "narrator" && x.user.includes("## The story so far"))).toBe(true);
     expect((await engine.campaigns.journal(c.id)).chapters.length).toBeGreaterThan(3);
     const loom = await loadLoom(db.db, c.id);
@@ -628,7 +635,7 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
   it("throws away planner notes that would give the game away", async () => {
     const llm = new FakeLlm({
       writer: () => ({
-        theme: "Karma is coming for them.",
+        theme: "Their kindness points will pay off soon.",
         beats: [
           {
             beatId: "ch2-the-fork-in-the-road",
@@ -670,7 +677,7 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
       note: "Remember how brave the heroes were in the garden.",
       featured: ["hattie-wick"],
     });
-    expect(plan.theme).not.toMatch(/karma/i);
+    expect(plan.theme).not.toMatch(/kindness points/i);
   });
 
   it("hands a turn the AI can't tell to a person in the DM room, with everything they need", async () => {
@@ -858,6 +865,125 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
       // The opening has no hidden-hand notes, so only an Epic story has it reviewed.
       expect(tasks.includes("judge")).toBe(intensity === "epic");
     }
+  });
+
+  it("lets the world speak of providence, and turns back only what shows how a turn was decided", async () => {
+    let judged = { revealsHiddenMechanic: false, explainsCauseOfLuck: false, crossesLimits: false, note: "" };
+    const llm = new FakeLlm({
+      narrator: (): NarratorOutput => ({
+        narration: "Old Wick smiles. Perhaps it was meant to be: light is meant to be shared, not kept.",
+        npcLines: [{ npcRef: "hattie-wick", line: "The roads remember every kindness." }],
+        proposedDeltas: [],
+        choices: ["Walk on toward the lamp-house", "Ask Hattie about the old roads"].map((label) => ({
+          label,
+          intent: {
+            approach: label,
+            skill: "none",
+            difficulty: "easy",
+            deed: "none",
+            targetRef: null,
+            shortcutId: null,
+          },
+        })),
+        sceneOver: false,
+        imageBrief: null,
+        significance: "minor",
+      }),
+      judge: () => judged,
+    });
+    const engine = createEngine({ db: db.db, worlds, llm });
+    const c = await engine.campaigns.create({
+      guildId: "g-meant",
+      channelId: "ch-meant",
+      name: "Meant",
+      mode: "ai_dm",
+      createdBy: "meant",
+      settings: { audience: "teen", story: { intensity: "epic" } as never },
+    });
+    await makeHero(engine, c.id, "meant", "scout", "Quill Swift");
+
+    // Fate and the land's long memory are the world's own voice: told as written, after the reviewer has read
+    // the whole passage, spoken lines included.
+    const view = await engine.turns.openCampaign(c.id, "meant");
+    expect(view.narration).toContain("meant to be");
+    const review = llm.calls.filter((x) => x.task === "judge").at(-1)?.user ?? "";
+    expect(review).toContain("Perhaps it was meant to be");
+    expect(review).toContain("The roads remember every kindness.");
+
+    // What the reviewer flags reaches the DM as the sentence it flagged, not a banned word.
+    judged = { ...judged, explainsCauseOfLuck: true, note: '"Hattie helps because you spared the skulker."' };
+    await engine.turns.submitAction({
+      roundId: view.roundId as string,
+      userId: "meant",
+      kind: "freeform",
+      text: "I ask Hattie about the old roads",
+    });
+    const next = await engine.turns.resolveRound(view.roundId as string);
+    if (next?.kind !== "draft") throw new Error("expected the turn to be handed over");
+    const reasons = next.draft.handoff?.reasons.join("\n") ?? "";
+    expect(reasons).toContain("what is kept for the epilogue");
+    expect(reasons).toContain('"Hattie helps because you spared the skulker."');
+    expect(reasons).not.toMatch(/meant to be/);
+  });
+
+  it("keeps the hidden hand out of the journal: a recap the reviewer turns back is written again, never stood in for", async () => {
+    let told =
+      "The heroes crossed the square, and something unseen guided their every step because they were kind.";
+    let passes = false;
+    const llm = new FakeLlm({
+      summarizer: () => ({ recap: told }),
+      judge: (call) => {
+        const recap = call.user.some((b) => b.text.includes("chapter recap"));
+        const flag = recap && !passes;
+        return {
+          revealsHiddenMechanic: false,
+          explainsCauseOfLuck: flag,
+          crossesLimits: false,
+          note: flag ? '"something unseen guided their every step"' : "",
+        };
+      },
+    });
+    const engine = createEngine({ db: db.db, worlds, llm });
+    const c = await engine.campaigns.create({
+      guildId: "g-recap",
+      channelId: "ch-recap",
+      name: "Journal",
+      mode: "ai_dm",
+      createdBy: "scribe",
+    });
+    await makeHero(engine, c.id, "scribe", "scout", "Quill Swift");
+    await engine.turns.openCampaign(c.id, "scribe");
+    const seq = (await engine.campaigns.require(c.id)).turnSeq;
+    await engine.storyJobs.enqueue({ campaignId: c.id, kind: "chapter_recap", key: 1, reason: "test", seq });
+    const writer = new StoryWriter({ db: db.db, llm, worlds, jobs: engine.storyJobs, campaignId: c.id });
+
+    // Turned back twice: the job tries again later, and the journal gets nothing in the meantime.
+    const first = (await writer.drain()).find((r) => r.job.kind === "chapter_recap");
+    expect(first?.outcome).toBe("retrying");
+    expect(await db.db.select().from(chapterSummaries).where(eq(chapterSummaries.campaignId, c.id))).toEqual(
+      [],
+    );
+    // It was asked again, told what it gave away; the DM room hears what was flagged.
+    const asked = llm.calls.filter((x) => x.task === "summarizer" && x.user.startsWith("Chapter 1"));
+    expect(asked).toHaveLength(2);
+    expect(asked[1]?.user).toContain(
+      'what is kept for the epilogue: that they were guided or repaid: "something unseen guided their every step"',
+    );
+    const job = await engine.storyJobs.get(first?.job.id as string);
+    expect(job?.error).toContain("the recap was turned back twice");
+    expect(job?.notice?.text).toContain("something unseen guided their every step");
+
+    // On its next try a recap the reviewer passes is the one kept, as written.
+    told = "The heroes crossed the square together and found the lamp-house door ajar.";
+    passes = true;
+    await db.db
+      .update(storyJobs)
+      .set({ runAfter: new Date() })
+      .where(eq(storyJobs.id, first?.job.id as string));
+    const [again] = await writer.drain();
+    expect(again?.outcome).toBe("done");
+    const [stored] = await db.db.select().from(chapterSummaries).where(eq(chapterSummaries.campaignId, c.id));
+    expect(stored?.text).toBe(told);
   });
 
   it("lets only one resolver win a round", async () => {

@@ -2,10 +2,11 @@
  * A chapter's recap, written once the chapter ends, from every turn told in that chapter (not just the first
  * few), for the journal and the storyteller's memory.
  */
+import { JudgeOutput, judgeSystem, judgeUser } from "@dq/core/narration";
 import { checkNarration } from "@dq/core/safety";
 import { chapterSummaries, scenes, turns } from "@dq/db";
 import { and, eq, gte, lte, sql } from "drizzle-orm";
-import { ChapterRecap, recapSystem } from "../chronicle";
+import { ChapterRecap, recapCheckProblems, recapSystem, reviewProblems } from "../chronicle";
 import { isRewound } from "../story-state";
 import { StepFailure, type WriterKind } from "./runner";
 
@@ -68,29 +69,53 @@ export const chapterRecapKind: WriterKind = {
       },
     },
     {
+      // Written, checked, then read by the reviewer, up to twice. The journal and the storyteller's memory must not
+      // give the hidden hand away before the epilogue. A recap that can't pass fails the step, so the job tries
+      // again later; nothing stands in for it.
       name: "draft",
       run: async (ctx) => {
         const facts = ctx.outputs.facts as RecapFacts;
-        const res = await ctx.ask({
-          task: "summarizer",
-          system: [{ text: recapSystem(ctx.index.world, ctx.telling), cache: "1h" }],
-          user: [
-            {
-              text: `Chapter ${facts.chapter}: ${facts.title}\n\nWhat happened, turn by turn:\n${facts.turns.map((s) => `- ${s}`).join("\n")}`,
-            },
-          ],
-          schema: ChapterRecap,
-          schemaName: "recap",
-          expectTokens: 600,
-          effort: "low",
-        });
-        const recap = res.recap.trim();
-        const verdict = checkNarration(recap, ctx.index.world, { intensity: ctx.telling.intensity });
-        if (!verdict.ok) {
-          const why = [...new Set(verdict.findings.map((f) => f.category))].join(", ");
-          throw new StepFailure(`the recap was turned back by the content check (${why})`);
+        let problems: string[] = [];
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const res = await ctx.ask({
+            task: "summarizer",
+            system: [{ text: recapSystem(ctx.index.world, ctx.telling), cache: "1h" }],
+            user: [
+              {
+                text: `Chapter ${facts.chapter}: ${facts.title}\n\nWhat happened, turn by turn:\n${facts.turns.map((s) => `- ${s}`).join("\n")}`,
+              },
+              ...(problems.length > 0
+                ? [
+                    {
+                      text: `Your previous recap had these problems. Write it again without them:\n${problems.map((p) => `- ${p}`).join("\n")}`,
+                    },
+                  ]
+                : []),
+            ],
+            schema: ChapterRecap,
+            schemaName: "recap",
+            expectTokens: 600,
+            effort: "low",
+          });
+          const recap = res.recap.trim();
+          const verdict = checkNarration(recap, ctx.index.world, { intensity: ctx.telling.intensity });
+          problems = verdict.ok
+            ? reviewProblems(
+                await ctx.ask({
+                  task: "judge",
+                  system: judgeSystem(ctx.index.world, ctx.telling),
+                  user: judgeUser({ narration: recap, npcLines: [] }, [], { recap: true }),
+                  schema: JudgeOutput,
+                  schemaName: "review",
+                  expectTokens: 300,
+                  effort: "low",
+                }),
+              )
+            : recapCheckProblems(verdict.findings);
+          if (problems.length === 0) return recap;
+          ctx.log.warn("chapter recap rejected", { jobId: ctx.job.id, attempt: attempt + 1, problems });
         }
-        return recap;
+        throw new StepFailure(`the recap was turned back twice (${problems.join(" ").slice(0, 300)})`);
       },
     },
   ],

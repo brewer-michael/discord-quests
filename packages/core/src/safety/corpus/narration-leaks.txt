@@ -1,11 +1,7 @@
-# Narration that would give the hidden hand away. Every line must be flagged.
-Your karma finally pays off.
-Because you spared Snibbet, he saves you now.
-Snibbet returns, repaying your kindness from long ago.
-Fate has a plan for you, it was written.
+# Game words no storybook would use. Every line must be flagged.
+# Whether a passage shows how a turn was decided ("because you spared him") depends on the turn: the reviewer judges that.
 Your hidden luck score is very high.
-The loom of the world tightens around you.
-Your mercy has been rewarded.
-It was destined that the Ember would fall.
-After sparing him earlier, Snibbet owes you.
-Providence smiles on the heroes.
+Your kindness points are adding up.
+The heroes' karma meter is nearly full.
+A secret tally of your good deeds grows.
+Your mercy score just went up.

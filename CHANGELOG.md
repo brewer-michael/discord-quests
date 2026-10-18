@@ -9,6 +9,14 @@
 - Scenes end when their story does, never on a turn count.
 - Fewer AI calls per turn: the reviewer reads hidden-hand turns and every turn at Epic; the AI read of typed text
   runs at Light. Word and personal-detail checks run on everything.
+- The hidden hand is guarded by one question, not banned words: is it world-building, or does it show the players
+  how this turn was decided? Fate, providence and things being meant to be are the world's to speak of on any turn.
+  The reviewer is told what the game quietly did that turn and reads the spoken lines too; the word check keeps
+  only game words like "luck score". A turned-back draft reaches the DM room with the sentence that was flagged.
+- The heroes learn they were guided and supported on their path only in the epilogue, and only as far as its lines
+  go. The reviewer reads the finale and every chapter recap. The story writer asks again for a recap it turns back,
+  telling the chronicler what was flagged; one that still doesn't pass is retried as a job, and the DM room hears
+  why if it gives up. Nothing from the world's own text stands in for it.
 
 ### Story writer
 - A separate service writes the story ahead of the table, so turns never wait for it: each chapter's plan

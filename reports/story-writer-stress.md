@@ -20,18 +20,18 @@ Run with `pnpm writer:stress` on 2026-10-18. **Passed.**
 | Steps saved twice | 0 |
 | AI steps asked again | 0 (the steps under way when a worker was killed; nothing saved was asked again) |
 | Two jobs running for one campaign | never |
-| Busiest moment | 3 jobs running, 87 waiting |
+| Busiest moment | 3 jobs running, 86 waiting |
 | AI calls by the writer | 156 |
-| Job time (claimed to done) | median 1.8 s, 95th percentile 3.7 s |
-| Wait in the queue | median 48.9 s, 95th percentile 80.7 s |
-| Whole run | 94.4 s |
+| Job time (claimed to done) | median 1.8 s, 95th percentile 3.8 s |
+| Wait in the queue | median 49.0 s, 95th percentile 80.3 s |
+| Whole run | 93.7 s |
 
 ## Turns while the writer works
 
 | | Turns | Median | 95th percentile |
 |---|---|---|---|
-| No writer running | 80 | 189 ms | 291 ms |
-| Writer busy | 520 | 167 ms | 341 ms |
+| No writer running | 80 | 193 ms | 273 ms |
+| Writer busy | 520 | 180 ms | 395 ms |
 
 Turns queue the writer's jobs inside their own transaction and never wait for them.
 

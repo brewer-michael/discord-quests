@@ -461,7 +461,11 @@ The story writer (`docker compose logs writer`) writes, each with `jobId`, `kind
 
 - **`writer job claimed`** with its `attempt` and `resumeAfter` (the steps an earlier try already saved).
 - **`writer step done`**: `step` (`facts`, `draft`, `revise`), `ms` and `tokens`. Its AI calls have their own
-  `ai call` lines, with `task: "writer"` (or `summarizer` for recaps).
+  `ai call` lines, with `task: "writer"` (or `summarizer` for recaps, and `judge` for the reviewer's read of
+  each recap).
+- **`chapter recap rejected`** with its `attempt` and the `problems` the content check or the reviewer found. The
+  chronicler is asked once more with them; a recap that still doesn't pass fails the step (`writer job failed`), and
+  the job is retried.
 - **`writer job done`**, or **`writer job failed`** with the `reason` the DM room was given and `retryAt` (none
   when it gave up). **`writer job stale`** when a rewind set it aside, **`writer job lost`** when it stopped being
   this writer's (handed back on shutdown, or taken over), and **`writer job released`** on shutdown.

@@ -71,6 +71,6 @@ export const DEFAULT_TUNING: LoomTuning = {
 /** The sentence every providence directive carries, so the narrator never explains it. */
 export const MUST_NOT_EXPLAIN = [
   "Do not say or hint that this happened because of anything the heroes did earlier.",
-  "Do not mention luck, fate, destiny, providence, or anything being meant to be.",
+  "Never let the players see how this turn was decided: not a reward, not a debt repaid, not a tally.",
   "Do not mention any hidden score, stat, thread, seed or tally.",
 ];

@@ -38,4 +38,8 @@ describe("safety corpus (local layer, no AI)", () => {
   it.each(lines("narration-clean.txt"))("leaves ordinary storytelling alone: %s", (text) => {
     expect(checkNarration(text, world, { intensity: "light" }).findings).toEqual([]);
   });
+
+  it.each(world.meta.themes)("never turns back the world's own themes: %s", (theme) => {
+    expect(checkNarration(theme, world, { intensity: "light" }).findings).toEqual([]);
+  });
 });

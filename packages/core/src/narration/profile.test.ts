@@ -10,6 +10,7 @@ import {
 } from "./profile";
 import {
   judgeSystem,
+  judgeUser,
   type NarrationStory,
   narratorSystem,
   narratorUser,
@@ -178,5 +179,45 @@ describe("prompts", () => {
     expect(text).not.toMatch(/young children|children's/i);
     expect(playerSafetySystem(world, "classic")[0]?.text).toContain("slaying monsters");
     expect(playerSafetySystem(world, "light")[0]?.text).not.toContain("slaying");
+  });
+
+  it("tell world-building from a reveal, and keep the reveal for the epilogue", () => {
+    const system = judgeSystem(world, story())[0]?.text ?? "";
+    expect(system).toContain(
+      "is this world-building, or does it let the players see how the story is being decided?",
+    );
+    expect(system).toMatch(/something being meant to be.*are fine anywhere/);
+    expect(system).toContain("guided and supported on their path is kept for the epilogue");
+    // The storyteller is told the same on every turn, not only when the hidden hand acts.
+    const told = narratorSystem(world, story())[0]?.text ?? "";
+    expect(told).toContain("not everything is chance belongs to it");
+    expect(told).toContain("never tell the heroes they are being guided");
+
+    const user = judgeUser(
+      {
+        narration: "Snibbet scrambles up the bank.",
+        npcLines: [{ npcRef: "snibbet", line: "Up you come!" }],
+      },
+      [{ kind: "minor_grace", text: "Snibbet happens by and pulls the heroes out.", mustNot: [] }],
+    )
+      .map((b) => b.text)
+      .join("\n");
+    expect(user).toContain("Snibbet happens by and pulls the heroes out.");
+    expect(user).toContain("Snibbet scrambles up the bank.");
+    expect(user).toContain("snibbet: Up you come!");
+    const plain = judgeUser({ narration: "A quiet road.", npcLines: [] }, [])[0]?.text ?? "";
+    expect(plain).not.toMatch(/quietly did|ends the campaign|recap/);
+
+    // The finale: the epilogue lines are as far as the reveal may go. A recap: the epilogue hasn't come yet.
+    const finale = judgeUser({ narration: "The lanterns burned again.", npcLines: [] }, [], {
+      epilogue: [
+        "Looking back: when you let Snibbet go free, you couldn't have known how much it would matter.",
+      ],
+    })[0]?.text;
+    expect(finale).toContain("This passage ends the campaign");
+    expect(finale).toContain("> Looking back: when you let Snibbet go free");
+    expect(
+      judgeUser({ narration: "The heroes crossed the marsh.", npcLines: [] }, [], { recap: true })[0]?.text,
+    ).toContain("The epilogue hasn't come yet.");
   });
 });

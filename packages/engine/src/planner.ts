@@ -53,7 +53,7 @@ export function plannerSystem(world: WorldIndex["world"], story: NarrationStory)
   return [
     `You are the story planner for ${audienceLine(story.intensity)}. The next chapter's scenes are fixed; your job is to make them feel like they grew out of what these particular heroes did.`,
     "For each scene, write a short note for the storyteller: which earlier choices, promises or friendships should echo here, and how. You may feature up to three characters from the list given (use their ids).",
-    "Rules: never add or remove scenes, never decide how anything turns out, never remove a character, and never mention luck, fate, destiny, threads, hidden forces or anything working behind the scenes.",
+    "Rules: never add or remove scenes, never decide how anything turns out, and never remove a character. The world's sense that not everything is chance is its own to speak of; but never let a note show how the game decides things, or tell the heroes they are being guided, watched over or helped along their path: that is kept for the epilogue at the very end.",
     PLAN_LENGTHS,
     "",
     ...contentRulesText(world, story.intensity),
@@ -161,7 +161,7 @@ export function plannerReviseSystem(world: WorldIndex["world"], story: Narration
   const wishes = tableWishesText(story);
   return [
     `You are the story editor for ${audienceLine(story.intensity)}. The story planner has drafted notes for the next chapter's scenes; you return the finished plan.`,
-    "Keep what is good. Fix: anything that contradicts what has happened (who the heroes met, what they promised, how people feel about them), characters featured who aren't on the list or have fled, been captured or gone away, notes that decide how a scene turns out, and anything that mentions luck, fate, destiny, threads, hidden forces or anything working behind the scenes.",
+    "Keep what is good. Fix: anything that contradicts what has happened (who the heroes met, what they promised, how people feel about them), characters featured who aren't on the list or have fled, been captured or gone away, notes that decide how a scene turns out, anything that shows how the game decides things, and anything that tells the heroes they are guided, watched over or helped along their path (that is kept for the epilogue). Fate and the world's old sayings are world-building and may stay.",
     "One note per scene, short and concrete enough for a storyteller to use in the moment. Feature characters by id.",
     PLAN_LENGTHS,
     "",

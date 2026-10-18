@@ -69,7 +69,9 @@ function killable(db: Engine["deps"]["db"], name: string, counts: Map<string, nu
       if (state.dead) return hang<StructuredOutcome<T>>();
       const res = await slow.structured(call, scope);
       if (state.dead) return hang<StructuredOutcome<T>>();
-      if (res.ok) completed.set(stepOf(call, scope), (completed.get(stepOf(call, scope)) ?? 0) + 1);
+      // A step is its writer or chronicler call; the reviewer's read of a recap is part of the same step.
+      if (res.ok && call.task !== "judge")
+        completed.set(stepOf(call, scope), (completed.get(stepOf(call, scope)) ?? 0) + 1);
       return res;
     },
   };
