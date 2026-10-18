@@ -115,6 +115,7 @@ export async function narrate(opts: {
         });
         reasons = [
           `The reviewer that reads each passage before the table sees it didn't answer (${judged.stop}).`,
+          ...(judged.error ? [`What the service said: ${judged.error.slice(0, 300)}`] : []),
         ];
         continue;
       }

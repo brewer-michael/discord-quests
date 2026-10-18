@@ -30,6 +30,7 @@
 
 ### DM room
 - Choices the DM writes roll when they should: when picked, they're read like typed text.
+- When the reviewer can't read a passage, the handed-over turn shows what its service said.
 - Rewind turns, mend the party, rebuild a fight, switch the fight rules: mention the bot in the DM room.
 
 ### AI services

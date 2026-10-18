@@ -1055,6 +1055,25 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
     expect(next.draft.rolls.map((r) => r.label)).toEqual(["Investigation"]);
   });
 
+  it("shows the DM what the reviewer's service said when it couldn't read a passage", async () => {
+    const llm = new FakeLlm({ judge: () => new Error("401 invalid x-api-key") });
+    const engine = createEngine({ db: db.db, worlds, llm });
+    const c = await engine.campaigns.create({
+      guildId: "g-unread",
+      channelId: "ch-unread",
+      name: "Unread passage",
+      mode: "ai_dm",
+      createdBy: "keeper",
+      settings: { audience: "teen", story: { intensity: "epic" } as never },
+    });
+    await makeHero(engine, c.id, "keeper", "scout", "Quill Swift");
+    const started = await engine.turns.startCampaign(c.id, "keeper");
+    if (started.kind !== "draft") throw new Error("expected the opening to be handed over");
+    const reasons = started.draft.handoff?.reasons.join("\n") ?? "";
+    expect(reasons).toContain("didn't answer (error)");
+    expect(reasons).toContain("What the service said: 401 invalid x-api-key");
+  });
+
   it("lets only one resolver win a round", async () => {
     const engine = createEngine({ db: db.db, worlds, llm: new FakeLlm() });
     const c = await engine.campaigns.create({
