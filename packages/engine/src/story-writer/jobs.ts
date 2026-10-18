@@ -309,12 +309,17 @@ export class StoryJobs {
     return rows.length;
   }
 
-  /** Jobs with something to tell the DM room, oldest first. */
-  async pendingNotices(limit = 20): Promise<StoryJob[]> {
+  /** Jobs with something to tell the DM room, oldest first; one campaign's when `campaignId` is given. */
+  async pendingNotices(limit = 20, campaignId?: string): Promise<StoryJob[]> {
     return this.db
       .select()
       .from(storyJobs)
-      .where(sql`${storyJobs.notice} is not null`)
+      .where(
+        and(
+          sql`${storyJobs.notice} is not null`,
+          campaignId ? eq(storyJobs.campaignId, campaignId) : undefined,
+        ),
+      )
       .orderBy(storyJobs.updatedAt)
       .limit(limit);
   }

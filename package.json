@@ -16,6 +16,7 @@
     "sim": "pnpm --filter @dq/sim start",
     "writer": "pnpm --filter @dq/bot writer",
     "writer:stress": "tsx packages/engine/src/story-writer/stress.ts",
+    "play": "tsx apps/bot/src/play.ts",
     "check": "pnpm lint && pnpm typecheck && pnpm test",
     "world:schemas": "tsx tools/gen-json-schemas.ts",
     "bestiary": "tsx tools/gen-bestiary.ts",

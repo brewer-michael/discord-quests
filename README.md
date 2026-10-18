@@ -55,9 +55,9 @@ packages/providers   AI story and image provider adapters
 packages/db          Postgres schema and migrations
 packages/engine      Turn pipeline and services shared by the bot and the simulator
 packages/map-render  World map renderer
-apps/bot             The Discord bot
+apps/bot             The Discord bot, the story writer service, and `pnpm play` (the game in a terminal)
 apps/web             The setup page
-apps/sim             Terminal simulator: play or stress-test a campaign without Discord
+apps/sim             Simulator: walks the story with scripted players to see how the hidden hand fares
 worlds/lanternreach  The starter world (editable YAML and Markdown)
 docs/PLAN.md         The design plan
 ```
@@ -74,10 +74,18 @@ pnpm world:validate   # check the starter world files
 
 To run the bot on your own server, see [docs/RUNNING.md](docs/RUNNING.md).
 
-To try the story engine without Discord:
+To play without Discord (you play the heroes and the DM room; see
+[Playing without Discord](docs/RUNNING.md#playing-without-discord)):
 
 ```sh
-pnpm sim transcript --policy merciful   # a whole campaign, turn by turn
+pnpm play                               # the scripted storyteller, no AI service needed
+pnpm play --ai env                      # the AI keys in your environment
+```
+
+To see how the hidden hand fares across many campaigns:
+
+```sh
+pnpm sim transcript --policy merciful   # a whole campaign, beat by beat
 pnpm sim -- --runs 500                  # how different play styles fare
 ```
 

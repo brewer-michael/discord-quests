@@ -65,6 +65,42 @@ The bot serves a health check at `http://localhost:8080/healthz` (the writer on 
 machine); the setup page listens on port 3000. With Docker, leave `HEALTH_PORT` out of `.env`: the image sets 8080,
 which its health check expects.
 
+### Playing without Discord
+
+`pnpm play` runs the game in a terminal: no Discord application, no bot token. You play every hero, and you're the
+DM room too: drafts and turns the storyteller couldn't tell come to you, and the story writer's notices appear as
+`[DM room]` lines. It needs Postgres (`DATABASE_URL`, or `postgres://dq:dq@localhost:5432/dq`) and creates a new
+campaign each run.
+
+```sh
+pnpm play                                          # the scripted storyteller; no AI service needed
+pnpm play --ai mock --slow 1-3                     # the same story through the real provider code, 1-3 s a call
+pnpm play --ai env                                 # the AI keys in the environment (OPENAI_API_KEY, ...)
+pnpm play --ai http://localhost:11434/v1 --model llama3.3    # a self-hosted OpenAI-compatible service
+```
+
+Type a choice's number, your own words, or `pass`; in a fight a number picks a battle action. `/sheet`,
+`/journal`, `/jobs` (the story writer's jobs for this campaign), `/rewind N`, `/help` and `/quit` work at any
+prompt. At the DM prompt: `o` sends a draft as it is, `e` edits it, `r` asks the storyteller again with your
+guidance; for a turn the storyteller couldn't tell, `w` writes it.
+
+| Option | |
+|---|---|
+| `--heroes "Wren:lanternkeeper,Bram:shieldheart:quick-way"` | The party: name, class and path (default: Wren, a Lanternkeeper on the Long Road). |
+| `--mode assist` | Every turn comes to you as a draft first. |
+| `--intensity light\|classic\|epic` | How dark the story may get. |
+| `--resume <campaign id>` | Carry on an earlier session (the id is printed at the end). |
+| `--auto N` | Play N rounds without asking: the first choice or an attack, every draft approved. |
+| `--transcript file.md` | Save the session. |
+| `--log file` | The JSON log lines (every `ai call`, `turn resolved`, `writer job ...`). |
+| `--no-writer` | Leave the story writer out, for example to run `pnpm writer` beside it. |
+| `--seed x` | Dice that replay the same way. |
+| `--db <url>` | Another database. |
+
+`--ai mock` starts a local stand-in that answers like an OpenAI-compatible service with the scripted story, and
+points the local server's jobs at it, so calls go through the provider store, the gateway, the adapter, budgets
+and logs, just not a real model. `--ai <url>` points them at your own endpoint the same way (it needs no key).
+
 ### The setup page
 
 Anyone with **Manage Server** on a Discord server can sign in and, for that server:

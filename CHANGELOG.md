@@ -22,6 +22,11 @@
 - No stand-in plans or recaps: a job the AI couldn't do is retried, then the DM room is told and can ask for
   another go.
 
+### Playing without Discord
+- `pnpm play`: the game in a terminal. You play the heroes and the DM room (drafts, turns the storyteller couldn't
+  tell, the story writer's notices), with the scripted storyteller, a local stand-in that goes through the real
+  provider code, the environment's AI keys, or your own OpenAI-compatible endpoint.
+
 ### Combat
 - Real dice, every roll shown, foe health as a bar.
 - 250 SRD creatures with their real stat blocks, chosen by where the story is and how dark it may get; encounters
