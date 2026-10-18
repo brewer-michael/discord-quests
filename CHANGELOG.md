@@ -33,7 +33,8 @@
 ### Playing without Discord
 - `pnpm play`: the game in a terminal. You play the heroes and the DM room (drafts, turns the storyteller couldn't
   tell, the story writer's notices), with the scripted storyteller, a local stand-in that goes through the real
-  provider code, the environment's AI keys, or your own OpenAI-compatible endpoint.
+  provider code, the environment's AI keys, any listed story service (its key read from the environment and stored
+  encrypted, as the setup page stores it), or your own OpenAI-compatible endpoint.
 
 ### Combat
 - Real dice, every roll shown, foe health as a bar.

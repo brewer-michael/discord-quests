@@ -76,7 +76,9 @@ campaign each run.
 pnpm play                                          # the scripted storyteller; no AI service needed
 pnpm play --ai mock --slow 1-3                     # the same story through the real provider code, 1-3 s a call
 pnpm play --ai env                                 # the AI keys in the environment (OPENAI_API_KEY, ...)
+pnpm play --ai zai                                 # any listed service, its key in ZAI_API_KEY (and so on)
 pnpm play --ai http://localhost:11434/v1 --model llama3.3    # a self-hosted OpenAI-compatible service
+pnpm play --help                                   # every option, and every service's id
 ```
 
 Type a choice's number, your own words, or `pass`; in a fight a number picks a battle action. `/sheet`,
@@ -86,6 +88,10 @@ guidance; for a turn the storyteller couldn't tell, `w` writes it.
 
 | Option | |
 |---|---|
+| `--ai <service>` | Any service in the presets list (`openai`, `zai`, `gemini`, ...; `--help` lists them), with its own models per job. |
+| `--model <id>` | One model for every job instead of the service's choice per job. |
+| `--base-url <url>` | Send the service's settings to another address (treated as self-hosted). |
+| `--key-env NAME` | Read the key from this variable instead of `<SERVICE>_API_KEY`. |
 | `--heroes "Wren:lanternkeeper,Bram:shieldheart:quick-way"` | The party: name, class and path (default: Wren, a Lanternkeeper on the Long Road). |
 | `--mode assist` | Every turn comes to you as a draft first. |
 | `--intensity light\|classic\|epic` | How dark the story may get. |
@@ -99,7 +105,17 @@ guidance; for a turn the storyteller couldn't tell, `w` writes it.
 
 `--ai mock` starts a local stand-in that answers like an OpenAI-compatible service with the scripted story, and
 points the local server's jobs at it, so calls go through the provider store, the gateway, the adapter, budgets
-and logs, just not a real model. `--ai <url>` points them at your own endpoint the same way (it needs no key).
+and logs, just not a real model.
+
+`--ai <service>` sets the local server up the way the setup page would: that service for every job, with its own
+models and settings. Its key is read from `<SERVICE>_API_KEY` (`ZAI_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`,
+...) or the variable `--key-env` names, never from the command line, and is stored encrypted with `MASTER_KEYS`,
+like a key added on the setup page. So `MASTER_KEYS` must be set (`.env.example` shows how to make one), and the
+same value lets `pnpm writer` read the key if you run it beside. `--ai <url>` points every job at your own
+OpenAI-compatible endpoint; it sends a key only if `--key-env` names one.
+
+Z.ai: use a key for its pay-as-you-go API. Its GLM Coding Plan endpoint is for its supported coding tools only
+under Z.ai's terms, so the game can't use it.
 
 ### The setup page
 

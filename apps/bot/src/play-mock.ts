@@ -22,10 +22,31 @@ const TASK_FOR_SCHEMA: Record<string, string> = {
   appearance: "summarizer",
 };
 
+/**
+ * For services asked for plain JSON (Z.ai and others take no named schema), the adapter writes the schema into the
+ * system prompt; its fields say which job the request is for.
+ */
+function taskFromSchema(system: string): string | undefined {
+  const at = system.lastIndexOf("matching this JSON Schema, and nothing else:");
+  if (at < 0) return undefined;
+  const schema = system.slice(at);
+  const has = (field: string) => schema.includes(`"${field}"`);
+  if (has("revealsHiddenMechanic")) return "judge";
+  if (has("isPromptInjection")) return "safety";
+  if (has("beats") && has("theme")) return "writer";
+  if (has("recap")) return "summarizer";
+  if (has("needsRoll")) return "intent";
+  if (has("appearance")) return "summarizer";
+  if (has("narration")) return "narrator";
+  return undefined;
+}
+
 export interface MockProvider {
   url: string;
   /** Requests answered, and requests whose caller hung up before the answer. */
   stats: { answered: number; abandoned: number; byTask: Record<string, number> };
+  /** The API key and model of the last request, to show what a service was sent. */
+  last: { authorization?: string; model?: string };
   close(): Promise<void>;
 }
 
@@ -38,6 +59,7 @@ async function body(req: IncomingMessage): Promise<string> {
 /** Starts the stand-in on a free local port. `delayMs` slows each answer, like a real model thinking. */
 export async function startMockProvider(opts: { delayMs?: [number, number] } = {}): Promise<MockProvider> {
   const stats: MockProvider["stats"] = { answered: 0, abandoned: 0, byTask: {} };
+  const last: MockProvider["last"] = {};
   const server = createServer(async (req, res) => {
     if (req.method !== "POST" || !req.url?.endsWith("/chat/completions")) {
       res.writeHead(404).end();
@@ -48,13 +70,16 @@ export async function startMockProvider(opts: { delayMs?: [number, number] } = {
       messages?: Array<{ role: string; content: string }>;
       response_format?: { json_schema?: { name?: string } };
     };
-    const schemaName = request.response_format?.json_schema?.name ?? "";
-    const task = TASK_FOR_SCHEMA[schemaName] ?? "narrator";
     const text = (role: string) =>
       (request.messages ?? [])
         .filter((m) => m.role === role)
         .map((m) => m.content)
         .join("\n");
+    const schemaName = request.response_format?.json_schema?.name ?? "";
+    const task = TASK_FOR_SCHEMA[schemaName] ?? taskFromSchema(text("system")) ?? "narrator";
+    last.model = request.model;
+    if (req.headers.authorization) last.authorization = req.headers.authorization;
+    else delete last.authorization;
     const [min, max] = opts.delayMs ?? [0, 0];
     if (max > 0) {
       let hungUp = false;
@@ -95,6 +120,7 @@ export async function startMockProvider(opts: { delayMs?: [number, number] } = {
   return {
     url: `http://127.0.0.1:${port}/v1`,
     stats,
+    last,
     close: () =>
       new Promise<void>((resolve) => {
         server.closeAllConnections();

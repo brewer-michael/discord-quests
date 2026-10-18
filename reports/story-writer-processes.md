@@ -72,5 +72,6 @@ the gateway, the OpenAI-compatible adapter, the safe fetcher, budgets and logs.
 
 ## Not yet done
 
-- **A real AI service:** no key is set in this environment. With `OPENAI_API_KEY` or `GEMINI_API_KEY` added, run
-  `pnpm play --ai env` for a few rounds and the first chapter plan, and record the `ai call` lines.
+- **A real AI service:** no key is set in this environment. With a service's key in its variable (for example
+  `ZAI_API_KEY`) and `MASTER_KEYS` set, run `pnpm play --ai zai` (or any listed service) for a few rounds and the
+  first chapter plan, and record the `ai call` lines.

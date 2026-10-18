@@ -5,9 +5,10 @@
  *   pnpm play                         the scripted storyteller (no AI service needed)
  *   pnpm play --ai mock --slow 1-3    the same story through the real provider code, from a local stand-in
  *   pnpm play --ai env                the AI keys in the environment (OPENAI_API_KEY, GEMINI_API_KEY, ...)
+ *   pnpm play --ai zai                any service in the presets list, its key in ZAI_API_KEY (and so on)
  *   pnpm play --ai http://localhost:11434/v1 --model llama3.3   a self-hosted OpenAI-compatible service
  *
- * See docs/RUNNING.md, "Playing without Discord", for every option.
+ * `pnpm play --help` lists every option; docs/RUNNING.md, "Playing without Discord", explains them.
  */
 import { randomUUID } from "node:crypto";
 import { writeFileSync } from "node:fs";
@@ -15,7 +16,17 @@ import { createInterface } from "node:readline/promises";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import type { LlmGateway } from "@dq/core/llm";
-import { characters, connect, type Db, guilds, providerConfigs, runMigrations, taskRoutes } from "@dq/db";
+import {
+  characters,
+  connect,
+  type Db,
+  guilds,
+  providerConfigs,
+  runMigrations,
+  secrets,
+  taskRoutes,
+} from "@dq/db";
+import { encryptSecret, type MasterKey, parseMasterKeys } from "@dq/db/crypto";
 import {
   createEngine,
   createLogger,
@@ -31,7 +42,7 @@ import {
   WorldCache,
 } from "@dq/engine";
 import { FakeLlm } from "@dq/engine/testing";
-import { BudgetGuard, ProviderGateway, ProviderStore } from "@dq/providers";
+import { BudgetGuard, ProviderGateway, ProviderStore, preset, presets } from "@dq/providers";
 import { and, eq } from "drizzle-orm";
 import { battleChoices, formatDraft, formatJournal, formatSheet, formatTurn } from "./play-format";
 import { startMockProvider } from "./play-mock";
@@ -392,30 +403,105 @@ export async function playSession(
 
 const LLM_JOBS = ["narrator", "director", "writer", "intent", "safety", "judge", "summarizer"] as const;
 
-/** Points every story job of the local guild at one OpenAI-compatible endpoint (the stand-in or a local model). */
-export async function routeEverythingTo(db: Db, guildId: string, baseUrl: string, model: string) {
+export interface PlayService {
+  /** A service from the presets list (packages/providers/presets/llm), such as "zai" or "custom-openai". */
+  presetId: string;
+  /** Another address than the preset's own. */
+  baseUrl?: string;
+  /** Its API key, stored encrypted with `masterKeys` the way the setup page stores keys. */
+  apiKey?: string;
+  masterKeys?: MasterKey[];
+  /** One model for every job; otherwise each job gets the preset's own choice. */
+  model?: string;
+  selfHosted?: boolean;
+  capabilityOverrides?: Record<string, unknown>;
+}
+
+/**
+ * Points every story job of the local guild at one service, as the setup page would: its provider settings, its
+ * key (encrypted), and a route per job with the preset's model and settings for that job. Replaces whatever the
+ * local guild used before.
+ */
+export async function useService(db: Db, guildId: string, service: PlayService): Promise<void> {
+  const p = preset(service.presetId);
+  if (p?.kind !== "llm") throw new Error(`there's no story service called "${service.presetId}"`);
+  const modelFor = (task: (typeof LLM_JOBS)[number]) =>
+    service.model ??
+    p.defaultModels[task] ??
+    (task === "writer" ? p.defaultModels.director : undefined) ??
+    p.defaultModels.narrator ??
+    p.models[0]?.id;
+  if (!modelFor("narrator")) throw new Error(`${p.label} has no default model: name one with --model`);
   await db.insert(guilds).values({ id: guildId, name: "Local play" }).onConflictDoNothing();
   await db.delete(taskRoutes).where(eq(taskRoutes.guildId, guildId));
+  await db.delete(providerConfigs).where(eq(providerConfigs.guildId, guildId));
+  await db.delete(secrets).where(eq(secrets.guildId, guildId));
+  let secretId: string | null = null;
+  if (service.apiKey) {
+    if (!service.masterKeys?.length) throw new Error("an API key needs MASTER_KEYS to be stored");
+    secretId = randomUUID();
+    const sealed = encryptSecret(service.apiKey, service.masterKeys, guildId, secretId);
+    await db.insert(secrets).values({ id: secretId, guildId, ...sealed, createdBy: "pnpm play" });
+  }
   const [cfg] = await db
     .insert(providerConfigs)
     .values({
       guildId,
       kind: "llm",
-      name: `Local play: ${baseUrl}`,
-      presetId: "custom-openai",
-      adapterId: "openai_compat",
-      baseUrl,
-      auth: { type: "none" },
-      capabilityOverrides: { structured: "json_schema" },
-      selfHosted: true,
+      name: `Local play: ${p.label}`,
+      presetId: p.id,
+      adapterId: p.adapter,
+      baseUrl: service.baseUrl ?? null,
+      secretId,
+      selfHosted: service.selfHosted ?? p.selfHosted,
+      capabilityOverrides: service.capabilityOverrides ?? {},
     })
     .returning();
-  await db
-    .insert(taskRoutes)
-    .values(
-      LLM_JOBS.map((task) => ({ guildId, task, providerConfigId: cfg?.id as string, model, priority: 0 })),
-    );
+  await db.insert(taskRoutes).values(
+    LLM_JOBS.map((task) => ({
+      guildId,
+      task,
+      providerConfigId: cfg?.id as string,
+      model: modelFor(task) as string,
+      params: (p.defaultParams[task] ?? {}) as Record<string, unknown>,
+      priority: 0,
+    })),
+  );
 }
+
+/** Points every story job of the local guild at a keyless OpenAI-compatible endpoint (the stand-in, a local model). */
+export async function routeEverythingTo(db: Db, guildId: string, baseUrl: string, model: string) {
+  await useService(db, guildId, {
+    presetId: "custom-openai",
+    baseUrl,
+    model,
+    selfHosted: true,
+    capabilityOverrides: { structured: "json_schema" },
+  });
+}
+
+/** The variable `--ai <service>` reads its key from unless --key-env names another: ZAI_API_KEY for zai. */
+export function keyVariable(presetId: string): string {
+  return `${presetId.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_API_KEY`;
+}
+
+const USAGE = `pnpm play [options]: the game in a terminal, no Discord.
+
+  --ai fake               the scripted storyteller, no AI service (the default)
+  --ai mock               a local stand-in that goes through the real provider code (--slow 1-3 to slow it)
+  --ai env                the server defaults from OPENAI_API_KEY, GEMINI_API_KEY, ANTHROPIC_API_KEY
+  --ai <service>          one of: ${presets("llm")
+    .map((p) => p.id)
+    .join(", ")}
+                          its key comes from <SERVICE>_API_KEY (ZAI_API_KEY for zai), or --key-env NAME;
+                          keys are stored encrypted, so MASTER_KEYS must be set
+  --ai <url> --model <m>  any OpenAI-compatible endpoint (keyless unless --key-env)
+  --model <id>            one model for every job (default: the service's choice per job)
+  --base-url <url>        another address for the service
+  --key-env <NAME>        the environment variable that holds the key
+
+  --heroes "Wren:lanternkeeper,Bram:shieldheart"   --mode assist   --intensity light|classic|epic
+  --resume <campaign id>  --auto <rounds>  --transcript <file>  --log <file>  --no-writer  --seed <x>  --db <url>`;
 
 function heroesFrom(arg: string | undefined): HeroSpec[] | undefined {
   if (!arg) return undefined;
@@ -431,7 +517,9 @@ async function main() {
     options: {
       db: { type: "string" },
       ai: { type: "string", default: "fake" },
-      model: { type: "string", default: "local" },
+      model: { type: "string" },
+      "base-url": { type: "string" },
+      "key-env": { type: "string" },
       slow: { type: "string" },
       mode: { type: "string", default: "ai_dm" },
       intensity: { type: "string" },
@@ -442,8 +530,42 @@ async function main() {
       transcript: { type: "string" },
       log: { type: "string" },
       "no-writer": { type: "boolean", default: false },
+      help: { type: "boolean", default: false },
     },
   });
+  if (values.help) {
+    process.stdout.write(`${USAGE}\n`);
+    return;
+  }
+  const ai = values.ai as string;
+  const keyEnv = values["key-env"];
+  const keyFrom = (name: string) => {
+    const key = process.env[name]?.trim();
+    if (!key)
+      throw new Error(
+        `${name} isn't set: put the service's API key in it (or name another variable with --key-env)`,
+      );
+    return key;
+  };
+  const masterKeys = () => {
+    const raw = process.env.MASTER_KEYS;
+    if (!raw || raw.includes("REPLACE_ME"))
+      throw new Error(
+        "MASTER_KEYS isn't set: keys are stored encrypted, as the setup page stores them. Make one with\n" +
+          "  node -e \"console.log('v1:'+require('crypto').randomBytes(32).toString('base64'))\"\n" +
+          "and set MASTER_KEYS to it (in .env with Docker, so the writer can read the key too).",
+      );
+    return parseMasterKeys(raw);
+  };
+  const isUrl = /^https?:\/\//.test(ai);
+  const service = isUrl || ["fake", "mock", "env"].includes(ai) ? undefined : preset(ai);
+  if (!isUrl && !["fake", "mock", "env"].includes(ai) && service?.kind !== "llm") {
+    process.stderr.write(`--ai "${ai}" isn't a story service.\n\n${USAGE}\n`);
+    process.exitCode = 1;
+    return;
+  }
+  if (isUrl && !values.model) throw new Error("--ai <url> needs --model");
+
   const url = values.db ?? process.env.DATABASE_URL ?? "postgres://dq:dq@localhost:5432/dq";
   const handle = connect(url, { max: 5 });
   await runMigrations(handle.db);
@@ -455,19 +577,36 @@ async function main() {
   const guildId = "local-play";
   let llm: LlmGateway;
   let mock: Awaited<ReturnType<typeof startMockProvider>> | null = null;
-  if (values.ai === "fake") llm = new FakeLlm();
+  if (ai === "fake") llm = new FakeLlm();
   else {
     const env = { ...process.env, ALLOW_PRIVATE_ENDPOINTS: "true" };
-    if (values.ai === "mock") {
+    if (ai === "mock") {
       const [min = 0, max = min] = (values.slow ?? "0").split("-").map((s) => Number(s) * 1000);
       mock = await startMockProvider({ delayMs: [min, max] });
       await routeEverythingTo(handle.db, guildId, mock.url, "mock");
-    } else if (values.ai === "env") {
+    } else if (ai === "env") {
       // The server-default routes from the environment's keys; nothing of the local guild's own.
       await handle.db.delete(taskRoutes).where(eq(taskRoutes.guildId, guildId));
-    } else if (/^https?:\/\//.test(values.ai ?? "")) {
-      await routeEverythingTo(handle.db, guildId, values.ai as string, values.model as string);
-    } else throw new Error(`--ai is fake, mock, env or an http(s) URL; got "${values.ai}"`);
+    } else if (isUrl) {
+      const apiKey = keyEnv ? keyFrom(keyEnv) : undefined;
+      await useService(handle.db, guildId, {
+        presetId: "custom-openai",
+        baseUrl: ai,
+        model: values.model as string,
+        selfHosted: true,
+        capabilityOverrides: { structured: "json_schema" },
+        ...(apiKey ? { apiKey, masterKeys: masterKeys() } : {}),
+      });
+    } else if (service) {
+      const apiKey = service.needsKey || keyEnv ? keyFrom(keyEnv ?? keyVariable(service.id)) : undefined;
+      await useService(handle.db, guildId, {
+        presetId: service.id,
+        // Another address may be on this machine or network (a proxy, a test server): let it be reached.
+        ...(values["base-url"] ? { baseUrl: values["base-url"], selfHosted: true } : {}),
+        ...(values.model ? { model: values.model } : {}),
+        ...(apiKey ? { apiKey, masterKeys: masterKeys() } : {}),
+      });
+    }
     const store = new ProviderStore(handle.db, env);
     llm = new ProviderGateway(store, new BudgetGuard(handle.db, env), { log });
   }
@@ -513,8 +652,15 @@ async function main() {
       },
       io,
     );
+    // The same service on the way back in: the options that chose it, never the key itself.
+    const service = [
+      ...(values.ai === "fake" ? [] : [`--ai ${values.ai}`]),
+      ...(values.model ? [`--model ${values.model}`] : []),
+      ...(values["base-url"] ? [`--base-url ${values["base-url"]}`] : []),
+      ...(keyEnv ? [`--key-env ${keyEnv}`] : []),
+    ];
     io.say(
-      `\n${done.ended ? "The adventure is over." : "Stopped."} ${done.rounds} round${done.rounds === 1 ? "" : "s"} played. Carry on with: pnpm play --resume ${done.campaignId}${values.ai === "fake" ? "" : ` --ai ${values.ai}`}`,
+      `\n${done.ended ? "The adventure is over." : "Stopped."} ${done.rounds} round${done.rounds === 1 ? "" : "s"} played. Carry on with: ${["pnpm play", `--resume ${done.campaignId}`, ...service].join(" ")}`,
     );
     if (mock) io.say(`The stand-in AI answered ${mock.stats.answered} requests.`);
   } catch (e) {
@@ -529,4 +675,9 @@ async function main() {
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)
+  await main().catch((e: Error) => {
+    // Setup problems (a missing key, an unknown option) read as one plain message.
+    process.stderr.write(`${e.message}\n`);
+    process.exitCode = 1;
+  });

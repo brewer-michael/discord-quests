@@ -80,6 +80,7 @@ To play without Discord (you play the heroes and the DM room; see
 ```sh
 pnpm play                               # the scripted storyteller, no AI service needed
 pnpm play --ai env                      # the AI keys in your environment
+pnpm play --ai zai                      # any listed service, its key in ZAI_API_KEY (and so on)
 ```
 
 To see how the hidden hand fares across many campaigns:

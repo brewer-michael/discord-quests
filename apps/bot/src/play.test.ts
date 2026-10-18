@@ -1,11 +1,13 @@
-import { storyJobs } from "@dq/db";
+import { randomBytes } from "node:crypto";
+import { secrets, storyJobs } from "@dq/db";
+import { parseMasterKeys } from "@dq/db/crypto";
 import { createTestDb, TEST_DATABASE_URL } from "@dq/db/testing";
 import { createEngine, StoryWriter, WorldCache } from "@dq/engine";
 import { FakeLlm, UnconfiguredLlm } from "@dq/engine/testing";
 import { BudgetGuard, ProviderGateway, ProviderStore } from "@dq/providers";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { type PlayIO, playSession, routeEverythingTo } from "./play";
+import { keyVariable, type PlayIO, playSession, routeEverythingTo, useService } from "./play";
 import { battleChoices, formatJournal } from "./play-format";
 import { startMockProvider } from "./play-mock";
 
@@ -149,6 +151,38 @@ describe.skipIf(!TEST_DATABASE_URL)("pnpm play", () => {
     expect(out).toMatch(
       /The lanterns gutter, and Hattie waves the heroes over\.\n\nWhat do you do\?\n {2}1\) Go to Hattie/,
     );
+  });
+
+  it("plays with any listed service and its key, stored encrypted the way the setup page stores it", async () => {
+    expect(keyVariable("zai")).toBe("ZAI_API_KEY");
+    expect(keyVariable("custom-openai")).toBe("CUSTOM_OPENAI_API_KEY");
+    // Z.ai's own settings (plain JSON answers, its models per job), sent to the stand-in instead of Z.ai.
+    const mock = await startMockProvider();
+    try {
+      const raw = `v1:${randomBytes(32).toString("base64")}`;
+      await useService(db.db, "g-play-zai", {
+        presetId: "zai",
+        baseUrl: mock.url,
+        selfHosted: true,
+        apiKey: "zai-test-key-1234",
+        masterKeys: parseMasterKeys(raw),
+      });
+      const [stored] = await db.db.select().from(secrets).where(eq(secrets.guildId, "g-play-zai"));
+      expect(stored?.last4).toBe("1234");
+      expect(stored?.ciphertext.toString("utf8")).not.toContain("zai-test-key");
+      const env = { MASTER_KEYS: raw, ALLOW_PRIVATE_ENDPOINTS: "true" };
+      const llm = new ProviderGateway(new ProviderStore(db.db, env), new BudgetGuard(db.db, env));
+      const engine = createEngine({ db: db.db, worlds, llm });
+      const { io, text } = scripted([]);
+      await playSession({ engine, guildId: "g-play-zai", auto: 3, writer: "between-turns" }, io);
+      expect(text()).toContain("[DM room] ✅ Chapter 1 is ready");
+      expect(mock.last.authorization).toBe("Bearer zai-test-key-1234");
+      expect(mock.stats.byTask.narrator).toBeGreaterThan(0);
+      expect(mock.stats.byTask.writer).toBe(2);
+      expect(["glm-5.3", "glm-5.3-flash"]).toContain(mock.last.model);
+    } finally {
+      await mock.close();
+    }
   });
 
   it("goes through the real provider code with the stand-in AI, and cuts off a request that runs too long", async () => {
