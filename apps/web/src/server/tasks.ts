@@ -11,7 +11,7 @@ export const TASK_INFO: Record<RouteTask, { label: string; help: string }> = {
   safety: { label: "Safety check", help: "Reads what players type, for stories told at Light." },
   judge: {
     label: "Secret keeper",
-    help: "Double-checks turns where the hidden hand acted, and every turn at Epic.",
+    help: "Double-checks turns where the hidden hand acted, the finale, every chapter recap, and every turn at Epic.",
   },
   summarizer: { label: "Chronicler", help: "Writes chapter recaps for the journal." },
   image: { label: "Scene art", help: "Paints a picture when the party reaches somewhere new." },

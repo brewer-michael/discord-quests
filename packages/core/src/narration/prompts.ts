@@ -186,7 +186,7 @@ export function narratorSystem(world: World, story: NarrationStory): PromptBlock
     "- Write for everyone at the table, from an 8-year-old listening to the grown-ups: clear and gripping, never babyish or condescending.",
     "- The heroes are exactly as the party list describes them: their people, class, background and looks. Use those details, and never make them younger or sillier than described.",
     "- Respect every dice result exactly as given. A failure is a failure, but make it interesting, never humiliating.",
-    "- The world's sense that not everything is chance belongs to it: speak of it as an old storyteller would, now and then and in your own words, on any turn. Never tell the players how the game decided something.",
+    "- The world's sense that not everything is chance belongs to it: speak of it as an old storyteller would, now and then and in your own words, on any turn. Never tell the players how the game decided something, and never tell the heroes they are being guided, watched over or helped along their path: that is kept for the epilogue at the very end.",
     "- A failure changes the situation; it doesn't end it. Show what it costs or what goes wrong, and leave the heroes room to try again, try another way, or deal with what happened.",
     "- Stay where the heroes are. Never move them to another place or skip ahead in time on your own: the next scene begins only when this turn's instructions say so.",
     "- Only the heroes listed in the party exist as player characters. Never decide what a player character thinks or feels beyond their stated action.",
@@ -411,10 +411,10 @@ export function judgeSystem(world: Pick<World, "content">, story: NarrationStory
         "",
         "Answer three questions:",
         "1. revealsHiddenMechanic: does it show the players a game mechanic: a score, tally, meter or rule that decides how things turn out?",
-        "2. explainsCauseOfLuck: does it show the players that what happens this turn was earned, owed or arranged by a particular earlier deed (for example 'because you spared him' or 'repaying your kindness')? Showing it happen is fine; showing why the game made it happen is not.",
+        "2. explainsCauseOfLuck: does it tell the heroes they are being guided, watched over or helped along their path, or show that a turn of good fortune was earned, owed or arranged by a particular earlier deed (for example 'because you spared him' or 'repaying your kindness')? Showing it happen is fine; showing why is not. Ordinary cause and effect the heroes can see (they helped the miller, so he lent them his boat) is just story.",
         "3. crossesLimits: does it break any hard limit, go darker than the intensity allows, or include something this table asked to leave out or keep offscreen? Danger, menace, battles and sorrow that fit the intensity are fine: only flag what actually crosses the line.",
         "",
-        "For 1 and 2, ask one thing: is this world-building, or does it let the players see how this turn was decided? Fate, providence, something being meant to be, a character's faith, old sayings and the land's long memory describe how the world is, and are fine on any turn, even this one. Flag only what shows the players what is at work this turn. You may be told what the game quietly did this turn; the players never are.",
+        "For 1 and 2, ask one thing: is this world-building, or does it let the players see how the story is being decided? Fate, providence, something being meant to be, a character's faith, old sayings and the land's long memory describe how the world is, and are fine anywhere. That the heroes were guided and supported on their path is kept for the epilogue at the very end of the campaign: only there may they learn it, and only as far as its epilogue lines go. Numbers, scores and game rules are never fine. You may be told what the game quietly did; the players never are.",
         "",
         "When any answer is yes, quote the sentence in note.",
       ].join("\n"),
@@ -423,12 +423,24 @@ export function judgeSystem(world: Pick<World, "content">, story: NarrationStory
   ];
 }
 
-/** The passage for the reviewer, with what the game quietly did this turn, so it can tell world-building from a reveal. */
+/**
+ * The passage for the reviewer, with what the game quietly did this turn, so it can tell world-building from a
+ * reveal; and, at the end of the campaign, the epilogue lines, which are as far as the reveal may go.
+ */
 export function judgeUser(
   passage: { narration: string; npcLines: ReadonlyArray<{ npcRef: string; line: string }> },
   directives: readonly NarrativeDirective[],
+  context: { epilogue?: readonly string[]; recap?: boolean } = {},
 ): PromptBlock[] {
   const lines: string[] = [];
+  if (context.recap)
+    lines.push("This is a chapter recap for the players' journal. The epilogue hasn't come yet.", "");
+  if (context.epilogue && context.epilogue.length > 0)
+    lines.push(
+      "## This passage ends the campaign. Its epilogue lines (the heroes may learn what these tell them, and no more):",
+      ...context.epilogue.map((l) => `> ${l}`),
+      "",
+    );
   if (directives.length > 0)
     lines.push(
       "## What the game quietly did this turn (the players don't know this)",

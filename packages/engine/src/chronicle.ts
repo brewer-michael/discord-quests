@@ -3,7 +3,14 @@
  * of the story so far. Built only from what the table saw.
  */
 import type { LlmGateway } from "@dq/core/llm";
-import { audienceLine, contentRulesText, type NarrationStory } from "@dq/core/narration";
+import {
+  audienceLine,
+  contentRulesText,
+  JudgeOutput,
+  judgeSystem,
+  judgeUser,
+  type NarrationStory,
+} from "@dq/core/narration";
 import { checkNarration } from "@dq/core/safety";
 import type { WorldIndex } from "@dq/core/world";
 import { campaigns, chapterSummaries, type Db, turns } from "@dq/db";
@@ -18,7 +25,7 @@ function recapSystem(world: WorldIndex["world"], story: NarrationStory): string 
   return [
     `You write the recap of one chapter of ${audienceLine(story.intensity)}, for the players' journal.`,
     "Write 3 to 5 sentences in the past tense, in the same voice as the story. Name the heroes and the choices they made, and end on where the story stands now.",
-    "No numbers, dice or game rules. Never mention luck, fate, destiny, threads, hidden forces or anything working behind the scenes.",
+    "No numbers, dice or game rules. Tell what happened and what the heroes chose; never say they were guided, watched over or helped along their path, or that a stroke of good fortune was the payoff of an earlier kindness. That is kept for the epilogue at the very end of the campaign.",
     "",
     ...contentRulesText(world, story.intensity),
   ].join("\n");
@@ -79,7 +86,11 @@ export async function writeChapterRecap(args: {
   const chapter = index.beatOrder.find((b) => b.chapter.number === args.chapterNumber)?.chapter;
 
   let recap = fallbackRecap(index, args.chapterNumber);
-  if (story.length > 0) {
+  const scope = { guildId: args.guildId, campaignId: args.campaignId };
+  // The reviewer reads every recap: the journal and the storyteller's memory must not give the hidden hand away
+  // before the epilogue. A recap it can't pass, or can't read, gives way to the plain one from the world's text.
+  let problems: string[] = [];
+  for (let attempt = 0; story.length > 0 && attempt < 2; attempt++) {
     const res = await args.llm.structured(
       {
         task: "summarizer",
@@ -88,19 +99,65 @@ export async function writeChapterRecap(args: {
           {
             text: `Chapter ${args.chapterNumber}: ${chapter?.title ?? ""}\n\nWhat happened, turn by turn:\n${story.map((s) => `- ${s}`).join("\n")}`,
           },
+          ...(problems.length > 0
+            ? [
+                {
+                  text: `Your previous recap had these problems. Write it again without them:\n${problems.map((p) => `- ${p}`).join("\n")}`,
+                },
+              ]
+            : []),
         ],
         schema: ChapterRecap,
         schemaName: "recap",
         expectTokens: 600,
         effort: "low",
       },
-      { guildId: args.guildId, campaignId: args.campaignId },
+      scope,
     );
-    if (res.ok) {
-      const verdict = checkNarration(res.value.recap, index.world, { intensity: args.telling.intensity });
-      if (verdict.ok) recap = res.value.recap.trim();
-      else args.log.warn("chapter recap rejected", { findings: verdict.findings.map((f) => f.category) });
+    if (!res.ok) break;
+    const text = res.value.recap.trim();
+    const verdict = checkNarration(text, index.world, { intensity: args.telling.intensity });
+    if (!verdict.ok) {
+      args.log.warn("chapter recap rejected", { findings: verdict.findings.map((f) => f.category) });
+      problems = verdict.findings.map((f) =>
+        f.category === "banned_word"
+          ? `It uses the word "${f.match}", which isn't allowed here.`
+          : f.category === "hidden_leak"
+            ? `It names a game mechanic ("${f.match}").`
+            : "It includes something that looks like real personal information.",
+      );
+      continue;
     }
+    const judged = await args.llm.structured(
+      {
+        task: "judge",
+        system: judgeSystem(index.world, args.telling),
+        user: judgeUser({ narration: text, npcLines: [] }, [], { recap: true }),
+        schema: JudgeOutput,
+        schemaName: "review",
+        expectTokens: 300,
+        effort: "low",
+      },
+      scope,
+    );
+    if (!judged.ok) {
+      args.log.warn("chapter recap unread", { stop: judged.stop, error: judged.error });
+      break;
+    }
+    const v = judged.value;
+    if (!v.revealsHiddenMechanic && !v.explainsCauseOfLuck && !v.crossesLimits) {
+      recap = text;
+      break;
+    }
+    const said = v.note.trim() ? `: ${v.note.trim()}` : ".";
+    problems = [
+      ...(v.revealsHiddenMechanic ? [`It shows the players a game mechanic${said}`] : []),
+      ...(v.explainsCauseOfLuck
+        ? [`It tells the heroes what is kept for the epilogue: that they were guided or repaid${said}`]
+        : []),
+      ...(v.crossesLimits ? [`It goes beyond what this story allows${said}`] : []),
+    ];
+    args.log.warn("chapter recap rejected by the reviewer", { attempt: attempt + 1, problems });
   }
   await db
     .insert(chapterSummaries)

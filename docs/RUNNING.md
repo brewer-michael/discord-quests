@@ -364,6 +364,9 @@ Each turn writes these lines (with Docker Compose: `docker compose logs bot`):
 - **`narrator unavailable`**, **`reviewer unavailable`** and **`narration rejected`** (with the `problems` sent
   back to the storyteller), each with its `attempt`, and **`narration handed to a person`** (with the `reasons`)
   when the storyteller couldn't tell the turn.
+- **`chapter recap rejected`**, **`chapter recap rejected by the reviewer`** (with its `problems`) and **`chapter
+  recap unread`** (the reviewer didn't answer). A recap that doesn't pass on its second try, or isn't read, is
+  replaced by the plain one from the world's own text.
 - **`turn resolved`** (a turn that went out), **`turn drafted for the DM`** (an Assist draft) or **`turn handed to a
   person`** (with its `reasons`): `seq`, `mode`, `outcome` (`committed`, `assist_draft` or `handoff`), and where the
   time went: `prepareMs` (the action reader, the dice, the hidden hand, the storyteller and its reviewer),

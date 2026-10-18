@@ -14,6 +14,7 @@ import { createTestDb, TEST_DATABASE_URL } from "@dq/db/testing";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { serverGameDefaults } from "./campaign-service";
+import { fallbackRecap, writeChapterRecap } from "./chronicle";
 import { createEngine, createLogger, type Engine, seededDice, withLogContext } from "./index";
 import { loadLoom } from "./loom-store";
 import { describeTimer, paceOf, reminderAt, whenTimeIsUp } from "./pace";
@@ -386,6 +387,12 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
     // Every chapter gets a recap, which the storyteller and the journal both use.
     const recaps = await db.db.select().from(chapterSummaries).where(eq(chapterSummaries.campaignId, c.id));
     expect(recaps.length).toBeGreaterThanOrEqual(7);
+    // The reviewer reads every recap the storyteller writes, and the finale with its epilogue lines.
+    const reviews = llm.calls.filter((x) => x.task === "judge");
+    const written = llm.calls.filter((x) => x.task === "summarizer" && x.user.startsWith("Chapter "));
+    expect(written.length).toBeGreaterThan(0);
+    expect(reviews.filter((x) => x.user.includes("chapter recap"))).toHaveLength(written.length);
+    expect(reviews.some((x) => x.user.includes("This passage ends the campaign"))).toBe(true);
     expect(llm.calls.some((x) => x.task === "narrator" && x.user.includes("## The story so far"))).toBe(true);
     expect((await engine.campaigns.journal(c.id)).chapters.length).toBeGreaterThan(3);
     const loom = await loadLoom(db.db, c.id);
@@ -896,9 +903,58 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
     const next = await engine.turns.resolveRound(view.roundId as string);
     if (next?.kind !== "draft") throw new Error("expected the turn to be handed over");
     const reasons = next.draft.handoff?.reasons.join("\n") ?? "";
-    expect(reasons).toContain("how this turn was decided");
+    expect(reasons).toContain("what is kept for the epilogue");
     expect(reasons).toContain('"Hattie helps because you spared the skulker."');
     expect(reasons).not.toMatch(/meant to be/);
+  });
+
+  it("keeps the hidden hand out of the journal: a recap the reviewer turns back gives way to the plain one", async () => {
+    const llm = new FakeLlm({
+      summarizer: () => ({
+        recap:
+          "The heroes crossed the square, and something unseen guided their every step because they were kind.",
+      }),
+      judge: (call) => {
+        const recap = call.user.some((b) => b.text.includes("chapter recap"));
+        return {
+          revealsHiddenMechanic: false,
+          explainsCauseOfLuck: recap,
+          crossesLimits: false,
+          note: recap ? '"something unseen guided their every step"' : "",
+        };
+      },
+    });
+    const engine = createEngine({ db: db.db, worlds, llm });
+    const { index } = worlds.get("lanternreach");
+    const c = await engine.campaigns.create({
+      guildId: "g-recap",
+      channelId: "ch-recap",
+      name: "Journal",
+      mode: "ai_dm",
+      createdBy: "scribe",
+    });
+    await makeHero(engine, c.id, "scribe", "scout", "Quill Swift");
+    await engine.turns.openCampaign(c.id, "scribe");
+
+    const recap = await writeChapterRecap({
+      db: db.db,
+      llm,
+      index,
+      log: { info: () => {}, warn: () => {}, error: () => {} },
+      campaignId: c.id,
+      guildId: "g-recap",
+      chapterNumber: 1,
+      telling: { intensity: "light", voice: "fireside", humor: "plenty", premise: "", lines: [], veils: [] },
+    });
+    expect(recap).toBe(fallbackRecap(index, 1));
+    const [stored] = await db.db.select().from(chapterSummaries).where(eq(chapterSummaries.campaignId, c.id));
+    expect(stored?.text).toBe(recap);
+    // It was asked again, told what it gave away, before the plain recap took its place.
+    const asked = llm.calls.filter((x) => x.task === "summarizer" && x.user.startsWith("Chapter 1"));
+    expect(asked).toHaveLength(2);
+    expect(asked[1]?.user).toContain(
+      'what is kept for the epilogue: that they were guided or repaid: "something unseen guided their every step"',
+    );
   });
 
   it("lets only one resolver win a round", async () => {

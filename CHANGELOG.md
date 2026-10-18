@@ -13,6 +13,9 @@
   how this turn was decided? Fate, providence and things being meant to be are the world's to speak of on any turn.
   The reviewer is told what the game quietly did that turn and reads the spoken lines too; the word check keeps
   only game words like "luck score". A turned-back draft reaches the DM room with the sentence that was flagged.
+- The heroes learn they were guided and supported on their path only in the epilogue, and only as far as its lines
+  go. The reviewer reads the finale and every chapter recap; a recap it turns back twice, or can't read, gives way
+  to the plain one from the world's text.
 
 ### Combat
 - Real dice, every roll shown, foe health as a bar.

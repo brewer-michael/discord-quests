@@ -47,8 +47,12 @@ export async function narrate(opts: {
   const { llm, world, view, directives, scope, log } = opts;
   const system = narratorSystem(world, view.story);
   const user = narratorUser(view, directives);
-  // The reviewer reads turns where the hidden hand acts, and every turn of a story told at Epic.
-  const review = view.story.intensity === "epic" || directives.some((d) => PROSE_DIRECTIVES.has(d.kind));
+  // The reviewer reads turns where the hidden hand acts, the finale (the one place it may be revealed, as far as
+  // the epilogue goes), and every turn of a story told at Epic.
+  const review =
+    view.story.intensity === "epic" ||
+    view.mode === "finale" ||
+    directives.some((d) => PROSE_DIRECTIVES.has(d.kind));
 
   let problems: string[] = [];
   let reasons: string[] = [];
@@ -88,7 +92,7 @@ export async function narrate(opts: {
         {
           task: "judge",
           system: judgeSystem(world, view.story),
-          user: judgeUser(cleaned, directives),
+          user: judgeUser(cleaned, directives, { epilogue: view.mode === "finale" ? view.epilogue : [] }),
           schema: JudgeOutput,
           schemaName: "review",
           expectTokens: 300,
@@ -117,7 +121,7 @@ export async function narrate(opts: {
         problems.push(`${flagged("It shows the players a game mechanic")} Tell the story without it.`);
       if (judged.value.explainsCauseOfLuck)
         problems.push(
-          `${flagged("It shows the players how this turn was decided, as the payoff of an earlier deed")} Show it happening; don't show why.`,
+          `${flagged("It tells the heroes what is kept for the epilogue: that they are guided, or that this turn repays an earlier deed")} Show it happening; don't show why.`,
         );
       if (judged.value.crossesLimits) problems.push(flagged("It goes beyond what this story allows"));
     }
