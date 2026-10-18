@@ -431,6 +431,10 @@ Copy backups off the server too. Notes:
 - **`POSTGRES_PASSWORD` is only read when the database is first created.** To change it later, run
   `ALTER USER dq PASSWORD '…'` via `docker compose exec postgres psql -U dq`, then update `.env` and
   `docker compose up -d`.
+- **`service "migrate" didn't complete successfully`:** `docker compose logs migrate` says why. Usually Postgres
+  refused the password because `POSTGRES_PASSWORD` in `.env` isn't the one the database was created with: put that
+  one back, or `docker compose down -v` to start afresh (deleting its data). The local development file
+  (`docker-compose.yml`) is a separate project, `discord-quests-dev`, with its own database.
 - **Already running a reverse proxy** (nginx, Traefik, Cloudflare Tunnel)? Leave out the `https` profile and point
   your proxy at `127.0.0.1:3000`, passing the original `Host` header (nginx: `proxy_set_header Host $host;`) or the
   setup page will refuse its own forms. `WEB_PORT=0.0.0.0:3000` in `.env` publishes the page on every interface

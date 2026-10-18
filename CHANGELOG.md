@@ -52,6 +52,13 @@
 - Logging: an `ai call` line for every AI request (time, tokens, reasoning, effort and limit sent, the server's own
   timings) and a line for every turn with its outcome and where the time went. `LOG_LEVEL`, `LOG_AI_OUTPUT`.
 
+### Running it
+- The local development `docker-compose.yml` is its own project, `discord-quests-dev`, so it no longer shares a
+  container and database with `docker-compose.prod.yml`, whose Postgres has another password. Local development
+  starts with a fresh database; the old one stays in the `discord-quests_pgdata` volume.
+- A failed migration says why in one line (a refused password, a database that can't be reached) instead of a
+  stack trace.
+
 ## v0.1 Alpha (`alpha`)
 
 The first proof of concept: a fixed story arc in the Lanternreach starter world, heroes with guided creation, turns
