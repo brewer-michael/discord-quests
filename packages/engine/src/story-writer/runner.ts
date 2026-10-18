@@ -95,7 +95,8 @@ export async function runJob(
 ): Promise<RunOutcome> {
   const log = deps.log ?? silentLogger;
   const now = deps.now ?? (() => new Date());
-  const fields = { jobId: job.id, kind: job.kind, key: job.key, campaignId: job.campaignId };
+  // "chapter", not "key": the log hides any field named like a key, as a secret.
+  const fields = { jobId: job.id, kind: job.kind, chapter: job.key, campaignId: job.campaignId };
   const kind = kinds[job.kind];
   if (!kind) {
     await deps.jobs.fail(job, `there's no writer for "${job.kind}" jobs`, job.kind, { final: true });

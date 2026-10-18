@@ -456,7 +456,7 @@ Every line logged while a round resolves carries its `roundId`, so one turn's li
 docker compose logs --no-log-prefix bot | grep '"roundId":"<id>"'
 ```
 
-The story writer (`docker compose logs writer`) writes, each with `jobId`, `kind`, `key` (the chapter) and
+The story writer (`docker compose logs writer`) writes, each with `jobId`, `kind`, `chapter` and
 `campaignId`:
 
 - **`writer job claimed`** with its `attempt` and `resumeAfter` (the steps an earlier try already saved).

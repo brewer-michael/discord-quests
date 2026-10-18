@@ -6,7 +6,7 @@
 |---|---|
 | `alpha` | **v0.1 Alpha, frozen.** The first proof of concept: a fixed story arc in Lanternreach, cute, shallow and whimsical, but every piece working end to end (heroes, turns, the hidden hand, fights, pictures, the setup page). |
 | `dev` | **The road to 1.0.** Alpha plus story settings (Light, Classic, Epic), the combat engine (real dice, the SRD bestiary, balanced encounters, partial hits and the defense mix), rewinds from the DM room, turns the AI can't tell going to a person, provider settings as each service documents them, and logging of every AI call and turn. |
-| `feature/story-writer` | The asynchronous story writer (below). Merges into `dev` first. **Built:** the queue, the writer service, chapter plans and recaps written ahead, DM-room notices; stress test in [`reports/story-writer-stress.md`](../reports/story-writer-stress.md). |
+| `feature/story-writer` | The asynchronous story writer (below). Merges into `dev` first. **Built:** the queue, the writer service, chapter plans and recaps written ahead, DM-room notices; stress tests in [`reports/story-writer-stress.md`](../reports/story-writer-stress.md) and [`reports/story-writer-processes.md`](../reports/story-writer-processes.md) (real processes killed mid-job, and the container). |
 | `feature/dice` | Players roll; the DM does the math (below). |
 | `feature/storytelling` | Archetypes, a plot spine, side quests, continuity and DM corrections (below). Built on the story writer. |
 | `release/1.0-beta` | Cut from `dev` once all three are in; tagged `v1.0.0-beta.1`. |
