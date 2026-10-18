@@ -28,6 +28,7 @@ import { renderRewindCard, renderRewindConfirm, renderRewindDone } from "./rende
 import { renderStoryCard, renderStoryDone, storyModal } from "./render/story";
 import { freezeComponents, renderScenePicture, renderTurn, waitingLine } from "./render/turn";
 import { nameModal, renderWizard } from "./render/wizard";
+import { renderWriterNotice } from "./render/writer";
 import { roomProblems } from "./rooms";
 import { RoundScheduler } from "./scheduler";
 
@@ -140,6 +141,7 @@ describe("custom ids", () => {
       { kind: "rewind", campaignId: UUID, action: "pick" },
       { kind: "rewind", campaignId: UUID, action: "go", seq: 1234 },
       { kind: "rewind", campaignId: UUID, action: "mend" },
+      { kind: "writer-retry", jobId: UUID },
     ];
     for (const id of ids) {
       const raw = encodeId(id);
@@ -912,6 +914,22 @@ describe.skipIf(!TEST_DATABASE_URL)("a whole campaign renders cleanly", () => {
     const assetId = "123e4567-e89b-42d3-a456-426614174999";
     await engine.campaigns.setSceneImage(first?.sceneId ?? "", assetId);
     expect((await engine.campaigns.sceneGallery(c.id))[0]?.imageAssetId).toBe(assetId);
+  });
+});
+
+describe("story writer notices in the DM room", () => {
+  it("fit one message, mention nobody, and offer another go only when the writer gave up", () => {
+    const long = `⚠️ The story writer couldn't write chapter 3: ${"the AI service failed (overloaded) ".repeat(80)}`;
+    for (const kind of ["started", "ready", "retrying", "gave_up"] as const) {
+      const payload = renderWriterNotice("The **Very** Long Campaign Name ".repeat(5), UUID, {
+        kind,
+        text: long,
+      });
+      checkLimits(payload);
+      expect(payload.allowedMentions).toEqual({ parse: [] });
+      const ids = JSON.stringify(payload.components.map((c) => c.toJSON())).match(/dq:wrr:[0-9a-f-]+/g) ?? [];
+      expect(ids).toEqual(kind === "gave_up" ? [`dq:wrr:${UUID}`] : []);
+    }
   });
 });
 

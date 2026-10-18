@@ -48,6 +48,7 @@ models:
 defaultModels:
   narrator: glm-5.3
   director: glm-5.3
+  writer: glm-5.3
   summarizer: glm-5.3-flash
   intent: glm-5.3-flash
   safety: glm-5.3-flash

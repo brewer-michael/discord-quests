@@ -16,6 +16,7 @@ import { armRound } from "./flows";
 import { rewindMention } from "./handlers/rewind";
 import { renderWelcome } from "./render/guide";
 import { route } from "./router";
+import { startWriterNotices } from "./writer-notices";
 
 /**
  * A Discord client wired to the engine. Guilds, plus guild messages so a mention of the bot in the DM room
@@ -109,6 +110,8 @@ export function wire(ctx: BotContext) {
       if (campaign.threadId)
         armRound(ctx, round, paceOf(campaign.settings as Record<string, unknown>), campaign.threadId);
     }
+    // What the story writer service has to tell the DM rooms.
+    startWriterNotices(ctx);
   });
   ctx.client.on(Events.GuildCreate, (g) => {
     void (async () => {

@@ -1,0 +1,36 @@
+# Fly.io config for the story writer. From the repository root:
+#   fly launch --no-deploy --copy-config --config deploy/fly/writer.toml --name <your-writer-app>
+#   fly secrets set --config deploy/fly/writer.toml DATABASE_URL=... MASTER_KEYS=...
+#   fly deploy --config deploy/fly/writer.toml --dockerfile Dockerfile
+app = "discord-quests-writer"
+primary_region = "iad"
+# Time to finish the step under way on a deploy before the job is handed back.
+kill_timeout = 30
+
+[env]
+  LOG_FORMAT = "json"
+  HEALTH_PORT = "8080"
+
+[processes]
+  writer = "node --import tsx apps/bot/src/writer.ts"
+
+# It works through a queue in the background: keep one machine running. On a deploy it hands its job back and
+# the next machine carries on from the last finished step.
+[[services]]
+  processes = ["writer"]
+  internal_port = 8080
+  protocol = "tcp"
+  auto_stop_machines = "off"
+  auto_start_machines = false
+  min_machines_running = 1
+
+  [[services.http_checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "60s"
+    method = "get"
+    path = "/healthz"
+
+[[vm]]
+  memory = "512mb"
+  cpus = 1

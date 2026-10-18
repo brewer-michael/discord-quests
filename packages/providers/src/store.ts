@@ -64,6 +64,11 @@ export class ProviderStore {
         priority: r.priority,
       }));
     if (own.length > 0) return own;
+    // The story writer uses the story director's service until a server gives it one of its own.
+    if (task === "writer") {
+      const director = await this.routes("director", scope);
+      if (director.length > 0) return director;
+    }
     const settings = await this.guildSettings(scope.guildId);
     return settings.usePlatformDefaults ? (this.defaults.routes[task] ?? []) : [];
   }

@@ -1,4 +1,4 @@
-# Discord Quests on your own server: Postgres, the bot, the setup page and (optionally) HTTPS.
+# Discord Quests on your own server: Postgres, the bot, the story writer, the setup page and (optionally) HTTPS.
 #
 #   cp .env.example .env    # fill in the Discord, MASTER_KEYS, POSTGRES_PASSWORD and DOMAIN sections
 #   docker compose -f docker-compose.prod.yml --profile https up -d --build
@@ -56,6 +56,19 @@ services:
   # Exactly one bot: it holds the Discord connection and the turn timers. Never scale it.
   bot:
     <<: *app
+    environment:
+      <<: *env
+      RUN_MIGRATIONS: "false"
+    stop_grace_period: 30s
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  # The story writer: writes chapters ahead of the table, in the background. Restarting it never interrupts
+  # play, and a job it was in the middle of carries on from its last finished step.
+  writer:
+    <<: *app
+    command: ["node", "--import", "tsx", "apps/bot/src/writer.ts"]
     environment:
       <<: *env
       RUN_MIGRATIONS: "false"

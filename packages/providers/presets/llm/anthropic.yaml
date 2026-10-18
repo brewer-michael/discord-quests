@@ -20,6 +20,7 @@ models:
 defaultModels:
   narrator: claude-opus-5-5
   director: claude-opus-5-5
+  writer: claude-opus-5-5
   intent: claude-opus-5-5
   safety: claude-opus-5-5
   judge: claude-opus-5-5
@@ -27,6 +28,7 @@ defaultModels:
 defaultParams:
   narrator: { effort: medium }
   director: { effort: high }
+  writer: { effort: high }
   intent: { effort: low }
   safety: { effort: low }
   judge: { effort: low }

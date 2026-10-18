@@ -13,4 +13,8 @@ Railway runs each part as its own service from this repository.
      (this service's public domain), `LOG_FORMAT=json`.
    - Generate a public domain, and add `https://<that domain>/auth/callback` as a redirect in the Discord
      Developer Portal (OAuth2).
-4. Both services must use the **same** `MASTER_KEYS`.
+4. Add a third service from the same repository for the **story writer**, which writes chapters ahead of the
+   table in the background.
+   - Settings → Deploy → Custom start command: `node --import tsx apps/bot/src/writer.ts`
+   - Variables: `DATABASE_URL`, `MASTER_KEYS`, the same story AI key as the bot (if any), `LOG_FORMAT=json`.
+5. All the services must use the **same** `MASTER_KEYS`.

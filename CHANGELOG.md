@@ -10,6 +10,18 @@
 - Fewer AI calls per turn: the reviewer reads hidden-hand turns and every turn at Epic; the AI read of typed text
   runs at Light. Word and personal-detail checks run on everything.
 
+### Story writer
+- A separate service writes the story ahead of the table, so turns never wait for it: each chapter's plan
+  (drafted, then checked against what has happened) and each chapter's recap, from every turn of the chapter.
+- Jobs are saved step by step in a Postgres queue: a restart or a crash carries on where it stopped, one job per
+  campaign at a time, retries after 1, 4 and 16 minutes, the next day if the spending limit stopped it.
+- The DM room hears what it's writing and why a job failed, with a Try again button. The hidden-hand page lists
+  each campaign's jobs.
+- Its own job on the setup page, "Story writer"; it uses the Planner's service until set. `WRITER_JOB_TOKENS`,
+  `WRITER_WORKERS`.
+- No stand-in plans or recaps: a job the AI couldn't do is retried, then the DM room is told and can ask for
+  another go.
+
 ### Combat
 - Real dice, every roll shown, foe health as a bar.
 - 250 SRD creatures with their real stat blocks, chosen by where the story is and how dark it may get; encounters

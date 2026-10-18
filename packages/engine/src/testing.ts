@@ -57,6 +57,9 @@ const DEFAULTS: Record<string, Handler> = {
     }));
     return { theme: "Friends found along the way.", beats };
   },
+  // The story writer: chapter plans (draft and revision) and, when a server sends recaps its way, recaps.
+  writer: (call, scope) =>
+    call.schemaName === "recap" ? DEFAULTS.summarizer?.(call, scope) : DEFAULTS.director?.(call, scope),
   summarizer: (call) => {
     const user = call.user.map((b) => b.text).join("\n");
     const first = user.split("\n- ")[1]?.split(/[.!?]/)[0] ?? "The heroes pressed on";
@@ -173,3 +176,6 @@ const DEFAULTS: Record<string, Handler> = {
     note: "",
   }),
 };
+
+/** The scripted answers, by AI job, for tests that change one answer and keep the rest. */
+export const FAKE_ANSWERS: Readonly<Record<string, Handler>> = DEFAULTS;

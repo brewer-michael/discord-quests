@@ -1,4 +1,4 @@
-import { auditLog, campaignMembers, campaigns, characters, type DbOrTx, turns } from "@dq/db";
+import { auditLog, campaignMembers, campaigns, characters, type DbOrTx, storyJobs, turns } from "@dq/db";
 import { dmLoomView } from "@dq/engine/loom-store";
 import { and, asc, desc, eq, gte, sql } from "drizzle-orm";
 import { audit } from "./audit";
@@ -163,5 +163,27 @@ export async function grantSpoilerConsent(
 export async function loomForWeb(db: DbOrTx, guildId: string, userId: string, campaignId: string) {
   const c = await owned(db, guildId, campaignId);
   if (!c || !(await hasSpoilerConsent(db, userId, campaignId))) return null;
-  return { campaign: c, loom: await dmLoomView(db, campaignId) };
+  const jobs = await db
+    .select()
+    .from(storyJobs)
+    .where(eq(storyJobs.campaignId, campaignId))
+    .orderBy(desc(storyJobs.createdAt))
+    .limit(12);
+  return {
+    campaign: c,
+    loom: await dmLoomView(db, campaignId),
+    writer: jobs.map((j) => ({
+      id: j.id,
+      what: j.kind === "chapter_recap" ? `Recap of chapter ${j.key}` : `Chapter ${j.key}`,
+      why: j.reason,
+      status: j.status,
+      tries: j.attempts,
+      steps: j.steps.map((s) => s.name),
+      tokens: j.tokensUsed,
+      minutes:
+        j.startedAt && j.finishedAt ? Math.max(1, Math.round((+j.finishedAt - +j.startedAt) / 60_000)) : null,
+      error: j.error,
+      at: j.createdAt,
+    })),
+  };
 }

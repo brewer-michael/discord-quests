@@ -89,7 +89,7 @@ import {
 } from "@dq/db";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { buildFor } from "./character-rules";
-import { chapterRecaps, writeChapterRecap } from "./chronicle";
+import { chapterRecaps } from "./chronicle";
 import {
   aftermathChoices,
   type CombatView,
@@ -105,10 +105,11 @@ import { nextSceneSpec, type SceneEntityState, type SceneSpec } from "./director
 import { withLogContext } from "./logger";
 import { clearPendingLoom, loadLoom, loadPendingLoom, saveLoom, savePendingLoom } from "./loom-store";
 import { type NarrationResult, narrate } from "./narrator";
-import { applyPlan, latestPlan, planChapter } from "./planner";
+import { applyPlan, planFor } from "./planner";
 import { applyRestorePoint, loadRestorePoint, restorePointSeqs, saveRestorePoint } from "./restore-points";
 import { campaignStory } from "./story-profile";
 import { asStory, isRewound, type StoryState } from "./story-state";
+import { StoryJobs } from "./story-writer/jobs";
 import type {
   DmDraft,
   DraftHandoff,
@@ -167,7 +168,11 @@ export function campaignSettings(c: CampaignRow) {
 }
 
 export class TurnService {
-  constructor(private readonly deps: EngineDeps) {}
+  private readonly jobs: StoryJobs;
+
+  constructor(private readonly deps: EngineDeps) {
+    this.jobs = new StoryJobs(deps.db, deps.now);
+  }
 
   private dice(campaignSeed: string, turnSeq: number, purpose: string) {
     return (this.deps.dice ?? realDice)(campaignSeed, turnSeq, purpose);
@@ -378,6 +383,11 @@ export class TurnService {
         })
         .where(eq(campaigns.id, campaignId));
       await saveRestorePoint(tx, campaignId, seq, roundId);
+      // The first chapter's plan, written while the heroes find their feet; it shapes the scenes after this one.
+      await this.jobs.enqueue(
+        { campaignId, kind: "chapter_plan", key: spec.chapterNumber, reason: "the adventure began", seq },
+        tx,
+      );
       return this.turnView({
         c: locked,
         index,
@@ -610,16 +620,13 @@ export class TurnService {
         return { kind: "draft", draft };
       }
       const view = await this.commit(prepared.turn, prepared.loom, prepared.inputHash);
-      const committed = Date.now();
-      await this.afterCommit(prepared.turn);
-      // prepareMs covers the action reader, the dice, the hidden hand and the storyteller with its reviewer;
-      // afterCommitMs is the chapter recap and plan at a chapter's end. The AI calls have lines of their own.
+      // prepareMs covers the action reader, the dice, the hidden hand and the storyteller with its reviewer.
+      // Chapter recaps and plans are the story writer's, in the background. The AI calls have lines of their own.
       this.log.info("turn resolved", {
         ...timing,
         outcome: "committed",
         chapterEnded: turn.chapterEnded,
-        commitMs: committed - started - prepareMs,
-        afterCommitMs: Date.now() - committed,
+        commitMs: Date.now() - started - prepareMs,
         totalMs: Date.now() - started,
       });
       return { kind: "turn", view };
@@ -765,7 +772,9 @@ export class TurnService {
     if (closing && spec.kind === "travel")
       storyAfter = { ...storyAfter, regionId: spec.regionId, poiId: null };
     const arcNext = closing ? nextSceneSpec(index, storyAfter, loomResult.state) : null;
-    const plannedNext = arcNext ? applyPlan(index, arcNext, await latestPlan(db, c.id)) : null;
+    const plannedNext = arcNext
+      ? applyPlan(index, arcNext, await planFor(db, c.id, arcNext.chapterNumber, c.story))
+      : null;
     const nextSpec = plannedNext
       ? withEncounter(
           index,
@@ -896,50 +905,40 @@ export class TurnService {
     };
   }
 
-  /** Work that follows a committed turn: at a chapter's end, its recap for the journal. */
-  private async afterCommit(turn: PreparedTurn) {
-    if (!turn.chapterEnded) return;
-    try {
-      const [c] = await this.deps.db.select().from(campaigns).where(eq(campaigns.id, turn.campaignId));
-      if (!c) return;
-      const { index } = this.deps.worlds.get(c.worldId);
-      const telling = (await campaignStory(this.deps.db, c)).story;
-      await writeChapterRecap({
-        db: this.deps.db,
-        llm: this.deps.llm,
-        index,
-        log: this.log,
-        campaignId: c.id,
-        guildId: c.guildId,
-        chapterNumber: turn.spec.chapterNumber,
-        telling,
-      });
-      // Tailor the next chapter to what the heroes did, starting with the scene that just opened.
-      const story = asStory(c.story);
-      if (story.ended || !story.sceneId) return;
-      const [sceneRow] = await this.deps.db.select().from(scenes).where(eq(scenes.id, story.sceneId));
-      const current = sceneRow?.state as unknown as SceneSpec | undefined;
-      if (!current || current.chapterNumber <= turn.spec.chapterNumber) return;
-      const plan = await planChapter({
-        db: this.deps.db,
-        llm: this.deps.llm,
-        index,
-        log: this.log,
-        campaignId: c.id,
-        guildId: c.guildId,
-        chapter: current.chapterNumber,
-        story,
-        telling,
-      });
-      const tailored = applyPlan(index, current, plan);
-      if (tailored !== current)
-        await this.deps.db
-          .update(scenes)
-          .set({ state: tailored as unknown as Record<string, unknown> })
-          .where(eq(scenes.id, story.sceneId));
-    } catch (e) {
-      this.log.warn("chapter recap failed", { error: (e as Error).message });
+  /**
+   * Asks the story writer for what's coming, in the turn's own transaction: a chapter's recap when it ends,
+   * and the next chapter's plan once this one is half played, so it's ready before the heroes get there.
+   */
+  private async queueWriting(tx: Tx, index: WorldIndex, campaignId: string, seq: number, turn: PreparedTurn) {
+    const chapter = turn.spec.chapterNumber;
+    if (turn.chapterEnded)
+      await this.jobs.enqueue(
+        { campaignId, kind: "chapter_recap", key: chapter, reason: `chapter ${chapter} ended`, seq },
+        tx,
+      );
+    const next = turn.nextSpec?.chapterNumber;
+    if (turn.chapterEnded && next && next > chapter) {
+      // Usually written ahead already; this asks again only if that job failed or a rewind undid it.
+      await this.jobs.enqueue(
+        { campaignId, kind: "chapter_plan", key: next, reason: `chapter ${next} began`, seq },
+        tx,
+      );
+      return;
     }
+    const beats = index.beatOrder.filter((b) => b.chapter.number === chapter && !b.beat.branch);
+    const done = beats.filter((b) => turn.completedAfter.includes(b.beat.id)).length;
+    const hasNext = index.beatOrder.some((b) => b.chapter.number === chapter + 1);
+    if (hasNext && beats.length > 0 && done * 2 >= beats.length)
+      await this.jobs.enqueue(
+        {
+          campaignId,
+          kind: "chapter_plan",
+          key: chapter + 1,
+          reason: `chapter ${chapter} is half played`,
+          seq,
+        },
+        tx,
+      );
   }
 
   /** One round of a fight: everyone's chosen action, then initiative order. */
@@ -1280,6 +1279,7 @@ export class TurnService {
           ended = true;
           storyAfter = { ...storyAfter, ended: true, sceneId: null };
         }
+        await this.queueWriting(tx, index, c.id, seq, prepared);
       } else {
         const fightOn = spec.combat?.phase === "fighting";
         const mercyNow = prepared.combat && spec.combat?.phase === "aftermath";
@@ -1600,7 +1600,6 @@ export class TurnService {
       if (!pending) throw new GameError("stale", "That draft is out of date.");
       const final = edited ? this.applyDmEdits(turn, edits) : turn;
       view = await this.commit(final, pending.result, pending.inputHash);
-      await this.afterCommit(final);
     }
     await this.deps.db
       .update(approvalRequests)
@@ -2286,6 +2285,17 @@ export class TurnService {
     return c;
   }
 
+  /** Another go at a story-writer job that was given up on. The host, a DM or a guardian may ask. */
+  async retryStoryJob(jobId: string, userId: string): Promise<{ ok: boolean; message: string }> {
+    const job = await this.jobs.get(jobId);
+    if (!job) return { ok: false, message: "That job is gone; nothing to retry." };
+    await this.supervised(job.campaignId, userId);
+    const { ok } = await this.jobs.retry(jobId);
+    return ok
+      ? { ok, message: "🔁 The story writer will try again in a moment." }
+      : { ok, message: "That job is already running again, finished, or no longer needed." };
+  }
+
   /** The turns this campaign can rewind to, newest first, and how the party stood after each. */
   async rewindPoints(campaignId: string, userId: string) {
     const c = await this.supervised(campaignId, userId);
@@ -2341,6 +2351,8 @@ export class TurnService {
         );
       const seq = locked.turnSeq + 1;
       const why = reason.trim().slice(0, 300);
+      // What the story writer was asked for in the undone turns is set aside; the turns ask again.
+      await this.jobs.staleAfter(tx, campaignId, toSeq);
       await tx
         .update(rounds)
         .set({ status: "cancelled" })

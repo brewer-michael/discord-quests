@@ -44,6 +44,12 @@ docker compose up -d postgres          # or point DATABASE_URL at a managed Post
 pnpm --filter @dq/bot start            # applies migrations, registers slash commands, connects to Discord
 ```
 
+And the story writer, which writes chapters ahead of the table (see [The story writer](#the-story-writer)):
+
+```sh
+pnpm writer                            # health check on http://localhost:8081/healthz
+```
+
 Slash commands are registered every time the bot starts (instantly in one server with `DISCORD_DEV_GUILD_ID`,
 otherwise globally). `pnpm --filter @dq/bot register` does it by hand; `REGISTER_COMMANDS=false` skips it.
 
@@ -202,6 +208,40 @@ A scene ends when its story does: the storyteller judges when what the scene is 
 heroes are moving on, or the players choose to leave. A failed roll changes the situation but doesn't end the
 scene. There's no turn limit.
 
+### The story writer
+
+Deep story work never holds up a turn. A separate service, the story writer, writes it ahead of the table in the
+background:
+
+- **Each chapter's plan**: notes for every scene of the chapter, tailored to what these heroes did, the promises
+  they made and the people they met, and the characters to bring back. The writer drafts the plan, then reads its
+  draft again against what has happened and the content rules. Chapter 1 is written when the adventure starts;
+  each later chapter once the one before it is half played, so it's ready before the heroes get there. A plan
+  shapes the scenes of its chapter from the moment it's ready.
+- **Each chapter's recap**, for the journal and the storyteller's memory, from every turn of that chapter.
+
+Turns only add jobs to its queue (in Postgres) and go on at once. If the writer is busy or down, play goes on:
+scenes just have no chapter notes yet, and recaps arrive late.
+
+The DM room hears what it's doing: `📝 Writing chapter 3 ahead of the table.`, then `✅ Chapter 3 is ready`. If a
+job fails, it tries again after 1, 4 and 16 minutes, and the DM room is told why each time (recaps are quiet
+unless they fail). After the last try it gives up and the notice has a **Try again** button for the host, a DM or
+a guardian. A job stopped by the server's daily spending limit waits for the next day without using up a try.
+
+- **Its own job on the setup page:** "Story writer" under Who does what. A slow, strong model is fine here, since
+  nobody waits for it. Until it's set, it uses the Planner's service; recaps use the Chronicler's.
+- **Restarts lose nothing.** Each step of a job is saved as it finishes. On a deploy the writer gets up to 25
+  seconds to finish the step under way, then hands the job back; if it crashes, another writer takes the job over
+  after 2 minutes. Either way the next one carries on from the last saved step.
+- **Limits:** a job may use up to `WRITER_JOB_TOKENS` tokens (200,000 by default; a chapter plan takes a few
+  thousand) and 30 minutes per try. Every call counts against the server's daily spending limit like any other.
+- **More than one:** `WRITER_WORKERS` (default 1) runs that many jobs at once, and you can run several writer
+  services. Two jobs never run for the same campaign at once.
+- **Rewinds:** what was asked for in turns that a rewind undid is set aside, and asked for again when play gets
+  there.
+- The hidden-hand page on the setup site (behind its spoiler warning) lists each campaign's recent jobs, with how
+  long they took, the tokens they used and any error.
+
 ### DM room tools: rewinding, fixes and fight rules
 
 When a turn goes wrong (a bug, a fight that should never have happened), the host, a DM or a guardian can put
@@ -246,7 +286,8 @@ Developer Portal.
 
 ## Deploying with Docker Compose
 
-`docker-compose.prod.yml` runs the whole thing on one server: Postgres, the bot, the setup page and, optionally,
+`docker-compose.prod.yml` runs the whole thing on one server: Postgres, the bot, the story writer, the setup page
+and, optionally,
 [Caddy](https://caddyserver.com) for automatic HTTPS.
 
 **You need** a Linux server with 2 GB of memory (or 1 GB plus swap: building the image runs the setup page's build),
@@ -295,9 +336,10 @@ is today):
    docker compose -f docker-compose.prod.yml --profile https up -d --build
    ```
 
-   The first build takes a few minutes. Postgres starts, the database is migrated, then the bot and the setup page
-   start. The bot registers its slash commands, and Caddy fetches an HTTPS certificate for `DOMAIN`.
-4. **Check it:** `docker compose -f docker-compose.prod.yml ps` shows `bot` and `web` as healthy, and
+   The first build takes a few minutes. Postgres starts, the database is migrated, then the bot, the story writer
+   and the setup page start. The bot registers its slash commands, and Caddy fetches an HTTPS certificate for
+   `DOMAIN`.
+4. **Check it:** `docker compose -f docker-compose.prod.yml ps` shows `bot`, `writer` and `web` as healthy, and
    `https://quests.example.com/guide` opens. If the bot isn't healthy, `docker compose -f docker-compose.prod.yml
    logs bot` says why (usually a mistyped token).
 5. **Invite the bot** (the link is in [step 1](#1-create-the-discord-application) and on the setup site) and run
@@ -308,10 +350,10 @@ shorten to plain `docker compose …`. The examples assume you have.
 
 | To… | Run |
 |---|---|
-| Follow the logs | `docker compose logs -f bot` (or `web`, `caddy`) |
+| Follow the logs | `docker compose logs -f bot` (or `writer`, `web`, `caddy`) |
 | Update to the latest version | `git pull && docker compose up -d --build` (migrations and commands are handled on start) |
 | Back up the database | `docker compose exec -T postgres pg_dump -U dq -Fc dq > dq-$(date +%F).dump` |
-| Restore a backup | `docker compose stop bot web`, then `docker compose exec -T postgres pg_restore -U dq -d dq --clean --if-exists < dq-2026-01-31.dump`, then `docker compose up -d` |
+| Restore a backup | `docker compose stop bot writer web`, then `docker compose exec -T postgres pg_restore -U dq -d dq --clean --if-exists < dq-2026-01-31.dump`, then `docker compose up -d` |
 | Stop everything | `docker compose down` (the data stays in the `pgdata` volume; `down -v` would delete it) |
 
 A nightly backup with cron (`mkdir backups`, then `crontab -e`), keeping two weeks:
@@ -333,17 +375,17 @@ Copy backups off the server too. Notes:
   instead.
 - **Without a domain**, for a trial on your own machine: leave out the `https` profile and set
   `WEB_BASE_URL=http://localhost:3000` (and that redirect in the Developer Portal). Sign-in works on localhost only.
-- **Never scale the bot** (`--scale bot=2`): two bots would both answer every button.
+- **Never scale the bot** (`--scale bot=2`): two bots would both answer every button. The writer may be scaled.
 
 ## Deploying elsewhere
 
-Ready-made configs: [`render.yaml`](../render.yaml) (Render Blueprint: database, bot and setup page),
-[`deploy/fly/`](../deploy/fly) (Fly.io: one app each for the bot and the setup page) and
+Ready-made configs: [`render.yaml`](../render.yaml) (Render Blueprint: database, bot, story writer and setup page),
+[`deploy/fly/`](../deploy/fly) (Fly.io: one app each for the bot, the story writer and the setup page) and
 [`deploy/railway.md`](../deploy/railway.md). All of them build the same `Dockerfile`.
 
-- **Run exactly one bot.** It holds the Discord gateway connection and the round timers. The setup page can scale
-  freely.
-- **Same `MASTER_KEYS` everywhere.** The bot decrypts the keys the setup page saved.
+- **Run exactly one bot.** It holds the Discord gateway connection and the round timers. The setup page and the
+  story writer can scale freely.
+- **Same `MASTER_KEYS` everywhere.** The bot and the story writer decrypt the keys the setup page saved.
 - **Logs** are one JSON object per line when `NODE_ENV=production` or `LOG_FORMAT=json` (time, level, message,
   campaign and round ids). API keys and tokens are redacted before anything is written. See
   [Reading the logs](#reading-the-logs).
@@ -352,7 +394,7 @@ Ready-made configs: [`render.yaml`](../render.yaml) (Render Blueprint: database,
 
 Each turn writes these lines (with Docker Compose: `docker compose logs bot`):
 
-- **`ai call`**, one per AI request: `task` (narrator, judge, intent, safety, summarizer, director), `model`,
+- **`ai call`**, one per AI request: `task` (narrator, judge, intent, safety, summarizer, writer), `model`,
   `provider`, `ms`, `inputTokens`, `outputTokens`, `effort` and `maxOutputTokens` as sent (the answer limit, only
   when one is set for the job or the model), `expectTokens` (the job's usual answer size, for the budget), and, when
   the service
@@ -367,7 +409,7 @@ Each turn writes these lines (with Docker Compose: `docker compose logs bot`):
 - **`turn resolved`** (a turn that went out), **`turn drafted for the DM`** (an Assist draft) or **`turn handed to a
   person`** (with its `reasons`): `seq`, `mode`, `outcome` (`committed`, `assist_draft` or `handoff`), and where the
   time went: `prepareMs` (the action reader, the dice, the hidden hand, the storyteller and its reviewer),
-  `commitMs` (saving), `afterCommitMs` (the chapter recap and plan at a chapter's end) and `totalMs`.
+  `commitMs` (saving, which includes queueing the story writer's jobs) and `totalMs`.
 - **`turn posted`**: `resolveMs`, `postMs` (Discord) and `totalMs`, from the round closing to the turn appearing.
 
 Every line logged while a round resolves carries its `roundId`, so one turn's lines can be pulled out together:
@@ -375,6 +417,16 @@ Every line logged while a round resolves carries its `roundId`, so one turn's li
 ```bash
 docker compose logs --no-log-prefix bot | grep '"roundId":"<id>"'
 ```
+
+The story writer (`docker compose logs writer`) writes, each with `jobId`, `kind`, `key` (the chapter) and
+`campaignId`:
+
+- **`writer job claimed`** with its `attempt` and `resumeAfter` (the steps an earlier try already saved).
+- **`writer step done`**: `step` (`facts`, `draft`, `revise`), `ms` and `tokens`. Its AI calls have their own
+  `ai call` lines, with `task: "writer"` (or `summarizer` for recaps).
+- **`writer job done`**, or **`writer job failed`** with the `reason` the DM room was given and `retryAt` (none
+  when it gave up). **`writer job stale`** when a rewind set it aside, **`writer job lost`** when it stopped being
+  this writer's (handed back on shutdown, or taken over), and **`writer job released`** on shutdown.
 
 `LOG_AI_OUTPUT=true` adds an **`ai output`** line after each call with the full `answer` and `reasoning`. Those
 lines are long: the Compose file keeps 5 files of 10 MB, so switch it off again once you've seen what you need.

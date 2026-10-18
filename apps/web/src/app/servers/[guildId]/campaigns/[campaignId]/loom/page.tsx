@@ -11,6 +11,20 @@ export const dynamic = "force-dynamic";
 
 const STATE_ICON: Record<string, string> = { seedling: "🌑", budding: "🌗", ripe: "🌕", woven: "✨" };
 const words = (s: string) => s.replaceAll("_", " ");
+const WRITER_ICON: Record<string, string> = {
+  queued: "⏳",
+  running: "🖋️",
+  done: "✅",
+  failed: "⚠️",
+  stale: "↩️",
+};
+const WRITER_STATUS: Record<string, string> = {
+  queued: "waiting",
+  running: "writing",
+  done: "ready",
+  failed: "gave up",
+  stale: "undone by a rewind",
+};
 
 export default async function Loom({ params }: { params: Promise<{ guildId: string; campaignId: string }> }) {
   const { guildId, campaignId } = await params;
@@ -47,7 +61,7 @@ export default async function Loom({ params }: { params: Promise<{ guildId: stri
     );
   }
 
-  const { loom } = view;
+  const { loom, writer } = view;
   return (
     <>
       <div className="card">
@@ -137,6 +151,40 @@ export default async function Loom({ params }: { params: Promise<{ guildId: stri
             </ul>
           )}
         </div>
+      </div>
+      <div className="card">
+        <h3>Story writer</h3>
+        <p className="hint">
+          Chapters written ahead of the table, in the background. Each plan shapes the scenes of its chapter
+          from when it's ready.
+        </p>
+        {writer.length === 0 ? (
+          <p className="muted">Nothing yet: the first chapter is written when the adventure starts.</p>
+        ) : (
+          <ul className="thread-list">
+            {writer.map((j) => (
+              <li key={j.id}>
+                <span aria-hidden>{WRITER_ICON[j.status] ?? "•"}</span>
+                <span>
+                  {j.what} <span className="muted">· {j.why}</span>{" "}
+                  <span className="badge">{WRITER_STATUS[j.status] ?? j.status}</span>
+                  <span className="muted small">
+                    {" "}
+                    {[
+                      j.tries > 1 ? `${j.tries} tries` : null,
+                      j.minutes ? `${j.minutes} min` : null,
+                      j.tokens > 0 ? `${j.tokens.toLocaleString("en")} tokens` : null,
+                      j.status === "running" && j.steps.length > 0 ? `done: ${j.steps.join(", ")}` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </span>
+                  {j.error && j.status !== "done" ? <span className="muted small"> · {j.error}</span> : null}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </>
   );

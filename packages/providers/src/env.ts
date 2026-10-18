@@ -27,7 +27,7 @@ export interface EnvDefaults {
   routes: Partial<Record<RouteTask, Route[]>>;
 }
 
-const LLM_TASKS: LlmTask[] = ["narrator", "director", "intent", "safety", "judge", "summarizer"];
+const LLM_TASKS: LlmTask[] = ["narrator", "director", "intent", "safety", "judge", "summarizer", "writer"];
 
 function fromPreset(id: string, presetId: string, apiKey: string): ResolvedProviderConfig | null {
   const p = preset(presetId);
@@ -91,7 +91,10 @@ export function envDefaults(env: ProviderEnv): EnvDefaults {
   });
   for (const task of LLM_TASKS) {
     routes[task] = story.flatMap(({ configId, p }, priority) => {
-      const model = p.defaultModels[task] ?? p.defaultModels.narrator;
+      const model =
+        p.defaultModels[task] ??
+        (task === "writer" ? p.defaultModels.director : undefined) ??
+        p.defaultModels.narrator;
       return model
         ? [{ configId, model, params: (p.defaultParams[task] ?? {}) as Route["params"], priority }]
         : [];

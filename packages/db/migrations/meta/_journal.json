@@ -57,6 +57,13 @@
       "when": 1792195565281,
       "tag": "0007_restore_points",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792330741955,
+      "tag": "0008_story_jobs",
+      "breakpoints": true
     }
   ]
 }

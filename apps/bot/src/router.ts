@@ -29,6 +29,7 @@ import { rewindInteraction } from "./handlers/rewind";
 import { setupCommand } from "./handlers/setup";
 import { friendly, say } from "./handlers/shared";
 import { storyInteraction, storyModalSubmit } from "./handlers/story";
+import { writerRetryInteraction } from "./handlers/writer";
 import { decodeId } from "./ids";
 import { renderGuide } from "./render/guide";
 import { renderAbout, renderHelp, renderPrivacy } from "./render/misc";
@@ -133,6 +134,9 @@ export async function route(ctx: BotContext, i: Interaction): Promise<void> {
         return;
       case "rewind":
         if (i.isButton() || i.isStringSelectMenu()) await rewindInteraction(ctx, i, id);
+        return;
+      case "writer-retry":
+        if (i.isButton()) await writerRetryInteraction(ctx, i, id);
         return;
       case "gallery-share":
         if (i.isButton()) await galleryShare(ctx, i, id.campaignId, id.sceneId);

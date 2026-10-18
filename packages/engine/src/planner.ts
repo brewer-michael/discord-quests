@@ -1,24 +1,23 @@
 /**
- * The story planner: at the end of each chapter it looks at what the heroes
- * actually did and tailors the next chapter's scenes to it. It adds notes
- * and supporting characters; it never adds or removes scenes, decides how
- * anything turns out, or touches the decisive moments' rules.
+ * The story planner: it looks at what the heroes actually did and tailors a
+ * chapter's scenes to it. It adds notes and supporting characters; it never
+ * adds or removes scenes, decides how anything turns out, or touches the
+ * decisive moments' rules. The story writer runs it ahead of the table
+ * (story-writer/chapter-plan.ts); turns only read the plans.
  *
  * It sees only what the table saw (recaps, promises, who likes the heroes),
  * never the hidden hand. Plans live in the spoiler schema.
  */
-import type { LlmGateway } from "@dq/core/llm";
 import { audienceLine, contentRulesText, type NarrationStory, tableWishesText } from "@dq/core/narration";
 import { checkNarration } from "@dq/core/safety";
 import type { WorldIndex } from "@dq/core/world";
 import { characters, type Db, npcs, promises, quests, storyPlans } from "@dq/db";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { chapterRecaps } from "./chronicle";
-import type { Logger } from "./deps";
 import type { SceneSpec } from "./director";
 import { npcAnchor } from "./director";
-import type { StoryState } from "./story-state";
+import { isRewound, type StoryState } from "./story-state";
 
 export const PlannerOutput = z.object({
   theme: z.string().max(300),
@@ -39,10 +38,13 @@ export interface ChapterPlan {
   chapter: number;
   theme: string;
   beats: Record<string, { note: string; featured: string[] }>;
-  source: "planner" | "fallback";
+  /** Who wrote it. Plans from before the story writer may say "planner" or "fallback". */
+  source: "writer" | "planner" | "fallback";
+  /** The campaign's turn when it was asked for: a rewind past it sets the plan aside. */
+  seq?: number;
 }
 
-function plannerSystem(world: WorldIndex["world"], story: NarrationStory): string {
+export function plannerSystem(world: WorldIndex["world"], story: NarrationStory): string {
   const wishes = tableWishesText(story);
   return [
     `You are the story planner for ${audienceLine(story.intensity)}. The next chapter's scenes are fixed; your job is to make them feel like they grew out of what these particular heroes did.`,
@@ -54,171 +56,168 @@ function plannerSystem(world: WorldIndex["world"], story: NarrationStory): strin
   ].join("\n");
 }
 
-/** Without a story AI, kept and pending promises still come back when the heroes meet that person again. */
-export function fallbackPlan(
-  index: WorldIndex,
-  chapter: number,
-  promiseRows: Array<{ npcId: string; text: string; status: string }>,
-): ChapterPlan {
-  const beats: ChapterPlan["beats"] = {};
-  const refs = index.beatOrder.filter((b) => b.chapter.number === chapter);
-  for (const ref of refs) {
-    const here = promiseRows.filter((p) => index.namedNpcs.get(p.npcId)?.region === ref.beat.region);
-    const p = here[0];
-    if (!p) continue;
-    const name = index.namedNpcs.get(p.npcId)?.name ?? p.npcId;
-    beats[ref.beat.id] = {
-      note:
-        p.status === "kept"
-          ? `${name} remembers that the heroes kept their promise ("${p.text}"), and greets them warmly.`
-          : p.status === "broken"
-            ? `${name} remembers the promise the heroes didn't keep ("${p.text}"), and is a little wary.`
-            : `${name} is waiting to see whether the heroes will keep their promise ("${p.text}").`,
-      featured: [p.npcId],
-    };
-  }
-  return { chapter, theme: refs[0]?.chapter.summary ?? "", beats, source: "fallback" };
+/** What the planner knows about a campaign when it plans a chapter: only what the table saw. */
+export interface PlanFacts {
+  chapter: number;
+  heroes: string[];
+  story: string[];
+  promises: string[];
+  met: string[];
+  factions: string[];
+  quests: string[];
+  cast: string[];
+  scenes: string[];
+  beatIds: string[];
+  /** People the heroes met who have fled, been captured or gone away: never featured. */
+  away: string[];
 }
 
-export async function planChapter(args: {
-  db: Db;
-  llm: LlmGateway;
-  index: WorldIndex;
-  log: Logger;
-  campaignId: string;
-  guildId: string;
-  chapter: number;
-  story: StoryState;
-  /** How the story is told: intensity, voice and the table's wishes. */
-  telling: NarrationStory;
-}): Promise<ChapterPlan | null> {
-  const { db, index } = args;
-  const refs = index.beatOrder.filter((b) => b.chapter.number === args.chapter && !b.beat.branch);
+/** Gathers what the planner needs for a chapter, or null if the world has no such chapter. */
+export async function gatherPlanFacts(
+  db: Db,
+  index: WorldIndex,
+  campaignId: string,
+  chapter: number,
+  story: StoryState,
+): Promise<PlanFacts | null> {
+  const refs = index.beatOrder.filter((b) => b.chapter.number === chapter && !b.beat.branch);
   if (refs.length === 0) return null;
   const [recaps, promiseRows, npcRows, questRows, party] = await Promise.all([
-    chapterRecaps(db, args.campaignId, 8),
-    db.select().from(promises).where(eq(promises.campaignId, args.campaignId)),
-    db.select().from(npcs).where(eq(npcs.campaignId, args.campaignId)),
-    db.select().from(quests).where(eq(quests.campaignId, args.campaignId)),
+    chapterRecaps(db, campaignId, 8),
+    db.select().from(promises).where(eq(promises.campaignId, campaignId)),
+    db.select().from(npcs).where(eq(npcs.campaignId, campaignId)),
+    db.select().from(quests).where(eq(quests.campaignId, campaignId)),
     db
       .select()
       .from(characters)
-      .where(and(eq(characters.campaignId, args.campaignId), eq(characters.status, "active"))),
+      .where(and(eq(characters.campaignId, campaignId), eq(characters.status, "active"))),
   ]);
-  let plan = fallbackPlan(index, args.chapter, promiseRows);
-
-  const cast = index.world.npcs.named.map(
-    (n) => `- ${n.name} [id: ${n.id}]: ${n.role}, in ${index.regions.get(n.region)?.name ?? n.region}`,
-  );
-  const user = [
-    "## The heroes",
-    ...party.map(
+  return {
+    chapter,
+    heroes: party.map(
       (p) =>
-        `- ${p.name}: ${index.classes.get(p.classId ?? "")?.name ?? "hero"} on ${index.world.paths.find((x) => x.id === p.pathId)?.name ?? "their own road"}`,
+        `${p.name}: ${index.classes.get(p.classId ?? "")?.name ?? "hero"} on ${index.world.paths.find((x) => x.id === p.pathId)?.name ?? "their own road"}`,
     ),
-    "",
-    "## The story so far",
-    ...(recaps.length > 0 ? recaps.map((r) => `- Chapter ${r.chapter}: ${r.text}`) : ["- (just beginning)"]),
-    "",
-    "## Promises",
-    ...(promiseRows.length > 0
-      ? promiseRows.map(
-          (p) => `- To ${index.namedNpcs.get(p.npcId)?.name ?? p.npcId}: "${p.text}" (${p.status})`,
-        )
-      : ["- none"]),
-    "",
-    "## People the heroes have met",
-    ...(npcRows.length > 0
-      ? npcRows.map(
-          (n) =>
-            `- ${n.name}: ${n.status}, feels ${n.disposition > 0 ? "friendly" : n.disposition < 0 ? "wary" : "neutral"} toward the heroes`,
-        )
-      : ["- nobody special yet"]),
-    "",
-    "## How the factions feel about the heroes",
-    ...Object.entries(args.story.factionDisposition).map(
+    story: recaps.map((r) => `Chapter ${r.chapter}: ${r.text}`),
+    promises: promiseRows.map(
+      (p) => `To ${index.namedNpcs.get(p.npcId)?.name ?? p.npcId}: "${p.text}" (${p.status})`,
+    ),
+    met: npcRows.map(
+      (n) =>
+        `${n.name}: ${n.status}, feels ${n.disposition > 0 ? "friendly" : n.disposition < 0 ? "wary" : "neutral"} toward the heroes`,
+    ),
+    factions: Object.entries(story.factionDisposition).map(
       ([id, d]) =>
-        `- ${index.factions.get(id)?.name ?? id}: ${d > 0 ? "friendly" : d < 0 ? "unfriendly" : "neutral"}`,
+        `${index.factions.get(id)?.name ?? id}: ${d > 0 ? "friendly" : d < 0 ? "unfriendly" : "neutral"}`,
     ),
-    "",
-    "## Quests",
-    ...(questRows.length > 0 ? questRows.map((q) => `- ${q.title} (${q.status})`) : ["- none"]),
-    "",
-    "## Characters you may feature",
-    ...cast,
-    "",
-    `## Chapter ${args.chapter}'s scenes (fixed; write one note per scene)`,
-    ...refs.map(
-      (r) =>
-        `- beat: ${r.beat.id} | ${r.beat.title} (${r.beat.kind}): ${r.beat.summary.replace(/\s+/g, " ")}`,
+    quests: questRows.map((q) => `${q.title} (${q.status})`),
+    cast: index.world.npcs.named.map(
+      (n) => `${n.name} [id: ${n.id}]: ${n.role}, in ${index.regions.get(n.region)?.name ?? n.region}`,
     ),
-  ].join("\n");
-
-  const res = await args.llm.structured(
-    {
-      task: "director",
-      system: [{ text: plannerSystem(index.world, args.telling), cache: "1h" }],
-      user: [{ text: user }],
-      schema: PlannerOutput,
-      schemaName: "chapter_plan",
-      expectTokens: 1500,
-      effort: "high",
-    },
-    { guildId: args.guildId, campaignId: args.campaignId },
-  );
-  if (res.ok) {
-    const beatIds = new Set(refs.map((r) => r.beat.id));
-    const away = new Set(
-      npcRows.filter((n) => ["fled", "captured", "defeated", "away"].includes(n.status)).map((n) => n.id),
-    );
-    const safe = (t: string) => checkNarration(t, index.world, { intensity: args.telling.intensity }).ok;
-    const beats: ChapterPlan["beats"] = { ...plan.beats };
-    let rejected = 0;
-    for (const b of res.value.beats) {
-      if (!beatIds.has(b.beatId)) continue;
-      const note = [b.note, b.callback].filter(Boolean).join(" ").trim();
-      if (!note || !safe(note)) {
-        rejected++;
-        continue;
-      }
-      beats[b.beatId] = {
-        note,
-        featured: b.featured.filter((id) => index.namedNpcs.has(id) && !away.has(id)).slice(0, 3),
-      };
-    }
-    if (rejected > 0) args.log.warn("planner notes rejected", { rejected });
-    plan = {
-      chapter: args.chapter,
-      theme: safe(res.value.theme) ? res.value.theme : plan.theme,
-      beats,
-      source: "planner",
-    };
-  }
-
-  const [last] = await db
-    .select({ version: storyPlans.version })
-    .from(storyPlans)
-    .where(eq(storyPlans.campaignId, args.campaignId))
-    .orderBy(desc(storyPlans.version))
-    .limit(1);
-  await db.insert(storyPlans).values({
-    campaignId: args.campaignId,
-    version: (last?.version ?? 0) + 1,
-    plan: plan as unknown as Record<string, unknown>,
-    reason: `chapter ${args.chapter}`,
-    createdBy: "director",
-  });
-  return plan;
+    scenes: refs.map(
+      (r) => `beat: ${r.beat.id} | ${r.beat.title} (${r.beat.kind}): ${r.beat.summary.replace(/\s+/g, " ")}`,
+    ),
+    beatIds: refs.map((r) => r.beat.id),
+    away: npcRows.filter((n) => ["fled", "captured", "defeated", "away"].includes(n.status)).map((n) => n.id),
+  };
 }
 
-export async function latestPlan(db: Db, campaignId: string): Promise<ChapterPlan | null> {
-  const [row] = await db
-    .select()
+export function planFactsText(f: PlanFacts): string {
+  const list = (items: string[], none: string) => (items.length > 0 ? items : [none]).map((x) => `- ${x}`);
+  return [
+    "## The heroes",
+    ...list(f.heroes, "(none yet)"),
+    "",
+    "## The story so far",
+    ...list(f.story, "(just beginning)"),
+    "",
+    "## Promises",
+    ...list(f.promises, "none"),
+    "",
+    "## People the heroes have met",
+    ...list(f.met, "nobody special yet"),
+    "",
+    "## How the factions feel about the heroes",
+    ...list(f.factions, "nobody has made up their mind yet"),
+    "",
+    "## Quests",
+    ...list(f.quests, "none"),
+    "",
+    "## Characters you may feature",
+    ...f.cast.map((x) => `- ${x}`),
+    "",
+    `## Chapter ${f.chapter}'s scenes (fixed; write one note per scene)`,
+    ...f.scenes.map((x) => `- ${x}`),
+  ].join("\n");
+}
+
+/** The second pass: the editor checks the planner's draft against what's happened and the rules. */
+export function plannerReviseSystem(world: WorldIndex["world"], story: NarrationStory): string {
+  const wishes = tableWishesText(story);
+  return [
+    `You are the story editor for ${audienceLine(story.intensity)}. The story planner has drafted notes for the next chapter's scenes; you return the finished plan.`,
+    "Keep what is good. Fix: anything that contradicts what has happened (who the heroes met, what they promised, how people feel about them), characters featured who aren't on the list or have fled, been captured or gone away, notes that decide how a scene turns out, and anything that mentions luck, fate, destiny, threads, hidden forces or anything working behind the scenes.",
+    "One note per scene, short and concrete enough for a storyteller to use in the moment. Feature at most three characters per scene, by id.",
+    "",
+    ...contentRulesText(world, story.intensity),
+    ...(wishes.length > 0 ? ["", ...wishes] : []),
+  ].join("\n");
+}
+
+/**
+ * Keeps the notes that pass every check: a scene of this chapter, the content rules, and featured characters
+ * who exist and haven't gone away. Says how many were turned back.
+ */
+export function checkPlan(
+  index: WorldIndex,
+  facts: PlanFacts,
+  output: PlannerOutput,
+  intensity: NarrationStory["intensity"],
+): { theme: string; beats: ChapterPlan["beats"]; rejected: number } {
+  const beatIds = new Set(facts.beatIds);
+  const away = new Set(facts.away);
+  const safe = (t: string) => checkNarration(t, index.world, { intensity }).ok;
+  const beats: ChapterPlan["beats"] = {};
+  let rejected = 0;
+  for (const b of output.beats) {
+    if (!beatIds.has(b.beatId)) continue;
+    const note = [b.note, b.callback].filter(Boolean).join(" ").trim();
+    if (!note || !safe(note)) {
+      rejected++;
+      continue;
+    }
+    beats[b.beatId] = {
+      note,
+      featured: b.featured.filter((id) => index.namedNpcs.has(id) && !away.has(id)).slice(0, 3),
+    };
+  }
+  return { theme: safe(output.theme) ? output.theme : "", beats, rejected };
+}
+
+/**
+ * The plan for a chapter: its newest version, unless a rewind undid the turn it was written for. Plans are
+ * written ahead, so the newest plan overall may be for a later chapter.
+ */
+export async function planFor(
+  db: Db,
+  campaignId: string,
+  chapter: number,
+  story: unknown,
+): Promise<ChapterPlan | null> {
+  const rows = await db
+    .select({ plan: storyPlans.plan })
     .from(storyPlans)
-    .where(eq(storyPlans.campaignId, campaignId))
+    .where(
+      and(eq(storyPlans.campaignId, campaignId), sql`(${storyPlans.plan}->>'chapter')::int = ${chapter}`),
+    )
     .orderBy(desc(storyPlans.version))
-    .limit(1);
-  return (row?.plan as unknown as ChapterPlan | undefined) ?? null;
+    .limit(5);
+  for (const row of rows) {
+    const plan = row.plan as unknown as ChapterPlan;
+    if (typeof plan.seq === "number" && isRewound(story, plan.seq)) continue;
+    return plan;
+  }
+  return null;
 }
 
 /** Adds the planner's note and featured characters to a scene built from the arc. */

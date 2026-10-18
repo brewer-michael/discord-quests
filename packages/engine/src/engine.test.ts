@@ -17,8 +17,8 @@ import { serverGameDefaults } from "./campaign-service";
 import { createEngine, createLogger, type Engine, seededDice, withLogContext } from "./index";
 import { loadLoom } from "./loom-store";
 import { describeTimer, paceOf, reminderAt, whenTimeIsUp } from "./pace";
-import { planChapter } from "./planner";
 import { asStory } from "./story-state";
+import { StoryWriter } from "./story-writer";
 import { FakeLlm } from "./testing";
 import { WorldCache } from "./world-cache";
 
@@ -305,6 +305,8 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
       mode: "ai_dm",
       createdBy: "host",
     });
+    // The story writer runs between turns here, as the writer service would while the table plays.
+    const writer = new StoryWriter({ db: db.db, llm, worlds, jobs: engine.storyJobs, campaignId: c.id });
     await engine.campaigns.join(c.id, "kid");
     await makeHero(engine, c.id, "host", "shieldheart", "Bram Junior");
     await makeHero(engine, c.id, "kid", "lanternkeeper", "Wren Pebble");
@@ -343,9 +345,15 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
         );
         expect(res.ok).toBe(true);
       }
+      const writing = llm.calls.length;
       const next = await engine.turns.resolveRound(roundId);
       expect(next?.kind).toBe("turn");
       view = (next as { kind: "turn"; view: typeof view }).view;
+      // Turns never write the story ahead themselves: no writer or chronicler calls while a turn resolves.
+      expect(llm.calls.slice(writing).filter((x) => x.task === "writer" || x.task === "summarizer")).toEqual(
+        [],
+      );
+      await writer.drain();
       if (!sawSnibbetMercy) {
         const loom = await loadLoom(db.db, c.id);
         sawSnibbetMercy = loom.state.threads.some((t) => t.anchor?.id === "snibbet" && t.tag === "mercy");
@@ -370,14 +378,23 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
     for (const secret of ["reservedForBeat", "sincerity", "ripenSpan", "masterSeed", "Keep it small"]) {
       expect(history).not.toContain(secret);
     }
-    // Each new chapter is tailored by the planner, and the storyteller sees its notes.
+    // Every chapter is planned ahead by the story writer (a draft, then a revision), and the storyteller sees
+    // its notes.
     const plans = await db.db.select().from(storyPlans).where(eq(storyPlans.campaignId, c.id));
-    expect(plans.length).toBeGreaterThanOrEqual(6);
+    expect(plans.length).toBeGreaterThanOrEqual(7);
+    expect(new Set(plans.map((p) => (p.plan as { chapter: number }).chapter)).size).toBe(plans.length);
+    expect(plans.every((p) => p.createdBy === "writer")).toBe(true);
     expect(
       llm.calls
-        .filter((x) => x.task === "director")
+        .filter((x) => x.task === "writer")
         .every((x) => !/reservedForBeat|ripen|weight|thread/i.test(x.user)),
     ).toBe(true);
+    // Each chapter after the first was asked for once the one before it was half played.
+    const jobs = await engine.storyJobs.recent(c.id, 50);
+    expect(jobs.every((j) => j.status === "done")).toBe(true);
+    expect(jobs.filter((j) => j.kind === "chapter_plan" && j.reason.endsWith("is half played")).length).toBe(
+      plans.length - 1,
+    );
     expect(
       llm.calls.some(
         (x) => x.task === "narrator" && x.user.includes("Story notes (weave these in naturally)"),
@@ -610,7 +627,7 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
 
   it("throws away planner notes that would give the game away", async () => {
     const llm = new FakeLlm({
-      director: () => ({
+      writer: () => ({
         theme: "Karma is coming for them.",
         beats: [
           {
@@ -628,31 +645,32 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
         ],
       }),
     });
-    const { index } = worlds.get("lanternreach");
-    const c = await createEngine({ db: db.db, worlds, llm }).campaigns.create({
+    const engine = createEngine({ db: db.db, worlds, llm });
+    const c = await engine.campaigns.create({
       guildId: "g-plan",
       channelId: "ch-plan",
       name: "Plans",
       mode: "ai_dm",
       createdBy: "p",
     });
-    const plan = await planChapter({
-      db: db.db,
-      llm,
-      index,
-      log: { info: () => {}, warn: () => {}, error: () => {} },
+    await engine.storyJobs.enqueue({
       campaignId: c.id,
-      guildId: "g-plan",
-      chapter: 2,
-      story: asStory(c.story),
-      telling: { intensity: "light", voice: "fireside", humor: "plenty", premise: "", lines: [], veils: [] },
+      kind: "chapter_plan",
+      key: 2,
+      reason: "test",
+      seq: 0,
     });
-    expect(plan?.beats["ch2-the-fork-in-the-road"]).toBeUndefined();
-    expect(plan?.beats["ch2-shadow-wolves"]).toEqual({
+    const writer = new StoryWriter({ db: db.db, llm, worlds, jobs: engine.storyJobs, campaignId: c.id });
+    const [ran] = await writer.drain();
+    expect(ran?.outcome).toBe("done");
+    const [row] = await db.db.select().from(storyPlans).where(eq(storyPlans.campaignId, c.id));
+    const plan = row?.plan as { theme: string; beats: Record<string, unknown> };
+    expect(plan.beats["ch2-the-fork-in-the-road"]).toBeUndefined();
+    expect(plan.beats["ch2-shadow-wolves"]).toEqual({
       note: "Remember how brave the heroes were in the garden.",
       featured: ["hattie-wick"],
     });
-    expect(plan?.theme).not.toMatch(/karma/i);
+    expect(plan.theme).not.toMatch(/karma/i);
   });
 
   it("hands a turn the AI can't tell to a person in the DM room, with everything they need", async () => {

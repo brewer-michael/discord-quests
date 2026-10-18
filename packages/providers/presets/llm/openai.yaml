@@ -79,6 +79,7 @@ models:
 defaultModels:
   narrator: gpt-6.1-sol
   director: gpt-6.1-sol
+  writer: gpt-6.1-sol
   summarizer: gpt-6-luna
   intent: gpt-6-luna
   safety: gpt-6-luna

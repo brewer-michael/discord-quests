@@ -63,13 +63,15 @@ export default async function Routing({ params }: { params: Promise<{ guildId: s
         const options = providers.filter((p) => p.kind === kind);
         const current = routes[task];
         const fallback =
-          settings.usePlatformDefaults && (store.defaults.routes[task]?.length ?? 0) > 0
-            ? "the bot's built-in service"
-            : task === "image"
-              ? "no scene art"
-              : task === "narrator"
-                ? "every turn goes to the DM room for a person to tell"
-                : "skipping this job";
+          task === "writer" && routes.director.length > 0
+            ? "the Planner's service"
+            : settings.usePlatformDefaults && (store.defaults.routes[task]?.length ?? 0) > 0
+              ? "the bot's built-in service"
+              : task === "image"
+                ? "no scene art"
+                : task === "narrator"
+                  ? "every turn goes to the DM room for a person to tell"
+                  : "skipping this job";
         return (
           <section key={task} className="card" aria-labelledby={`t-${task}`}>
             <div className="card-head">

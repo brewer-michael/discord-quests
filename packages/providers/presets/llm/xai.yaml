@@ -48,6 +48,7 @@ models:
 defaultModels:
   narrator: grok-4.7
   director: grok-4.7
+  writer: grok-4.7
   summarizer: grok-4.7
   intent: grok-4.7
   safety: grok-4.7

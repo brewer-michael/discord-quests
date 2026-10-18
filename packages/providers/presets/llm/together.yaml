@@ -61,6 +61,7 @@ models:
 defaultModels:
   narrator: moonshotai/Kimi-K3
   director: moonshotai/Kimi-K3
+  writer: moonshotai/Kimi-K3
   summarizer: openai/gpt-oss-120b
   intent: openai/gpt-oss-120b
   safety: openai/gpt-oss-120b

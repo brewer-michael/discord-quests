@@ -6,7 +6,7 @@ import type { z } from "zod";
  * engine only ever talks to this interface.
  */
 
-export type LlmTask = "narrator" | "director" | "intent" | "safety" | "summarizer" | "judge";
+export type LlmTask = "narrator" | "director" | "intent" | "safety" | "summarizer" | "judge" | "writer";
 export const LLM_TASKS: readonly LlmTask[] = [
   "narrator",
   "director",
@@ -14,6 +14,7 @@ export const LLM_TASKS: readonly LlmTask[] = [
   "safety",
   "summarizer",
   "judge",
+  "writer",
 ];
 
 /** How hard a model reasons before it answers. "none" asks it not to, where the service allows. */

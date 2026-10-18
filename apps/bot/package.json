@@ -6,6 +6,7 @@
   "description": "The Discord bot: slash commands, buttons and forms on top of the engine.",
   "scripts": {
     "start": "tsx src/main.ts",
+    "writer": "tsx src/writer.ts",
     "register": "tsx src/register-commands.ts",
     "typecheck": "tsc -p tsconfig.json"
   },

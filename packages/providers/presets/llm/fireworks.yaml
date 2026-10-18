@@ -46,6 +46,7 @@ models:
 defaultModels:
   narrator: accounts/fireworks/routers/kimi-k3-fast
   director: accounts/fireworks/routers/kimi-k3-fast
+  writer: accounts/fireworks/routers/kimi-k3-fast
   summarizer: accounts/fireworks/routers/kimi-k3-fast
   intent: accounts/fireworks/routers/kimi-k3-fast
   safety: accounts/fireworks/routers/kimi-k3-fast

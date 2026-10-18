@@ -93,6 +93,7 @@ models:
 defaultModels:
   narrator: gemini-3.8-flash
   director: gemini-3.8-flash
+  writer: gemini-3.8-flash
   summarizer: gemini-3.5-flash-lite
   intent: gemini-3.5-flash-lite
   safety: gemini-3.5-flash-lite

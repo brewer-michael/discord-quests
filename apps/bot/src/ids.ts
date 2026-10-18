@@ -30,7 +30,9 @@ export type CustomId =
   | { kind: "story"; campaignId: string; action: StoryAction }
   | { kind: "story-modal"; campaignId: string }
   /** The DM room's card: pick a turn to rewind to and confirm, mend the party, rebuild the fight, or switch partial hits. */
-  | { kind: "rewind"; campaignId: string; action: RewindAction; seq?: number };
+  | { kind: "rewind"; campaignId: string; action: RewindAction; seq?: number }
+  /** Another go at a story-writer job that was given up on, from its notice in the DM room. */
+  | { kind: "writer-retry"; jobId: string };
 
 export type RewindAction = "pick" | "go" | "back" | "mend" | "rebuild" | "cancel" | "graze-on" | "graze-off";
 const REWIND_ACTIONS: readonly string[] = [
@@ -81,6 +83,7 @@ const CODES: Record<CustomId["kind"], string> = {
   story: "sty",
   "story-modal": "stm",
   rewind: "rw",
+  "writer-retry": "wrr",
 };
 const KINDS = Object.fromEntries(Object.entries(CODES).map(([k, v]) => [v, k])) as Record<
   string,
@@ -128,6 +131,9 @@ export function encodeId(id: CustomId): string {
     case "rewind":
       parts.push(id.campaignId, id.action);
       if (id.seq !== undefined) parts.push(id.seq);
+      break;
+    case "writer-retry":
+      parts.push(id.jobId);
       break;
     default:
       parts.push(id.campaignId);
@@ -200,6 +206,8 @@ export function decodeId(raw: string): CustomId | null {
         return null;
       return { kind, campaignId: a, action: action as RewindAction, ...(seq !== undefined ? { seq } : {}) };
     }
+    case "writer-retry":
+      return { kind, jobId: a };
     default:
       return { kind, campaignId: a } as CustomId;
   }

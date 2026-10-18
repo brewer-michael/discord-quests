@@ -29,6 +29,7 @@ models:
 defaultModels:
   narrator: deepseek-v4-pro
   director: deepseek-v4-pro
+  writer: deepseek-v4-pro
   summarizer: deepseek-v4-flash
   intent: deepseek-v4-flash
   safety: deepseek-v4-flash
