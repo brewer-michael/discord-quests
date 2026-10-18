@@ -60,6 +60,26 @@ export interface PlayIO {
   say(text: string): void;
 }
 
+/**
+ * Says what the game is waiting for once a wait passes a second, and again every 15 seconds, so a slow AI service
+ * (one that reasons before it answers, say) doesn't look stuck.
+ */
+async function waitFor<T>(io: PlayIO, what: string, work: Promise<T>): Promise<T> {
+  const started = Date.now();
+  const say = () => io.say(`… ${what} (${Math.round((Date.now() - started) / 1000)} s)`);
+  let every: NodeJS.Timeout | undefined;
+  const first = setTimeout(() => {
+    say();
+    every = setInterval(say, 15_000);
+  }, 1_000);
+  try {
+    return await work;
+  } finally {
+    clearTimeout(first);
+    clearInterval(every);
+  }
+}
+
 export interface PlaySessionOptions {
   engine: Engine;
   guildId?: string;
@@ -147,7 +167,11 @@ export async function playSession(
       heroes.push({ id: sheet.id, userId, name: sheet.name });
     }
     io.say(`A new campaign (${c.id}) with ${heroes.map((h) => h.name).join(", ")}. ${HELP}`);
-    result = await engine.turns.startCampaign(c.id, host);
+    result = await waitFor(
+      io,
+      "the storyteller is writing the opening",
+      engine.turns.startCampaign(c.id, host),
+    );
   }
   const dm = mode === "assist" ? "play-dm" : host;
 
@@ -272,7 +296,11 @@ export async function playSession(
       }
       if (pick === "redo") {
         const guidance = draft.handoff ? "" : ((await io.ask("Guidance for the storyteller> ")) ?? "");
-        draft = await engine.turns.regenerateDraft(draft.approvalId, dm, guidance);
+        draft = await waitFor(
+          io,
+          "the storyteller is writing it again",
+          engine.turns.regenerateDraft(draft.approvalId, dm, guidance),
+        );
         show = true;
         continue;
       }
@@ -317,14 +345,18 @@ export async function playSession(
           continue;
         }
         const base = { roundId, userId: hero.userId, interactionId: randomUUID() };
-        const res = await engine.turns.submitAction(
-          input.toLowerCase() === "pass"
-            ? { ...base, kind: "pass" }
-            : fighting && pick && "action" in pick
-              ? { ...base, kind: "combat", action: pick.action }
-              : pick
-                ? { ...base, kind: "choice", choiceIndex: (n as number) - 1 }
-                : { ...base, kind: "freeform", text: input },
+        const res = await waitFor(
+          io,
+          `the storyteller is reading what ${hero.name} does`,
+          engine.turns.submitAction(
+            input.toLowerCase() === "pass"
+              ? { ...base, kind: "pass" }
+              : fighting && pick && "action" in pick
+                ? { ...base, kind: "combat", action: pick.action }
+                : pick
+                  ? { ...base, kind: "choice", choiceIndex: (n as number) - 1 }
+                  : { ...base, kind: "freeform", text: input },
+          ),
         );
         if (!res.ok) {
           io.say(res.message);
@@ -371,7 +403,8 @@ export async function playSession(
         continue;
       }
       if (result) io.say(formatTurn(result.view));
-      if (writer && o.writer === "between-turns") await writer.drain();
+      if (writer && o.writer === "between-turns")
+        await waitFor(io, "the story writer is writing ahead", writer.drain());
       await notices();
       const view = result ? result.view : await openRound();
       if (!view) {
@@ -387,7 +420,11 @@ export async function playSession(
         continue;
       }
       rounds++;
-      const next = await engine.turns.resolveRound(view.roundId as string);
+      const next = await waitFor(
+        io,
+        "the storyteller is telling the turn",
+        engine.turns.resolveRound(view.roundId as string),
+      );
       if (!next) {
         io.say("Someone else is already telling this round.");
         return { campaignId, rounds, ended: false };
@@ -671,8 +708,26 @@ async function main() {
   });
 
   const transcript: string[] = [];
-  const rl = createInterface({ input: process.stdin, terminal: Boolean(process.stdin.isTTY) });
-  // Lines are read through the iterator, which keeps lines piped in ahead of their prompts.
+  const tty = Boolean(process.stdin.isTTY);
+  // In a terminal readline takes over the keys, so it echoes what's typed itself and needs the screen for that.
+  const rl = createInterface({
+    input: process.stdin,
+    ...(tty ? { output: process.stdout } : {}),
+    terminal: tty,
+  });
+  // Ctrl+C stops at the next prompt; a second one stops at once.
+  let interrupted = false;
+  let closed = false;
+  rl.on("close", () => {
+    closed = true;
+  });
+  rl.on("SIGINT", () => {
+    if (interrupted) process.exit(130);
+    interrupted = true;
+    process.stdout.write("\nStopping (Ctrl+C again to stop now).\n");
+    rl.close();
+  });
+  // Lines are read through the iterator, which keeps lines typed or piped in ahead of their prompts.
   const lines = rl[Symbol.asyncIterator]();
   const io: PlayIO = {
     say: (text) => {
@@ -680,10 +735,14 @@ async function main() {
       process.stdout.write(`${text}\n`);
     },
     ask: async (prompt) => {
-      process.stdout.write(prompt);
+      if (closed) return null;
+      if (tty) {
+        rl.setPrompt(prompt);
+        rl.prompt();
+      } else process.stdout.write(prompt);
       const next = await lines.next();
       if (next.done) return null;
-      if (!process.stdin.isTTY) process.stdout.write(`${next.value}\n`);
+      if (!tty) process.stdout.write(`${next.value}\n`);
       transcript.push(`${prompt}${next.value}`);
       return next.value;
     },
