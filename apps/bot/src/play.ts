@@ -34,6 +34,7 @@ import {
   type DmDraft,
   type Engine,
   GameError,
+  jobTitle,
   type Logger,
   type ResolveResult,
   StoryWriter,
@@ -214,7 +215,7 @@ export async function playSession(
             : jobs
                 .map(
                   (j) =>
-                    `  ${j.kind === "chapter_recap" ? "recap of chapter" : "chapter"} ${j.key}: ${j.status}` +
+                    `  ${jobTitle(j)}: ${j.status}` +
                     `${j.steps.length ? ` (done: ${j.steps.map((s) => s.name).join(", ")})` : ""}` +
                     `${j.error && j.status !== "done" ? `: ${j.error}` : ""}`,
                 )

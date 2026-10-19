@@ -16,28 +16,39 @@ const TASK_FOR_SCHEMA: Record<string, string> = {
   review: "judge",
   actions: "intent",
   verdict: "safety",
-  chapter_plan: "writer",
-  chapter_plan_revised: "writer",
+  outline: "writer",
+  bible: "writer",
+  spine: "writer",
+  chapter_detail: "writer",
+  side_quests: "writer",
+  rework: "writer",
+  self_check: "writer",
   recap: "summarizer",
   appearance: "summarizer",
 };
 
 /**
  * For services asked for plain JSON (Z.ai and others take no named schema), the adapter writes the schema into the
- * system prompt; its fields say which job the request is for.
+ * system prompt; its fields say which shape, and so which job, the request is for.
  */
-function taskFromSchema(system: string): string | undefined {
+function shapeFromSchema(system: string): string | undefined {
   const at = system.lastIndexOf("matching this JSON Schema, and nothing else:");
   if (at < 0) return undefined;
   const schema = system.slice(at);
   const has = (field: string) => schema.includes(`"${field}"`);
-  if (has("revealsHiddenMechanic")) return "judge";
-  if (has("isPromptInjection")) return "safety";
-  if (has("beats") && has("theme")) return "writer";
-  if (has("recap")) return "summarizer";
-  if (has("needsRoll")) return "intent";
-  if (has("appearance")) return "summarizer";
-  if (has("narration")) return "narrator";
+  if (has("revealsHiddenMechanic")) return "review";
+  if (has("isPromptInjection")) return "verdict";
+  if (has("problems")) return "self_check";
+  if (has("pitch")) return "outline";
+  if (has("cast")) return "bible";
+  if (has("endings")) return "spine";
+  if (has("facts") && has("sideQuests")) return "rework";
+  if (has("scenes")) return "chapter_detail";
+  if (has("sideQuests")) return "side_quests";
+  if (has("recap")) return "recap";
+  if (has("needsRoll")) return "actions";
+  if (has("appearance")) return "appearance";
+  if (has("narration")) return "narration";
   return undefined;
 }
 
@@ -75,8 +86,8 @@ export async function startMockProvider(opts: { delayMs?: [number, number] } = {
         .filter((m) => m.role === role)
         .map((m) => m.content)
         .join("\n");
-    const schemaName = request.response_format?.json_schema?.name ?? "";
-    const task = TASK_FOR_SCHEMA[schemaName] ?? taskFromSchema(text("system")) ?? "narrator";
+    const schemaName = request.response_format?.json_schema?.name ?? shapeFromSchema(text("system")) ?? "";
+    const task = TASK_FOR_SCHEMA[schemaName] ?? "narrator";
     last.model = request.model;
     if (req.headers.authorization) last.authorization = req.headers.authorization;
     else delete last.authorization;

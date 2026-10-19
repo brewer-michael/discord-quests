@@ -88,7 +88,7 @@ import {
   type Tx,
   turns,
 } from "@dq/db";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { buildFor } from "./character-rules";
 import { chapterRecaps } from "./chronicle";
 import {
@@ -110,7 +110,8 @@ import { applyPlan, planFor } from "./planner";
 import { applyRestorePoint, loadRestorePoint, restorePointSeqs, saveRestorePoint } from "./restore-points";
 import { campaignStory } from "./story-profile";
 import { asStory, isRewound, type StoryState } from "./story-state";
-import { StoryJobs } from "./story-writer/jobs";
+import { type StoryJobKind, StoryJobs } from "./story-writer/jobs";
+import { applyMaterial, coversPlace, materialFor, preparedScene } from "./story-writer/material";
 import type {
   DmDraft,
   DraftHandoff,
@@ -148,6 +149,8 @@ interface ResolvedAction {
 }
 
 const SHORTCUT_EVIDENCE: DeedCandidate["evidence"] = {};
+/** Scenes running without touching anything prepared before the party counts as off course. */
+const OFF_COURSE_SCENES = 3;
 
 function hash(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex").slice(0, 32);
@@ -384,9 +387,9 @@ export class TurnService {
         })
         .where(eq(campaigns.id, campaignId));
       await saveRestorePoint(tx, campaignId, seq, roundId);
-      // The first chapter's plan, written while the heroes find their feet; it shapes the scenes after this one.
+      // The whole story is asked for when the campaign is created; a campaign from before the writer asks now.
       await this.jobs.enqueue(
-        { campaignId, kind: "chapter_plan", key: spec.chapterNumber, reason: "the adventure began", seq },
+        { campaignId, kind: "bible", key: "story", reason: "the adventure began", seq },
         tx,
       );
       return this.turnView({
@@ -773,8 +776,11 @@ export class TurnService {
     if (closing && spec.kind === "travel")
       storyAfter = { ...storyAfter, regionId: spec.regionId, poiId: null };
     const arcNext = closing ? nextSceneSpec(index, storyAfter, loomResult.state) : null;
+    const material = arcNext ? await materialFor(db, c.id, c.story) : null;
     const plannedNext = arcNext
-      ? applyPlan(index, arcNext, await planFor(db, c.id, arcNext.chapterNumber, c.story))
+      ? material
+        ? applyMaterial(index, arcNext, material)
+        : applyPlan(index, arcNext, await planFor(db, c.id, arcNext.chapterNumber, c.story))
       : null;
     const nextSpec = plannedNext
       ? withEncounter(
@@ -907,38 +913,83 @@ export class TurnService {
   }
 
   /**
-   * Asks the story writer for what's coming, in the turn's own transaction: a chapter's recap when it ends,
-   * and the next chapter's plan once this one is half played, so it's ready before the heroes get there.
+   * What a scene ending asks of the story writer, in the turn's own transaction; nothing waits for it. A chapter
+   * marker reached: that chapter's recap, and the next chapter in full. Prepared material running low: more of
+   * this chapter. The party off course (heading somewhere nothing is prepared for, or several scenes running that
+   * touched nothing prepared): side quests for where they went.
    */
-  private async queueWriting(tx: Tx, index: WorldIndex, campaignId: string, seq: number, turn: PreparedTurn) {
+  private async queueWriting(tx: Tx, index: WorldIndex, c: CampaignRow, seq: number, turn: PreparedTurn) {
+    const campaignId = c.id;
     const chapter = turn.spec.chapterNumber;
-    if (turn.chapterEnded)
-      await this.jobs.enqueue(
-        { campaignId, kind: "chapter_recap", key: chapter, reason: `chapter ${chapter} ended`, seq },
-        tx,
-      );
-    const next = turn.nextSpec?.chapterNumber;
-    if (turn.chapterEnded && next && next > chapter) {
-      // Usually written ahead already; this asks again only if that job failed or a rewind undid it.
-      await this.jobs.enqueue(
-        { campaignId, kind: "chapter_plan", key: next, reason: `chapter ${next} began`, seq },
-        tx,
+    const ask = (kind: StoryJobKind, key: string | number, reason: string) =>
+      this.jobs.enqueue({ campaignId, kind, key, reason, seq }, tx);
+    // A campaign from before the writer gets its whole story now.
+    await ask("bible", "story", "the story had no material yet");
+    if (turn.chapterEnded) {
+      await ask("recap", chapter, `chapter ${chapter} ended`);
+      const next = turn.nextSpec?.chapterNumber;
+      if (next && next > chapter) await ask("chapter", next, `chapter ${chapter}'s marker was reached`);
+    }
+    const next = turn.nextSpec;
+    const material = await materialFor(tx, campaignId, c.story);
+    if (!next || !material) return;
+
+    const n = next.chapterNumber;
+    const done = new Set(turn.completedAfter);
+    const ahead = index.beatOrder.filter(
+      (b) => b.chapter.number === n && !b.beat.branch && !done.has(b.beat.id),
+    );
+    const detail = material.chapters[String(n)];
+    const left = (detail?.scenes ?? []).filter((sc) => sc.beatId !== null && !done.has(sc.beatId));
+    if (
+      detail &&
+      left.length < Math.min(2, ahead.length) &&
+      !(await this.jobs.pending(campaignId, "chapter", tx))
+    )
+      await ask("chapter", `${n}+${seq}`, `chapter ${n}'s prepared scenes are running out`);
+
+    // Off course only counts against material that's settled: not while a new chapter or the story is being written.
+    if (turn.chapterEnded) return;
+    for (const kind of ["bible", "chapter", "side_quest"] as const)
+      if (await this.jobs.pending(campaignId, kind, tx)) return;
+    const place = next.poiId ?? next.regionId;
+    if (!coversPlace(index, material, place)) {
+      const name = index.pois.get(place)?.poi.name ?? index.regions.get(place)?.name ?? place;
+      await ask(
+        "side_quest",
+        `place:${place}:${seq}`,
+        `the party is heading to ${name}, where nothing is prepared`,
       );
       return;
     }
-    const beats = index.beatOrder.filter((b) => b.chapter.number === chapter && !b.beat.branch);
-    const done = beats.filter((b) => turn.completedAfter.includes(b.beat.id)).length;
-    const hasNext = index.beatOrder.some((b) => b.chapter.number === chapter + 1);
-    if (hasNext && beats.length > 0 && done * 2 >= beats.length)
-      await this.jobs.enqueue(
-        {
-          campaignId,
-          kind: "chapter_plan",
-          key: chapter + 1,
-          reason: `chapter ${chapter} is half played`,
-          seq,
-        },
-        tx,
+    const played = (
+      await tx
+        .select({
+          beatId: scenes.beatId,
+          regionId: scenes.regionId,
+          poiId: scenes.poiId,
+          startedTurn: scenes.startedTurn,
+          state: scenes.state,
+        })
+        .from(scenes)
+        .where(and(eq(scenes.campaignId, campaignId), isNotNull(scenes.endedTurn)))
+        .orderBy(desc(scenes.startedTurn))
+        .limit(OFF_COURSE_SCENES * 2)
+    )
+      .filter((sc) => !isRewound(c.story, sc.startedTurn))
+      .slice(0, OFF_COURSE_SCENES);
+    const touched = (sc: (typeof played)[number]) =>
+      preparedScene(material, {
+        beatId: sc.beatId,
+        chapterNumber: Number((sc.state as { chapterNumber?: number }).chapterNumber ?? 0),
+        regionId: sc.regionId,
+        poiId: sc.poiId,
+      }) !== null;
+    if (played.length >= OFF_COURSE_SCENES && !played.some(touched))
+      await ask(
+        "side_quest",
+        `drift:${seq}`,
+        `${OFF_COURSE_SCENES} scenes have gone by without touching anything prepared for the story`,
       );
   }
 
@@ -1280,7 +1331,7 @@ export class TurnService {
           ended = true;
           storyAfter = { ...storyAfter, ended: true, sceneId: null };
         }
-        await this.queueWriting(tx, index, c.id, seq, prepared);
+        await this.queueWriting(tx, index, c, seq, prepared);
       } else {
         const fightOn = spec.combat?.phase === "fighting";
         const mercyNow = prepared.combat && spec.combat?.phase === "aftermath";
@@ -1607,6 +1658,18 @@ export class TurnService {
       .set({ status: edited ? "edited" : "approved", dmEdits: edits, decidedAt: new Date() })
       .where(eq(approvalRequests.id, req.id));
     if (!isOpening(turn)) await clearPendingLoom(this.deps.db, req.campaignId);
+    // The DM told this turn in their own words: anything already written that it touches is reworked.
+    if (edits.narration !== undefined) {
+      const [c] = await this.deps.db.select().from(campaigns).where(eq(campaigns.id, req.campaignId));
+      if (c && (await materialFor(this.deps.db, c.id, c.story)))
+        await this.jobs.enqueue({
+          campaignId: c.id,
+          kind: "rework",
+          key: turn.seq,
+          reason: `the DM told turn ${turn.seq} their own way`,
+          seq: turn.seq,
+        });
+    }
     return view;
   }
 

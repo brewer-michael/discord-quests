@@ -53,3 +53,5 @@ defaultModels:
   intent: grok-4.7
   safety: grok-4.7
   judge: grok-4.7
+defaultParams:
+  writer: { effort: high }

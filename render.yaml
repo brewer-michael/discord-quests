@@ -45,7 +45,7 @@ services:
     name: discord-quests-writer
     runtime: docker
     dockerfilePath: ./Dockerfile
-    dockerCommand: node --import tsx apps/bot/src/writer.ts
+    dockerCommand: node --import tsx apps/writer/src/main.ts
     plan: starter
     numInstances: 1
     envVars:

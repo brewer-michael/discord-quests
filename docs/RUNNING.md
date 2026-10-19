@@ -44,7 +44,7 @@ docker compose up -d postgres          # or point DATABASE_URL at a managed Post
 pnpm --filter @dq/bot start            # applies migrations, registers slash commands, connects to Discord
 ```
 
-And the story writer, which writes chapters ahead of the table (see [The story writer](#the-story-writer)):
+And the story writer, which writes the story ahead of the table (see [The story writer](#the-story-writer)):
 
 ```sh
 pnpm writer                            # health check on http://localhost:8081/healthz
@@ -272,37 +272,60 @@ scene. There's no turn limit.
 
 ### The story writer
 
-Deep story work never holds up a turn. A separate service, the story writer, writes it ahead of the table in the
-background:
+Deep story work never holds up a turn. A separate service, the story writer (`apps/writer`, the same image with
+its own command), writes the story ahead of the table, in the background, from a queue in Postgres.
 
-- **Each chapter's plan**: notes for every scene of the chapter, tailored to what these heroes did, the promises
-  they made and the people they met, and the characters to bring back. The writer drafts the plan, then reads its
-  draft again against what has happened and the content rules. Chapter 1 is written when the adventure starts;
-  each later chapter once the one before it is half played, so it's ready before the heroes get there. A plan
-  shapes the scenes of its chapter from the moment it's ready.
+**What it writes.** Each job is a series of steps, each one AI call, saved as it finishes:
+
+- **The whole story**, when a campaign is created, while the heroes are being made: the **outline** (the pitch,
+  the story's shape, what's at stake, the villain), the **story bible** (places and routes, factions, the cast with
+  their roles, pronouns, wants, secrets and voices, and the established facts: what has happened, who knows what,
+  where everyone is), the **plot spine** (a marker for each chapter with no clock, a hook that stays on offer, fork
+  points, and two or three endings decided up front), **chapter 1 in detail** (a prepared scene for each of its
+  beats and one or two extra: the situation, the question, who's there, clues each findable in more than one place,
+  an encounter, a temptation), and **side quests** that lead back to the spine. Then a **self-check** reads it all
+  against what has happened and the rules and corrects it.
+- **The next chapter in full**, when a chapter's marker is reached, aimed at the endings still open.
+- **More of a chapter**, when its prepared scenes run low (fewer than two left for the beats still ahead).
+- **Side quests for where the party went**, when the party goes off course: heading somewhere nothing is prepared
+  for, or three scenes running that touched nothing prepared.
+- **A rework**, when the DM tells a turn in their own words: what's already written is rewritten to fit.
 - **Each chapter's recap**, for the journal and the storyteller's memory, from every turn of that chapter.
 
-Turns only add jobs to its queue (in Postgres) and go on at once. If the writer is busy or down, play goes on:
-scenes just have no chapter notes yet, and recaps arrive late.
+Before anything is published, the engine checks it: every place, person, faction, creature and beat is real; every
+line passes the content rules; and nothing contradicts what has happened (people who are gone aren't written in,
+beats already played aren't prepared again, no finished chapter is rewritten). Material the table has played past
+while it was being written is dropped. What fails the checks sends the job round again, told what failed. What
+passes becomes a new version of the campaign's story plan.
 
-The DM room hears what it's doing: `📝 Writing chapter 3 ahead of the table.`, then `✅ Chapter 3 is ready`. If a
-job fails, it tries again after 1, 4 and 16 minutes, and the DM room is told why each time (recaps are quiet
-unless they fail). After the last try it gives up and the notice has a **Try again** button for the host, a DM or
-a guardian. A job stopped by the server's daily spending limit waits for the next day without using up a try.
+**How it's used.** When a scene opens, the storyteller gets the writer's prepared scene for it: the situation, the
+question, who's there, the clues and the temptation. Scenes still follow the world's chapters; until
+`feature/storytelling` lands, the side quests and the spine shape the writer's own work and the spoiler page, not
+where scenes happen (see [MILESTONE-story-writer.md](MILESTONE-story-writer.md)).
+
+Turns only add jobs to the queue and go on at once. If the writer is busy or down, play goes on: scenes open
+without prepared material and recaps arrive late.
+
+The DM room hears what it's doing: `📝 Story writer is preparing chapter 3 (about 10 min).`, then `✅ Chapter 3 is
+ready.` The estimate comes from how long that kind of job took last. If a job fails, it tries again after 1, 4 and
+16 minutes, and the DM room is told why each time (recaps are quiet unless they fail). After the last try it gives
+up and the notice has a **Try again** button for the host, a DM or a guardian. A job stopped by the server's daily
+spending limit waits for the next day without using up a try.
 
 - **Its own job on the setup page:** "Story writer" under Who does what. A slow, strong model is fine here, since
   nobody waits for it. Until it's set, it uses the Planner's service; recaps use the Chronicler's.
 - **Restarts lose nothing.** Each step of a job is saved as it finishes. On a deploy the writer gets up to 25
   seconds to finish the step under way, then hands the job back; if it crashes, another writer takes the job over
   after 2 minutes. Either way the next one carries on from the last saved step.
-- **Limits:** a job may use up to `WRITER_JOB_TOKENS` tokens (200,000 by default; a chapter plan takes a few
-  thousand) and 30 minutes per try. Every call counts against the server's daily spending limit like any other.
+- **Limits:** each AI call has the usual three-minute cap; a job may use up to `WRITER_JOB_TOKENS` tokens (200,000
+  by default) and 30 minutes per try. Every call counts against the server's daily spending limit like any other.
 - **More than one:** `WRITER_WORKERS` (default 1) runs that many jobs at once, and you can run several writer
   services. Two jobs never run for the same campaign at once.
-- **Rewinds:** what was asked for in turns that a rewind undid is set aside, and asked for again when play gets
-  there.
-- The hidden-hand page on the setup site (behind its spoiler warning) lists each campaign's recent jobs, with how
-  long they took, the tokens they used and any error.
+- **Rewinds:** what was asked for in turns that a rewind undid is set aside, and the material falls back to the
+  version from before.
+- The hidden-hand page on the setup site (behind its spoiler warning) shows the material (outline, spine and
+  endings, cast and facts, the current chapter's prepared scenes, side quests) and each campaign's recent jobs,
+  with how long they took, the tokens they used and any error.
 
 ### DM room tools: rewinding, fixes and fight rules
 
@@ -484,13 +507,16 @@ Every line logged while a round resolves carries its `roundId`, so one turn's li
 docker compose logs --no-log-prefix bot | grep '"roundId":"<id>"'
 ```
 
-The story writer (`docker compose logs writer`) writes, each with `jobId`, `kind`, `chapter` and
-`campaignId`:
+The story writer (`docker compose logs writer`) writes, each with `jobId`, `kind` (`bible`, `chapter`,
+`side_quest`, `rework`, `recap`), `chapter` (the job's key: `story`, a chapter number, `3+57` for more of chapter 3,
+a turn number for a rework) and `campaignId`:
 
 - **`writer job claimed`** with its `attempt` and `resumeAfter` (the steps an earlier try already saved).
-- **`writer step done`**: `step` (`facts`, `draft`, `revise`), `ms` and `tokens`. Its AI calls have their own
-  `ai call` lines, with `task: "writer"` (or `summarizer` for recaps, and `judge` for the reviewer's read of
-  each recap).
+- **`writer step done`**: `step` (`outline`, `bible`, `spine`, `chapter`, `side_quests`, `rework`, `self_check`;
+  `facts` and `draft` for recaps), `ms` and `tokens`. Its AI calls have their own `ai call` lines, with
+  `task: "writer"` (or `summarizer` for recaps, and `judge` for the reviewer's read of each recap).
+- **`writer self-check fixed`** with the `problems` the self-check found and corrected, and **`writer material
+  rejected`** with the `problems` the engine's checks still found: the job is retried, told what failed.
 - **`chapter recap rejected`** with its `attempt` and the `problems` the content check or the reviewer found. The
   chronicler is asked once more with them; a recap that still doesn't pass fails the step (`writer job failed`), and
   the job is retried.

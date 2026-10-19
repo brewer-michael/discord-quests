@@ -61,7 +61,13 @@ export default async function Loom({ params }: { params: Promise<{ guildId: stri
     );
   }
 
-  const { loom, writer } = view;
+  const { loom, writer, material } = view;
+  const chapterNow = material
+    ? Object.keys(material.chapters)
+        .map(Number)
+        .sort((a, b) => b - a)[0]
+    : undefined;
+  const detail = chapterNow !== undefined ? material?.chapters[String(chapterNow)] : undefined;
   return (
     <>
       <div className="card">
@@ -155,11 +161,115 @@ export default async function Loom({ params }: { params: Promise<{ guildId: stri
       <div className="card">
         <h3>Story writer</h3>
         <p className="hint">
-          Chapters written ahead of the table, in the background. Each plan shapes the scenes of its chapter
-          from when it's ready.
+          The story written ahead of the table, in the background: the outline, the story bible, the plot
+          spine, each chapter in detail and side quests. Its jobs are below the material.
         </p>
+        {!material ? (
+          <p className="muted">No material yet: the story is written when the campaign is created.</p>
+        ) : (
+          <div className="stack">
+            {material.outline ? (
+              <div>
+                <h4>Outline</h4>
+                <p>
+                  {material.outline.pitch} <span className="muted">({material.outline.shape})</span>
+                </p>
+                <p className="small">
+                  At stake: {material.outline.stakes} Villain: {material.outline.villain.name}, who wants{" "}
+                  {material.outline.villain.want}
+                </p>
+              </div>
+            ) : null}
+            {material.spine ? (
+              <div>
+                <h4>Spine</h4>
+                <ul className="thread-list">
+                  {material.spine.chapters.map((ch) => (
+                    <li key={ch.number}>
+                      <span aria-hidden>📍</span>
+                      <span>
+                        Chapter {ch.number}: {ch.marker} <span className="muted">· hook: {ch.hook}</span>
+                        {ch.forks.map((f) => (
+                          <span key={f.id} className="muted small">
+                            {" "}
+                            · fork: {f.question} (
+                            {f.options.map((o) => `${o.choice} → ${o.keepsOpen.join(", ")}`).join("; ")})
+                          </span>
+                        ))}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="small">
+                  Endings: {material.spine.endings.map((e) => `${e.title} (${e.reachedWhen})`).join(" · ")}
+                </p>
+              </div>
+            ) : null}
+            {material.bible ? (
+              <div>
+                <h4>Cast</h4>
+                <ul className="thread-list">
+                  {material.bible.cast.map((p) => (
+                    <li key={p.id}>
+                      <span aria-hidden>🎭</span>
+                      <span>
+                        {p.name} <span className="muted">({p.pronouns})</span>: {p.role}.{" "}
+                        <span className="muted small">
+                          Wants {p.wants} Secret: {p.secret}
+                        </span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <h4>Established facts</h4>
+                <ul className="small">
+                  {material.bible.facts.map((f) => (
+                    <li key={f}>{f}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {detail ? (
+              <div>
+                <h4>Chapter {detail.chapter}, prepared</h4>
+                <ul className="thread-list">
+                  {detail.scenes.map((sc) => (
+                    <li key={`${sc.beatId ?? "extra"}:${sc.place}:${sc.question}`}>
+                      <span aria-hidden>🎬</span>
+                      <span>
+                        {sc.situation} <span className="muted">· {sc.question}</span>
+                        {sc.clues.length > 0 ? (
+                          <span className="muted small">
+                            {" "}
+                            · clues: {sc.clues.map((c) => c.text).join("; ")}
+                          </span>
+                        ) : null}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {material.sideQuests.length > 0 ? (
+              <div>
+                <h4>Side quests</h4>
+                <ul className="thread-list">
+                  {material.sideQuests.map((q) => (
+                    <li key={q.id}>
+                      <span aria-hidden>🗺️</span>
+                      <span>
+                        {q.title}: {q.hook} <span className="muted small">· leads back to {q.leadsBack}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+        )}
+        <h4>Jobs</h4>
         {writer.length === 0 ? (
-          <p className="muted">Nothing yet: the first chapter is written when the adventure starts.</p>
+          <p className="muted">Nothing yet.</p>
         ) : (
           <ul className="thread-list">
             {writer.map((j) => (

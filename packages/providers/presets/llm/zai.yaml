@@ -53,3 +53,5 @@ defaultModels:
   intent: glm-5.3-flash
   safety: glm-5.3-flash
   judge: glm-5.3-flash
+defaultParams:
+  writer: { effort: high }

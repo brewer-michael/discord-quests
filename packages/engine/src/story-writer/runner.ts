@@ -32,8 +32,6 @@ export interface WriterDeps {
 export const DEFAULT_JOB_TOKENS = 200_000;
 export const DEFAULT_DEADLINE_MS = 30 * 60_000;
 const HEARTBEAT_MS = 30_000;
-/** How long one AI call may take. Nobody waits on the writer, so a slow, deep answer is fine. */
-const CALL_TIMEOUT_MS = 15 * 60_000;
 
 /** A step that couldn't finish, with what the DM room is told. */
 export class StepFailure extends Error {
@@ -67,8 +65,10 @@ export interface WriterKind {
   kind: StoryJobKind;
   /** What the DM room calls the job: "chapter 3", "the recap of chapter 2". */
   label(job: StoryJob): string;
-  /** What the DM room hears when the job first starts, if anything. */
-  started?(job: StoryJob): StoryJobNotice;
+  /** About how long a job of this kind takes, in minutes, until there are finished jobs to tell from. */
+  minutes?: number;
+  /** What the DM room hears when the job first starts, with about how many minutes it will take. */
+  started?(job: StoryJob, minutes: number): StoryJobNotice;
   steps: Array<{ name: string; run(ctx: StepContext): Promise<unknown> }>;
   /** Saves the result, inside the transaction that marks the job done. Returns what the DM room hears. */
   publish(tx: Tx, ctx: StepContext): Promise<StoryJobNotice | null>;
@@ -115,7 +115,10 @@ export async function runJob(
     resumeAfter: job.steps.map((s) => s.name),
   });
   if (job.attempts === 1 && job.steps.length === 0 && kind.started)
-    await deps.jobs.announce(job, kind.started(job));
+    await deps.jobs.announce(
+      job,
+      kind.started(job, await deps.jobs.typicalMinutes(job.kind, kind.minutes ?? 10)),
+    );
 
   const ceiling = deps.jobTokens ?? DEFAULT_JOB_TOKENS;
   const limitMs = deps.deadlineMs ?? DEFAULT_DEADLINE_MS;
@@ -153,8 +156,9 @@ export async function runJob(
       scope: { guildId: campaign.guildId, campaignId: campaign.id },
       outputs: Object.fromEntries(job.steps.map((s) => [s.name, s.output])),
       ask: async <T>(call: StructuredCall<T>) => {
+        // Each call has the usual three-minute cap; whatever stops the job also cancels the call under way.
         const res = await deps.llm.structured(
-          { timeoutMs: CALL_TIMEOUT_MS, ...call, signal: cancel.signal },
+          { ...call, signal: cancel.signal },
           { guildId: campaign.guildId, campaignId: campaign.id },
         );
         if (res.usage) stepTokens += Math.round(res.usage.inputTokens + res.usage.outputTokens);

@@ -23,6 +23,7 @@ import { createLoom } from "./loom-store";
 import { PACES, type Pace, type PaceSettings, paceOf, timerFitsPace, validTimer } from "./pace";
 import { audienceOf, type CampaignStory, campaignStory, profileOf } from "./story-profile";
 import { asStory, initialStoryState, isRewound } from "./story-state";
+import { StoryJobs } from "./story-writer/jobs";
 import { DEFAULT_WORLD_ID } from "./world-cache";
 
 export interface CampaignSettings {
@@ -89,7 +90,11 @@ export interface ServerRooms {
 }
 
 export class CampaignService {
-  constructor(private readonly deps: EngineDeps) {}
+  private readonly jobs: StoryJobs;
+
+  constructor(private readonly deps: EngineDeps) {
+    this.jobs = new StoryJobs(deps.db, deps.now);
+  }
 
   async create(input: {
     guildId: string;
@@ -156,6 +161,11 @@ export class CampaignService {
           regionId,
           state: regionId === story.regionId ? ("visited" as const) : ("rumored" as const),
         })),
+      );
+      // The story writer starts on the whole story now, while the heroes are being made.
+      await this.jobs.enqueue(
+        { campaignId: c.id, kind: "bible", key: "story", reason: "the campaign was created", seq: 0 },
+        tx,
       );
       return c;
     });

@@ -19,12 +19,19 @@
   why if it gives up. Nothing from the world's own text stands in for it.
 
 ### Story writer
-- A separate service writes the story ahead of the table, so turns never wait for it: each chapter's plan
-  (drafted, then checked against what has happened) and each chapter's recap, from every turn of the chapter.
+- A separate service (`apps/writer`) writes the story ahead of the table, so turns never wait for it. When a
+  campaign is created it writes the whole story: an outline, a story bible (places, factions, the cast with
+  pronouns, wants and secrets, the established facts), a plot spine (chapter markers with no clock, hooks, fork
+  points, two or three endings decided up front), chapter 1 in detail, and side quests that lead back, then checks
+  its own work. It writes the next chapter when a marker is reached, more of a chapter when its prepared scenes run
+  low, side quests when the party goes off course, a rework when the DM tells a turn their own way, and each
+  chapter's recap from every turn of the chapter.
+- Nothing is published until the engine has checked it: real places, people, creatures and beats, the content
+  rules, and nothing that contradicts what has happened. A scene opens with the writer's prepared scene for it.
 - Jobs are saved step by step in a Postgres queue: a restart or a crash carries on where it stopped, one job per
   campaign at a time, retries after 1, 4 and 16 minutes, the next day if the spending limit stopped it.
-- The DM room hears what it's writing and why a job failed, with a Try again button. The hidden-hand page lists
-  each campaign's jobs.
+- The DM room hears what it's writing, about how long it will take, and why a job failed, with a Try again button.
+  The hidden-hand page shows the writer's material and each campaign's jobs.
 - Its own job on the setup page, "Story writer"; it uses the Planner's service until set. `WRITER_JOB_TOKENS`,
   `WRITER_WORKERS`.
 - No stand-in plans or recaps: a job the AI couldn't do is retried, then the DM room is told and can ask for

@@ -51,3 +51,5 @@ defaultModels:
   intent: accounts/fireworks/routers/kimi-k3-fast
   safety: accounts/fireworks/routers/kimi-k3-fast
   judge: accounts/fireworks/routers/kimi-k3-fast
+defaultParams:
+  writer: { effort: high }

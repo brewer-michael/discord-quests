@@ -66,3 +66,5 @@ defaultModels:
   intent: openai/gpt-oss-120b
   safety: openai/gpt-oss-120b
   judge: openai/gpt-oss-120b
+defaultParams:
+  writer: { effort: high }

@@ -64,6 +64,13 @@
       "when": 1792330741955,
       "tag": "0008_story_jobs",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792368370493,
+      "tag": "0009_story_job_kinds",
+      "breakpoints": true
     }
   ]
 }

@@ -57,9 +57,12 @@ const DEFAULTS: Record<string, Handler> = {
     }));
     return { theme: "Friends found along the way.", beats };
   },
-  // The story writer: chapter plans (draft and revision) and, when a server sends recaps its way, recaps.
-  writer: (call, scope) =>
-    call.schemaName === "recap" ? DEFAULTS.summarizer?.(call, scope) : DEFAULTS.director?.(call, scope),
+  // The story writer: each step of its jobs, by the shape asked for; recaps when a server sends them its way.
+  writer: (call, scope) => {
+    if (call.schemaName === "recap") return DEFAULTS.summarizer?.(call, scope);
+    const step = WRITER_STEPS[call.schemaName ?? ""];
+    return step ? step(writerPrompt(call)) : new Error(`no scripted answer for ${call.schemaName}`);
+  },
   summarizer: (call) => {
     const user = call.user.map((b) => b.text).join("\n");
     const first = user.split("\n- ")[1]?.split(/[.!?]/)[0] ?? "The heroes pressed on";
@@ -175,6 +178,170 @@ const DEFAULTS: Record<string, Handler> = {
     crossesLimits: false,
     note: "",
   }),
+};
+
+interface WriterPrompt {
+  text: string;
+  chapters: Array<{ number: number; title: string; beats: Array<{ id: string; place: string }> }>;
+  places: string[];
+  people: Array<{ id: string; name: string }>;
+  factions: string[];
+  played: Set<string>;
+  partyChapter: number;
+  partyPlace: string;
+}
+
+/** What the story writer is told, read back: the world's chapters, places and people, and where the party is. */
+function writerPrompt(call: StructuredCall<unknown>): WriterPrompt {
+  const text = [...call.system, ...call.user].map((b) => b.text).join("\n");
+  const chapters: WriterPrompt["chapters"] = [];
+  for (const line of text.split("\n")) {
+    const head = /^### Chapter (\d+): ([^.]+)\./.exec(line);
+    if (head) chapters.push({ number: Number(head[1]), title: head[2] ?? "", beats: [] });
+    const beat = /^- beat: ([a-z0-9-]+) \|.*? at ([a-z0-9-]+):/.exec(line);
+    if (beat && chapters.length) chapters.at(-1)?.beats.push({ id: beat[1] ?? "", place: beat[2] ?? "" });
+  }
+  const where = /- Chapter (\d+), at ([a-z0-9-]+)\. Beats already played: ([^\n]*)\./.exec(text);
+  return {
+    text,
+    chapters,
+    places: [...text.matchAll(/^ *- place: ([a-z0-9-]+) \|/gm)].map((m) => m[1] ?? ""),
+    people: [...text.matchAll(/^- person: ([a-z0-9-]+) \| ([^:]+):/gm)].map((m) => ({
+      id: m[1] ?? "",
+      name: m[2] ?? "",
+    })),
+    factions: [...text.matchAll(/^- faction: ([a-z0-9-]+) \|/gm)].map((m) => m[1] ?? ""),
+    played: new Set((where?.[3] ?? "").split(", ").filter((x) => x && x !== "none")),
+    partyChapter: Number(where?.[1] ?? 1),
+    partyPlace: where?.[2] ?? "",
+  };
+}
+
+function preparedChapter(p: WriterPrompt, n: number) {
+  const beats = (p.chapters.find((c) => c.number === n)?.beats ?? [])
+    .filter((b) => !p.played.has(b.id))
+    .slice(0, 5);
+  const elsewhere = (place: string) => p.places.find((x) => x !== place) ?? place;
+  const first = beats[0]?.place ?? p.partyPlace ?? p.places[0] ?? "";
+  const scene = (beatId: string | null, place: string) => ({
+    beatId,
+    place,
+    situation: "The heroes arrive to find the trouble has moved on a little since they last heard of it.",
+    question: "What will the heroes do about it?",
+    people: [],
+    clues: [{ text: "A trail of sooty footprints.", alsoAt: [elsewhere(place)] }],
+    encounter: null,
+    temptation: null,
+  });
+  return { chapter: n, scenes: [...beats.map((b) => scene(b.id, b.place)), scene(null, first)] };
+}
+
+const WRITER_STEPS: Record<string, (p: WriterPrompt) => unknown> = {
+  outline: (p) => ({
+    pitch: "The heroes set out to bring the light home, one kindness at a time.",
+    shape: "a quest for a stolen thing",
+    stakes: "Without the flame, the long night settles over every village.",
+    villain: { name: "The Gloam King", want: "to keep every warm thing for himself" },
+    chapters: p.chapters.map((c) => ({
+      number: c.number,
+      title: c.title,
+      purpose: "The heroes take the next step on the road.",
+    })),
+  }),
+  bible: (p) => ({
+    places: p.places.slice(0, 4).map((id) => ({ id, now: "Quiet, and waiting for news.", routes: [] })),
+    factions: p.factions
+      .slice(0, 2)
+      .map((id) => ({ id, wants: "Its own way.", towardHeroes: "Watching them." })),
+    cast: [
+      ...p.people.slice(0, 3).map((x) => ({
+        id: x.id,
+        name: x.name,
+        role: "someone the heroes meet on the road",
+        pronouns: "they/them",
+        personality: "Warm and a little nervous.",
+        wants: "To see the lanterns lit again.",
+        secret: "They know more than they say.",
+        voice: "Quick and kind.",
+      })),
+      {
+        id: "new-pell",
+        name: "Pell",
+        role: "a lamp-boy who wants to help",
+        pronouns: "he/him",
+        personality: "Eager.",
+        wants: "To be useful.",
+        secret: "He has never left the village.",
+        voice: "Breathless.",
+      },
+    ],
+    facts: ["The adventure is just beginning."],
+  }),
+  spine: (p) => ({
+    chapters: p.chapters.map((c) => ({
+      number: c.number,
+      marker: `The heroes finish what ${c.title} is about.`,
+      hook: "Someone asks the heroes for help.",
+      forks:
+        c.number === 1
+          ? [
+              {
+                id: "fork-mercy",
+                question: "Will the heroes show mercy?",
+                options: [
+                  { choice: "Show mercy", keepsOpen: ["light-returns", "light-shared"] },
+                  { choice: "Turn away", keepsOpen: ["long-road"] },
+                ],
+              },
+            ]
+          : [],
+    })),
+    endings: [
+      {
+        id: "light-returns",
+        title: "The Light Returns",
+        summary: "The flame comes home.",
+        reachedWhen: "The Ember reaches the forge.",
+      },
+      {
+        id: "light-shared",
+        title: "The Light Shared",
+        summary: "The flame is shared by all.",
+        reachedWhen: "The heroes share it.",
+      },
+      {
+        id: "long-road",
+        title: "The Long Road",
+        summary: "The heroes walk home in the dark.",
+        reachedWhen: "The Ember is lost.",
+      },
+    ],
+  }),
+  chapter_detail: (p) =>
+    preparedChapter(p, Number(/Write chapter (\d+) in detail/.exec(p.text)?.[1] ?? p.partyChapter)),
+  side_quests: (p) => ({
+    sideQuests: [
+      {
+        id: `sq-${p.partyPlace || "road"}`,
+        title: "A small trouble nearby",
+        place: p.partyPlace || (p.places[0] ?? ""),
+        people: [],
+        hook: "Someone nearby needs a hand.",
+        complication: "It's harder than it looks.",
+        payoff: "A new friend who remembers the favor.",
+        leadsBack: "the chapter's marker",
+      },
+    ],
+  }),
+  rework: (p) => ({
+    facts: ["The DM's telling of the turn stands."],
+    chapter: preparedChapter(p, p.partyChapter),
+    sideQuests: [],
+  }),
+  self_check: (p) => {
+    const line = p.text.split("## The material this job wrote\n")[1]?.split("\n")[0] ?? "{}";
+    return { problems: [], ...(JSON.parse(line) as Record<string, unknown>) };
+  },
 };
 
 /** The scripted answers, by AI job, for tests that change one answer and keep the rest. */

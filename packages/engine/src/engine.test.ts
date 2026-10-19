@@ -19,8 +19,8 @@ import { createEngine, createLogger, type Engine, seededDice, withLogContext } f
 import { loadLoom } from "./loom-store";
 import { describeTimer, paceOf, reminderAt, whenTimeIsUp } from "./pace";
 import { asStory } from "./story-state";
-import { StoryWriter } from "./story-writer";
-import { FakeLlm } from "./testing";
+import { materialFor, mergeMaterial, publishMaterial, StoryWriter } from "./story-writer";
+import { FAKE_ANSWERS, FakeLlm } from "./testing";
 import { WorldCache } from "./world-cache";
 
 const worlds = new WorldCache();
@@ -379,28 +379,33 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
     for (const secret of ["reservedForBeat", "sincerity", "ripenSpan", "masterSeed", "Keep it small"]) {
       expect(history).not.toContain(secret);
     }
-    // Every chapter is planned ahead by the story writer (a draft, then a revision), and the storyteller sees
-    // its notes.
+    // The story writer wrote the whole story when the campaign was created (outline, bible, spine, chapter 1, side
+    // quests) and each later chapter in full when the one before it reached its marker, and the storyteller saw its
+    // prepared scenes.
     const plans = await db.db.select().from(storyPlans).where(eq(storyPlans.campaignId, c.id));
-    expect(plans.length).toBeGreaterThanOrEqual(7);
-    expect(new Set(plans.map((p) => (p.plan as { chapter: number }).chapter)).size).toBe(plans.length);
-    expect(plans.every((p) => p.createdBy === "writer")).toBe(true);
+    expect(
+      plans.every((p) => p.createdBy === "writer" && (p.plan as { kind: string }).kind === "story"),
+    ).toBe(true);
+    const material = await materialFor(db.db, c.id, final?.story);
+    const chapters = new Set(worlds.get("lanternreach").index.beatOrder.map((b) => b.chapter.number));
+    expect(
+      Object.keys(material?.chapters ?? {})
+        .map(Number)
+        .sort((a, b) => a - b),
+    ).toEqual([...chapters].sort((a, b) => a - b));
+    expect(material?.spine?.endings.length).toBeGreaterThanOrEqual(2);
     expect(
       llm.calls
         .filter((x) => x.task === "writer")
         .every((x) => !/reservedForBeat|ripen|weight|thread/i.test(x.user)),
     ).toBe(true);
-    // Each chapter after the first was asked for once the one before it was half played.
-    const jobs = await engine.storyJobs.recent(c.id, 50);
+    const jobs = await engine.storyJobs.recent(c.id, 200);
     expect(jobs.every((j) => j.status === "done")).toBe(true);
-    expect(jobs.filter((j) => j.kind === "chapter_plan" && j.reason.endsWith("is half played")).length).toBe(
-      plans.length - 1,
+    expect(jobs.filter((j) => j.kind === "bible")).toHaveLength(1);
+    expect(jobs.filter((j) => j.kind === "chapter" && j.reason.endsWith("marker was reached"))).toHaveLength(
+      chapters.size - 1,
     );
-    expect(
-      llm.calls.some(
-        (x) => x.task === "narrator" && x.user.includes("Story notes (weave these in naturally)"),
-      ),
-    ).toBe(true);
+    expect(llm.calls.some((x) => x.task === "narrator" && x.user.includes("The question here:"))).toBe(true);
     // Every chapter gets a recap, which the storyteller and the journal both use.
     const recaps = await db.db.select().from(chapterSummaries).where(eq(chapterSummaries.campaignId, c.id));
     expect(recaps.length).toBeGreaterThanOrEqual(7);
@@ -632,25 +637,16 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
     await engine.campaigns.setStatus(c.id, "mum", "active");
   });
 
-  it("throws away planner notes that would give the game away", async () => {
+  it("never publishes material that would give the game away", async () => {
+    let checks = 0;
     const llm = new FakeLlm({
-      writer: () => ({
-        theme: "Their kindness points will pay off soon.",
-        beats: [
-          {
-            beatId: "ch2-the-fork-in-the-road",
-            note: "Their hidden luck score is high, so fate helps them.",
-            callback: null,
-            featured: [],
-          },
-          {
-            beatId: "ch2-shadow-wolves",
-            note: "Remember how brave the heroes were in the garden.",
-            callback: null,
-            featured: ["nobody-real", "hattie-wick"],
-          },
-        ],
-      }),
+      writer: async (call, scope) => {
+        const answer = (await FAKE_ANSWERS.writer?.(call, scope)) as Record<string, unknown>;
+        if (call.schemaName !== "self_check" || checks++ > 0) return answer;
+        const spine = answer.spine as { chapters: Array<{ marker: string }> };
+        if (spine.chapters[0]) spine.chapters[0].marker = "Their kindness points will pay off soon.";
+        return answer;
+      },
     });
     const engine = createEngine({ db: db.db, worlds, llm });
     const c = await engine.campaigns.create({
@@ -660,24 +656,18 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
       mode: "ai_dm",
       createdBy: "p",
     });
-    await engine.storyJobs.enqueue({
-      campaignId: c.id,
-      kind: "chapter_plan",
-      key: 2,
-      reason: "test",
-      seq: 0,
-    });
     const writer = new StoryWriter({ db: db.db, llm, worlds, jobs: engine.storyJobs, campaignId: c.id });
     const [ran] = await writer.drain();
-    expect(ran?.outcome).toBe("done");
-    const [row] = await db.db.select().from(storyPlans).where(eq(storyPlans.campaignId, c.id));
-    const plan = row?.plan as { theme: string; beats: Record<string, unknown> };
-    expect(plan.beats["ch2-the-fork-in-the-road"]).toBeUndefined();
-    expect(plan.beats["ch2-shadow-wolves"]).toEqual({
-      note: "Remember how brave the heroes were in the garden.",
-      featured: ["hattie-wick"],
-    });
-    expect(plan.theme).not.toMatch(/kindness points/i);
+    expect(ran?.outcome).toBe("retrying");
+    expect((await engine.storyJobs.get(ran?.job.id as string))?.error).toMatch(
+      /spine's chapter 1 breaks the content rules/,
+    );
+    expect(await db.db.select().from(storyPlans).where(eq(storyPlans.campaignId, c.id))).toEqual([]);
+    await db.db.update(storyJobs).set({ runAfter: new Date() }).where(eq(storyJobs.campaignId, c.id));
+    const [again] = await writer.drain();
+    expect(again?.outcome).toBe("done");
+    const m = await materialFor(db.db, c.id, c.story);
+    expect(JSON.stringify(m)).not.toMatch(/kindness points/i);
   });
 
   it("hands a turn the AI can't tell to a person in the DM room, with everything they need", async () => {
@@ -954,11 +944,11 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
     await makeHero(engine, c.id, "scribe", "scout", "Quill Swift");
     await engine.turns.openCampaign(c.id, "scribe");
     const seq = (await engine.campaigns.require(c.id)).turnSeq;
-    await engine.storyJobs.enqueue({ campaignId: c.id, kind: "chapter_recap", key: 1, reason: "test", seq });
+    await engine.storyJobs.enqueue({ campaignId: c.id, kind: "recap", key: 1, reason: "test", seq });
     const writer = new StoryWriter({ db: db.db, llm, worlds, jobs: engine.storyJobs, campaignId: c.id });
 
     // Turned back twice: the job tries again later, and the journal gets nothing in the meantime.
-    const first = (await writer.drain()).find((r) => r.job.kind === "chapter_recap");
+    const first = (await writer.drain()).find((r) => r.job.kind === "recap");
     expect(first?.outcome).toBe("retrying");
     expect(await db.db.select().from(chapterSummaries).where(eq(chapterSummaries.campaignId, c.id))).toEqual(
       [],
@@ -984,6 +974,136 @@ describe.skipIf(!TEST_DATABASE_URL)("engine (end to end)", () => {
     expect(again?.outcome).toBe("done");
     const [stored] = await db.db.select().from(chapterSummaries).where(eq(chapterSummaries.campaignId, c.id));
     expect(stored?.text).toBe(told);
+  });
+
+  it("asks the writer for more when prepared material runs low, and for side quests when the party goes off course", async () => {
+    const llm = new FakeLlm();
+    const engine = createEngine({ db: db.db, worlds, llm });
+    const scene = (beatId: string | null, place: string) => ({
+      beatId,
+      place,
+      situation: "Something waits.",
+      question: "What now?",
+      people: [],
+      clues: [],
+      encounter: null,
+      temptation: null,
+    });
+    /** A campaign whose story was written with `chapter1`'s scenes, then played through its first scene. */
+    const played = async (
+      name: string,
+      parts: Parameters<typeof mergeMaterial>[1],
+      until = "The Thief in the Lamp-House",
+    ) => {
+      const c = await engine.campaigns.create({
+        guildId: `g-${name}`,
+        channelId: `ch-${name}`,
+        name,
+        mode: "ai_dm",
+        createdBy: "h",
+      });
+      await makeHero(engine, c.id, "h", "shieldheart", "Bram Junior");
+      // The whole story was written and published.
+      await db.db.update(storyJobs).set({ status: "done" }).where(eq(storyJobs.campaignId, c.id));
+      await publishMaterial(db.db, c.id, mergeMaterial(null, parts, 0), "test");
+      let view = await engine.turns.openCampaign(c.id, "h");
+      // The scripted storyteller ends every scene; the round after, the party moves on to the next.
+      for (let i = 0; i < 12 && view.sceneTitle !== until; i++) {
+        await engine.turns.submitAction({
+          roundId: view.roundId as string,
+          userId: "h",
+          kind: "choice",
+          choiceIndex: 0,
+        });
+        const next = await engine.turns.resolveRound(view.roundId as string);
+        if (next?.kind !== "turn") throw new Error("expected a turn");
+        view = next.view;
+      }
+      expect(view.sceneTitle).toBe(until);
+      return (await engine.storyJobs.recent(c.id)).filter((j) => j.kind !== "bible");
+    };
+
+    // Only the first scene was prepared: with three of chapter 1's scenes still ahead, the writer is asked for more.
+    const low = await played("low", {
+      chapter: { chapter: 1, scenes: [scene("ch1-the-last-flame", "hearthmoor-square")] },
+    });
+    expect(low).toEqual([
+      expect.objectContaining({ kind: "chapter", reason: "chapter 1's prepared scenes are running out" }),
+    ]);
+    expect(low[0]?.key).toMatch(/^1\+\d+$/);
+
+    // Everything ahead is prepared, but in the Whisperwood: the party is heading somewhere nothing is prepared.
+    const away = await played("away", {
+      chapter: {
+        chapter: 1,
+        scenes: ["ch1-the-thief-in-the-lamp-house", "ch1-hatties-request", "ch1-gloam-in-the-garden"].map(
+          (b) => scene(b, "foxglove-glade"),
+        ),
+      },
+    });
+    expect(away).toEqual([
+      expect.objectContaining({
+        kind: "side_quest",
+        reason: "the party is heading to The Lamp-House, where nothing is prepared",
+      }),
+    ]);
+
+    // Something is prepared around Hearthmoor, but none of it is the scenes being played: after three scenes
+    // that touched nothing prepared, the party counts as off course.
+    const drift = await played(
+      "drift",
+      {
+        sideQuests: [
+          {
+            id: "sq-geese",
+            title: "The Goose Tax",
+            place: "hearthmoor-square",
+            people: [],
+            hook: "The geese want something.",
+            complication: "Nobody speaks goose.",
+            payoff: "A loyal flock.",
+            leadsBack: "the chapter's marker",
+          },
+        ],
+      },
+      "Gloam in the Garden",
+    );
+    expect(drift).toEqual([
+      expect.objectContaining({
+        kind: "side_quest",
+        reason: "3 scenes have gone by without touching anything prepared for the story",
+      }),
+    ]);
+  });
+
+  it("asks the writer to rework what's written when the DM tells a turn their own way", async () => {
+    const engine = createEngine({ db: db.db, worlds, llm: new FakeLlm() });
+    const c = await engine.campaigns.create({
+      guildId: "g-rework",
+      channelId: "ch-rework",
+      name: "Rework",
+      mode: "assist",
+      createdBy: "h",
+      dmUserId: "dm",
+    });
+    await makeHero(engine, c.id, "h", "lanternkeeper", "Wren Pebble");
+    await publishMaterial(db.db, c.id, mergeMaterial(null, { sideQuests: [] }, 0), "test");
+    const view = await engine.turns.openCampaign(c.id, "h");
+    await engine.turns.submitAction({
+      roundId: view.roundId as string,
+      userId: "h",
+      kind: "choice",
+      choiceIndex: 0,
+    });
+    const drafted = await engine.turns.resolveRound(view.roundId as string);
+    if (drafted?.kind !== "draft") throw new Error("expected a draft for the DM");
+    await engine.turns.approveDraft(drafted.draft.approvalId, "dm", {
+      narration: "The thief is already long gone, and only soot is left.",
+    });
+    const jobs = await engine.storyJobs.recent(c.id);
+    expect(jobs.find((j) => j.kind === "rework")).toEqual(
+      expect.objectContaining({ key: "2", reason: "the DM told turn 2 their own way", status: "queued" }),
+    );
   });
 
   it("lets only one resolver win a round", async () => {

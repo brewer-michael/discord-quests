@@ -59,6 +59,23 @@ the gateway, the OpenAI-compatible adapter, the safe fetcher, budgets and logs.
   use) and with the sandbox proxy's certificate added. Everything else in the Dockerfile, and the compose file
   itself, ran unchanged.
 
+## Again with the plan's job kinds (2026-10-19)
+
+After the writer was rebuilt to write the whole story (outline, bible, spine, chapter detail, side quests,
+self-check), the outright kill was run again: real processes started as `node --import tsx apps/writer/src/main.ts`
+(the `apps/writer` entry the deploys now use), the stand-in taking 4 to 8 s an answer.
+
+| Time (UTC) | What happened |
+|---|---|
+| 00:31 | `pnpm play --no-writer` creates a campaign; its whole story is queued as it's created. |
+| 00:33:12 | Writer A has saved `outline` and `bible`; `kill -9` while it waits on the `spine` call. |
+| 00:35:04 | The lease has run out: writer B logs `writer job claimed`, `attempt: 2`, `resumeAfter: ["outline", "bible"]`. |
+| 00:35:09 to 00:35:29 | `spine`, `chapter`, `side_quests`, `self_check` done; `writer job done`. |
+
+- The outline and the bible weren't asked for again: the stand-in answered 6 writer calls and counted the one A
+  died in as abandoned.
+- One story version was published, marked ready, with chapter 1 prepared.
+
 ## Found and fixed during these runs
 
 - The writer's log lines carried the chapter as `key`, and the log redaction hides any field named like a key, so
@@ -72,6 +89,7 @@ the gateway, the OpenAI-compatible adapter, the safe fetcher, budgets and logs.
 
 ## Not yet done
 
-- **A real AI service:** no key is set in this environment. With a service's key in its variable (for example
-  `ZAI_API_KEY`) and `MASTER_KEYS` set, run `pnpm play --ai zai` (or any listed service) for a few rounds and the
-  first chapter plan, and record the `ai call` lines.
+- **A real AI service:** no key is set in this environment (see
+  [MILESTONE-story-writer.md](../docs/MILESTONE-story-writer.md)). With a service's key in its variable (for example
+  `ZAI_API_KEY`) and `MASTER_KEYS` set, run `pnpm play --ai zai` (or any listed service) until the whole story is
+  written, and record the `ai call`, `writer step done` and `writer material rejected` lines.

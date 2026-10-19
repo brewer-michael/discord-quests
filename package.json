@@ -14,7 +14,7 @@
     "lint:fix": "biome check --write .",
     "world:validate": "tsx tools/world-validate.ts",
     "sim": "pnpm --filter @dq/sim start",
-    "writer": "pnpm --filter @dq/bot writer",
+    "writer": "tsx apps/writer/src/main.ts",
     "writer:stress": "tsx packages/engine/src/story-writer/stress.ts",
     "play": "tsx apps/bot/src/play.ts",
     "check": "pnpm lint && pnpm typecheck && pnpm test",

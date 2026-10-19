@@ -6,7 +6,7 @@
 |---|---|
 | `alpha` | **v0.1 Alpha, frozen.** The first proof of concept: a fixed story arc in Lanternreach, cute, shallow and whimsical, but every piece working end to end (heroes, turns, the hidden hand, fights, pictures, the setup page). |
 | `dev` | **The road to 1.0.** Alpha plus story settings (Light, Classic, Epic), the combat engine (real dice, the SRD bestiary, balanced encounters, partial hits and the defense mix), rewinds from the DM room, turns the AI can't tell going to a person, provider settings as each service documents them, and logging of every AI call and turn. |
-| `feature/story-writer` | The asynchronous story writer (below). Merges into `dev` first. **Built:** the queue, the writer service, chapter plans and recaps written ahead, DM-room notices; stress tests in [`reports/story-writer-stress.md`](../reports/story-writer-stress.md) and [`reports/story-writer-processes.md`](../reports/story-writer-processes.md) (real processes killed mid-job, and the container). |
+| `feature/story-writer` | The asynchronous story writer (below). Merges into `dev` first. **Built:** the queue, the `apps/writer` service, the whole story (outline, bible, spine, chapters, side quests) written ahead and checked, its five triggers, reworks and recaps, DM-room notices; stress tests in [`reports/story-writer-stress.md`](../reports/story-writer-stress.md) and [`reports/story-writer-processes.md`](../reports/story-writer-processes.md). PR readiness: [MILESTONE-story-writer.md](MILESTONE-story-writer.md). |
 | `feature/dice` | Players roll; the DM does the math (below). |
 | `feature/storytelling` | Archetypes, a plot spine, side quests, continuity and DM corrections (below). Built on the story writer. |
 | `release/1.0-beta` | Cut from `dev` once all three are in; tagged `v1.0.0-beta.1`. |
@@ -27,10 +27,11 @@ The table should never wait on deep story writing, and the story should never ru
 - The bot calls it when a campaign is created (while the heroes are being made), when prepared material runs low,
   when the party goes somewhere nothing is prepared for, when a chapter marker is reached, and when a DM correction
   changes something already written.
-- **On `feature/story-writer` now:** the queue and the service, with chapter plans (drafted, then checked against
-  what has happened) and chapter recaps. Chapter 1 is written when the adventure starts and each later chapter once
-  the one before it is half played. The world, the plot spine and side quests are new kinds of job on the same
-  queue, with `feature/storytelling`.
+- **On `feature/story-writer` now:** the queue and the `apps/writer` service, with the plan's job kinds: the whole
+  story when a campaign is created (outline → bible → spine → chapter detail → side quests → self-check), the next
+  chapter when a marker is reached, more of a chapter when its material runs low, side quests when the party goes
+  off course, a rework when the DM tells a turn their own way, and recaps. Everything is checked before it's
+  published. What must land before it merges is in [MILESTONE-story-writer.md](MILESTONE-story-writer.md).
 - Its own job on the setup page ("Story writer"), so a server can give it a slow, strong model while turns use a
   fast one. It counts against the server's daily spending limit.
 - The DM room hears what it's doing ("preparing chapter 3, about 20 minutes"), and why if it fails. Meanwhile the DM

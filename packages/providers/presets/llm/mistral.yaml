@@ -77,3 +77,5 @@ defaultModels:
   intent: mistral-small-2603
   safety: mistral-small-2603
   judge: mistral-small-2603
+defaultParams:
+  writer: { effort: high }

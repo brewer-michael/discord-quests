@@ -106,7 +106,7 @@ describe.skipIf(!TEST_DATABASE_URL)("pnpm play", () => {
     expect(out).toContain("═══ The Last Flame · Lantern Square ═══");
     expect(out).toContain("What do you do?");
     expect(out).toMatch(/Wren: .+\nBram: .+/);
-    expect(out).toContain("[DM room] ✅ Chapter 1 is ready; it shapes the scenes from here.");
+    expect(out).toContain("[DM room] ✅ The story is ready: its outline, bible, spine and first chapter.");
   });
 
   it("lets the DM approve, redo and edit drafts in Assist mode, and answers commands", async () => {
@@ -138,7 +138,9 @@ describe.skipIf(!TEST_DATABASE_URL)("pnpm play", () => {
     expect(out).toContain("Guidance for the storyteller> Make it funnier");
     expect(out).toContain("The square falls quiet, and a small voice calls from the lamp-house.");
     expect(out).toMatch(/1\) Follow the voice\n {2}2\) Ask Hattie/);
-    expect(out).toContain("chapter 1: done (done: facts, draft, revise)");
+    expect(out).toContain(
+      "The story: outline, bible, spine, first chapter, side quests: done (done: outline, bible, spine, chapter, side_quests, self_check)",
+    );
     expect(out).toContain("⏪ Back 1 turn.");
   });
 
@@ -200,10 +202,11 @@ describe.skipIf(!TEST_DATABASE_URL)("pnpm play", () => {
       const engine = createEngine({ db: db.db, worlds, llm });
       const { io, text } = scripted([]);
       await playSession({ engine, guildId: "g-play-zai", auto: 3, writer: "between-turns" }, io);
-      expect(text()).toContain("[DM room] ✅ Chapter 1 is ready");
+      expect(text()).toContain("[DM room] ✅ The story is ready");
       expect(mock.last.authorization).toBe("Bearer zai-test-key-1234");
       expect(mock.stats.byTask.narrator).toBeGreaterThan(0);
-      expect(mock.stats.byTask.writer).toBe(2);
+      // The whole story: outline, bible, spine, chapter 1, side quests and the self-check, one call each.
+      expect(mock.stats.byTask.writer).toBe(6);
       expect(["glm-5.3", "glm-5.3-flash"]).toContain(mock.last.model);
     } finally {
       await mock.close();
@@ -222,9 +225,10 @@ describe.skipIf(!TEST_DATABASE_URL)("pnpm play", () => {
       const engine = createEngine({ db: db.db, worlds, llm });
       const { io, text } = scripted([]);
       await playSession({ engine, guildId: "g-play-mock", auto: 3, writer: "between-turns" }, io);
-      expect(text()).toContain("[DM room] ✅ Chapter 1 is ready");
+      expect(text()).toContain("[DM room] ✅ The story is ready");
       expect(mock.stats.byTask.narrator).toBeGreaterThan(0);
-      expect(mock.stats.byTask.writer).toBe(2);
+      // The whole story: outline, bible, spine, chapter 1, side quests and the self-check, one call each.
+      expect(mock.stats.byTask.writer).toBe(6);
       expect(lines.filter((l) => l === "ai call").length).toBe(mock.stats.answered);
     } finally {
       await mock.close();
@@ -245,13 +249,7 @@ describe.skipIf(!TEST_DATABASE_URL)("pnpm play", () => {
         mode: "ai_dm",
         createdBy: "host",
       });
-      await engine.storyJobs.enqueue({
-        campaignId: c.id,
-        kind: "chapter_plan",
-        key: 1,
-        reason: "test",
-        seq: 0,
-      });
+      // The campaign asked for its whole story when it was created.
       const writer = new StoryWriter({
         db: db.db,
         llm,

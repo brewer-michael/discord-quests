@@ -1,5 +1,5 @@
 /**
- * The story writer service: writes chapters ahead of the table, in the background, from the queue the bot
+ * The story writer service: writes the story ahead of the table, in the background, from the queue the bot
  * fills. Runs beside the bot from the same image; restarting either never interrupts the other. A job cut off
  * by a restart carries on from its last finished step.
  */

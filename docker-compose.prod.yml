@@ -64,11 +64,11 @@ services:
       migrate:
         condition: service_completed_successfully
 
-  # The story writer: writes chapters ahead of the table, in the background. Restarting it never interrupts
+  # The story writer: writes the story ahead of the table, in the background. Restarting it never interrupts
   # play, and a job it was in the middle of carries on from its last finished step.
   writer:
     <<: *app
-    command: ["node", "--import", "tsx", "apps/bot/src/writer.ts"]
+    command: ["node", "--import", "tsx", "apps/writer/src/main.ts"]
     environment:
       <<: *env
       RUN_MIGRATIONS: "false"

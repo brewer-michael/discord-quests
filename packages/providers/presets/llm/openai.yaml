@@ -84,3 +84,5 @@ defaultModels:
   intent: gpt-6-luna
   safety: gpt-6-luna
   judge: gpt-6-luna
+defaultParams:
+  writer: { effort: high }

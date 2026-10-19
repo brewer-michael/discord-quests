@@ -4,12 +4,13 @@
  */
 import { randomUUID } from "node:crypto";
 import { silentLogger } from "../deps";
-import { chapterPlanKind } from "./chapter-plan";
 import { chapterRecapKind } from "./chapter-recap";
 import type { StoryJob } from "./jobs";
 import { type RunOutcome, runJob, type WriterDeps, type WriterKind } from "./runner";
+import { bibleKind, chapterKind, reworkKind, sideQuestKind } from "./story-kinds";
 
 export * from "./jobs";
+export * from "./material";
 export {
   DEFAULT_DEADLINE_MS,
   DEFAULT_JOB_TOKENS,
@@ -19,8 +20,11 @@ export {
 } from "./runner";
 
 export const WRITER_KINDS: Record<string, WriterKind> = {
-  chapter_plan: chapterPlanKind,
-  chapter_recap: chapterRecapKind,
+  bible: bibleKind,
+  chapter: chapterKind,
+  side_quest: sideQuestKind,
+  rework: reworkKind,
+  recap: chapterRecapKind,
 };
 
 export interface StoryWriterOptions extends WriterDeps {

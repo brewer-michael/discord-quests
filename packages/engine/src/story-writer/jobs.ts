@@ -13,8 +13,32 @@ import {
 } from "@dq/db";
 import { and, desc, eq, gt, inArray, lte, or, sql } from "drizzle-orm";
 
-export type StoryJobKind = "chapter_plan" | "chapter_recap";
+/**
+ * What a job writes: the whole story when a campaign is created (bible), a chapter in detail (chapter), side
+ * quests when the party goes off course (side_quest), material reworked after a DM's change (rework), and a
+ * chapter's recap (recap).
+ */
+export type StoryJobKind = "bible" | "chapter" | "side_quest" | "rework" | "recap";
 export type StoryJob = typeof storyJobs.$inferSelect;
+
+/** What a job is for, as the DM and the setup page read it. */
+export function jobTitle(job: Pick<StoryJob, "kind" | "key">): string {
+  const chapter = job.key.split("+")[0];
+  switch (job.kind) {
+    case "bible":
+      return "The story: outline, bible, spine, first chapter, side quests";
+    case "chapter":
+      return job.key.includes("+") ? `More of chapter ${chapter}` : `Chapter ${chapter}`;
+    case "side_quest":
+      return "Side quests for where the party went";
+    case "rework":
+      return `Rework after the DM's turn ${job.key}`;
+    case "recap":
+      return `Recap of chapter ${job.key}`;
+    default:
+      return job.kind;
+  }
+}
 
 /** How long a claimed job is the worker's before another may take it over. The runner renews it. */
 export const LEASE_MS = 2 * 60_000;
@@ -341,6 +365,38 @@ export class StoryJobs {
       .where(eq(storyJobs.campaignId, campaignId))
       .orderBy(desc(storyJobs.createdAt))
       .limit(limit);
+  }
+
+  /** About how long a job of this kind takes, from the last ten finished ones; `fallback` until there are any. */
+  async typicalMinutes(kind: StoryJobKind | string, fallback: number): Promise<number> {
+    const rows = await this.db
+      .select({ startedAt: storyJobs.startedAt, finishedAt: storyJobs.finishedAt })
+      .from(storyJobs)
+      .where(and(eq(storyJobs.kind, kind), eq(storyJobs.status, "done")))
+      .orderBy(desc(storyJobs.finishedAt))
+      .limit(10);
+    const spans = rows
+      .filter((r) => r.startedAt && r.finishedAt)
+      .map((r) => ((r.finishedAt as Date).getTime() - (r.startedAt as Date).getTime()) / 60_000)
+      .sort((a, b) => a - b);
+    if (spans.length === 0) return fallback;
+    return Math.max(1, Math.round(spans[Math.floor(spans.length / 2)] as number));
+  }
+
+  /** Whether a job of this kind is queued or running for the campaign. */
+  async pending(campaignId: string, kind: StoryJobKind, tx: DbOrTx = this.db): Promise<boolean> {
+    const [row] = await tx
+      .select({ id: storyJobs.id })
+      .from(storyJobs)
+      .where(
+        and(
+          eq(storyJobs.campaignId, campaignId),
+          eq(storyJobs.kind, kind),
+          inArray(storyJobs.status, ["queued", "running"] satisfies StoryJobStatus[]),
+        ),
+      )
+      .limit(1);
+    return Boolean(row);
   }
 
   async get(jobId: string): Promise<StoryJob | null> {

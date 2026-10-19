@@ -34,3 +34,5 @@ defaultModels:
   intent: deepseek-v4-flash
   safety: deepseek-v4-flash
   judge: deepseek-v4-flash
+defaultParams:
+  writer: { effort: high }

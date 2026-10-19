@@ -1,5 +1,6 @@
 import { auditLog, campaignMembers, campaigns, characters, type DbOrTx, storyJobs, turns } from "@dq/db";
 import { dmLoomView } from "@dq/engine/loom-store";
+import { jobTitle, materialFor } from "@dq/engine/story-writer";
 import { and, asc, desc, eq, gte, sql } from "drizzle-orm";
 import { audit } from "./audit";
 
@@ -172,9 +173,10 @@ export async function loomForWeb(db: DbOrTx, guildId: string, userId: string, ca
   return {
     campaign: c,
     loom: await dmLoomView(db, campaignId),
+    material: await materialFor(db, campaignId, c.story),
     writer: jobs.map((j) => ({
       id: j.id,
-      what: j.kind === "chapter_recap" ? `Recap of chapter ${j.key}` : `Chapter ${j.key}`,
+      what: jobTitle(j),
       why: j.reason,
       status: j.status,
       tries: j.attempts,

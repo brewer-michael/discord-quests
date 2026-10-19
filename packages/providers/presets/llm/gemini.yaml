@@ -98,3 +98,5 @@ defaultModels:
   intent: gemini-3.5-flash-lite
   safety: gemini-3.5-flash-lite
   judge: gemini-3.5-flash-lite
+defaultParams:
+  writer: { effort: high }
